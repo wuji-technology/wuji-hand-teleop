@@ -1,0 +1,28 @@
+# ROS2 build artifacts
+build/
+install/
+log/
+*.bag
+*.db3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.DS_Store
+
+# Python build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+*.whl
+
+# Logs
+logs/
+
+# Temporary files
+*.tmp
+*.log

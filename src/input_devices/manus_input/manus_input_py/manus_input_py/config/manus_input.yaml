@@ -1,0 +1,13 @@
+# Configuration for the manus_input ROS2 node (Manus Glove → ROS topics)
+
+# Publishing settings
+publish_rate_hz: 200.0
+publish_hand_topic: /hand_input
+
+# Hand selection
+include_right_hand: true
+include_left_hand: true
+
+# Glove IDs (0 = left hand, 1 = right hand typically)
+left_glove_id: 0
+right_glove_id: 1
