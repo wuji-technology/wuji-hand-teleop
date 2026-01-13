@@ -1,6 +1,10 @@
 MIT License
 
+<<<<<<< HEAD
 Copyright (c) 2025 Wuji Technology Co., Ltd.
+=======
+Copyright (c) 2026 Wuji Technology
+>>>>>>> 17e6c13f8a39108aba8b1d290c74e746089735a6
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,4 +23,7 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+<<<<<<< HEAD
 
+=======
+>>>>>>> 17e6c13f8a39108aba8b1d290c74e746089735a6
