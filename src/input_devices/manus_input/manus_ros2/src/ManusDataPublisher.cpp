@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <thread>
+#include "rclcpp/qos.hpp"
 #include <chrono>
 
 #include "ClientLogging.hpp"
@@ -25,7 +26,7 @@ ManusDataPublisher::ManusDataPublisher() : Node("manus_data_publisher")
     m_PublishCountMap.clear();
 
     //Timer to publish the data 
-    m_PublishTimer = create_wall_timer(5ms, [this] { PublishCallback(); }); // 200Hz
+    m_PublishTimer = create_wall_timer(std::chrono::microseconds(8333), [this] { PublishCallback(); }); // 120Hz (匹配 Manus 手套硬件刷新率, 1000000/120≈8333μs)
 
     // initialize client
     ClientLog::print("Starting MANUS Data publisher!");
@@ -348,7 +349,9 @@ void ManusDataPublisher::PublishCallback()
         //Find a publisher for the glove, if not present create one
         auto t_Publisher = m_GlovePublisher.find(t_Msg.glove_id);
         if(t_Publisher == m_GlovePublisher.end()){
-            auto t_NewPublisher = this->create_publisher<manus_ros2_msgs::msg::ManusGlove>("manus_glove_" + std::to_string(m_GlovePublisher.size()), 10);
+            auto t_NewPublisher = this->create_publisher<manus_ros2_msgs::msg::ManusGlove>(
+                "manus_glove_" + std::to_string(m_GlovePublisher.size()),
+                rclcpp::SensorDataQoS());
             t_Publisher = m_GlovePublisher.emplace(t_Msg.glove_id, t_NewPublisher).first;
         }
         
@@ -635,7 +638,13 @@ bool ManusDataPublisher::LoadCalibrationFile(uint32_t p_GloveId, Side p_Side)
         return false;
     }
 
-    std::string t_CalibrationPath = t_PackageShareDir + "/calibration/Calibration.mcal";
+    // 根据左右手加载不同的标定文件
+    std::string t_CalibrationPath;
+    if (p_Side == Side_Left) {
+        t_CalibrationPath = t_PackageShareDir + "/calibration/LeftMetaglovePro.mcal";
+    } else {
+        t_CalibrationPath = t_PackageShareDir + "/calibration/RightMetaglovePro.mcal";
+    }
 
     // 检查文件是否存在
     std::ifstream t_File(t_CalibrationPath, std::ios::binary);
