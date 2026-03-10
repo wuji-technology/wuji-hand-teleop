@@ -1,0 +1,5 @@
+# Tianji Arm Output Configuration
+# 天机臂输出配置
+
+# Robot IP address / 机器人 IP 地址
+robot_ip: "192.168.1.190"

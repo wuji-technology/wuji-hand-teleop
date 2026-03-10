@@ -1,0 +1,86 @@
+{
+	"name": "Wuji Teleop ROS2 Environment",
+	"image": "robbenge/wuji_env:latest",
+	
+	// 特权模式，用于硬件访问
+	"privileged": true,
+	
+	// 工作目录
+	"workspaceFolder": "/workspace",
+	
+	// 挂载目录
+	"mounts": [
+		{
+			"source": "${localWorkspaceFolder}",
+			"target": "/workspace",
+			"type": "bind"
+		},
+		{
+			"source": "/dev",
+			"target": "/dev",
+			"type": "bind"
+		},
+		{
+			"source": "/tmp/.X11-unix",
+			"target": "/tmp/.X11-unix",
+			"type": "bind"
+		}
+	],
+	
+	// 容器启动后的命令
+	"postCreateCommand": "echo 'Container ready!'",
+	
+	// 容器用户（可选，如果需要非root用户）
+	// "remoteUser": "vscode",
+	
+	// 功能特性
+	"features": {},
+	
+	// 运行参数
+	"runArgs": [
+		"--network=host"
+	],
+	
+	// 自定义属性
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"remote.autoForwardPorts": false,
+				"python.defaultInterpreterPath": "/usr/bin/python3",
+				"python.linting.enabled": true,
+				"python.linting.pylintEnabled": false,
+				"python.formatting.provider": "black",
+				"editor.formatOnSave": true,
+				"files.eol": "\n"
+			},
+			"extensions": [
+				// C++ language support
+				"llvm-vs-code-extensions.vscode-clangd",
+				// Python language support
+				"ms-python.vscode-pylance",
+				"ms-python.python",
+				"ms-python.debugpy",
+				// ROS2 support
+				"ms-ros.ros2",
+				// CMake language support
+				"KylinIdeTeam.cmake-intellisence",
+				// Code formatting
+				"ms-python.black-formatter",
+				"ms-python.isort",
+				// Code spell checking
+				"streetsidesoftware.code-spell-checker",
+				// Git enhancements
+				"mhutchie.git-graph"
+			]
+		}
+	},
+	
+	// 端口转发（如果需要）
+	"forwardPorts": [],
+	
+	// 环境变量
+	"containerEnv": {
+		"TZ": "Asia/Shanghai",
+		"DISPLAY": "${localEnv:DISPLAY}"
+	}
+}

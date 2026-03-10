@@ -1,0 +1,50 @@
+{
+  "keys": {},
+  "groups": {
+    "mainwindow": {
+      "keys": {
+        "geometry": "AdnQywADAAAAAAD3AAAAJwAAB4gAAAQYAAAA9wAAACcAAAeIAAAEGAAAAAAAAAAAB4AAAAD3AAAAJwAAB4gAAAQY",
+        "state": "AAAA/wAAAAD9AAAAAgAAAAAAAAJoAAAC+vwCAAAAAfwAAAD8AAAC+gAAAVgA////+gAAAAACAAAAAvsAAAAiAGkAbQBhAGcAZQBfAHYAaQBlAHcAXwBfAFMAdABlAHIAZQBvAQAAAAD/////AAAAVgD////7AAAAIABpAG0AYQBnAGUAXwB2AGkAZQB3AF8AXwBMAGUAZgB0AQAAAAD/////AAAAVgD////7AAAAIgBpAG0AYQBnAGUAXwB2AGkAZQB3AF8AXwBSAGkAZwBoAHQBAAAAAP////8AAABUAP///wAAAAEAAAJoAAAC+vwCAAAAAfsAAAAiAGkAbQBhAGcAZQBfAHYAaQBlAHcAXwBfAFMAdABlAHIAZQBvAQAAADwAAAL6AAAAVgD///8AAALoAAAC+gAAAAQAAAAEAAAACAAAAAj8AAAAAA=="
+      },
+      "groups": {
+        "toolbar_areas": {
+          "keys": {
+            "MinimizedDockWidgetsToolbar": 4
+          },
+          "groups": {}
+        }
+      }
+    },
+    "pluginmanager": {
+      "keys": {
+        "running-plugins": {
+          "type": "repr",
+          "repr": "{u'rqt_image_view/ImageView (1)': [1], u'rqt_image_view/ImageView (2)': [1], u'rqt_image_view/ImageView (3)': [1]}"
+        }
+      },
+      "groups": {
+        "plugin__rqt_image_view__ImageView__1": {
+          "keys": {
+            "topic": "/stereo/left/compressed",
+            "toolbar_hidden": false
+          },
+          "groups": {}
+        },
+        "plugin__rqt_image_view__ImageView__2": {
+          "keys": {
+            "topic": "/cam_left_wrist/color/image_rect_raw/compressed",
+            "toolbar_hidden": false
+          },
+          "groups": {}
+        },
+        "plugin__rqt_image_view__ImageView__3": {
+          "keys": {
+            "topic": "/cam_right_wrist/color/image_rect_raw/compressed",
+            "toolbar_hidden": false
+          },
+          "groups": {}
+        }
+      }
+    }
+  }
+}
