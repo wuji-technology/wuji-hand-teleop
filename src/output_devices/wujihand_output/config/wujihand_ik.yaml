@@ -1,0 +1,40 @@
+# Wuji Hand 统一配置 — 灵巧手参数的唯一来源
+#
+# 此文件同时被以下两处加载:
+#   1. wujihand_controller 节点 (通过 -c 参数)
+#   2. launch 文件 (通过 wuji_teleop_bringup.hand_defaults 模块)
+#
+# ===== 手套接入协议 =====
+#
+# 统一话题: /hand_input (std_msgs/Float32MultiArray)
+# 数据格式: MediaPipe 21-point 关键点 (每只手 21 × 3 = 63 floats)
+#   - 单手: 63 values
+#   - 双手: 126 values (right 在前, left 在后)
+#
+# 接入新手套只需:
+#   1. 编写输入节点, 将手套数据转换为 MediaPipe 21-point 格式, 发布到 /hand_input
+#   2. 添加 retarget 配置: config/retarget_{source}.yaml (双手共用)
+#      或 config/retarget_{source}_left.yaml + retarget_{source}_right.yaml (分侧)
+#   3. 在 launch 文件中添加 LaunchConfigurationEquals 条件块
+#
+# 已支持: manus (retarget_manus_left/right.yaml)
+
+# 输入源: "manus"
+# 自动加载对应的 retarget 配置 (优先 retarget_{source}_{side}.yaml, 回退 retarget_{source}.yaml)
+input_source: "manus"
+
+# ===== 灵巧手硬件 =====
+# 序列号获取方式: lsusb -v -d 0483:2000 | grep iSerial
+left_hand:
+  serial_number: "307A377F3333"
+  name: "left_hand"           # wujihandros2 驱动命名空间
+
+right_hand:
+  serial_number: "358137563533"
+  name: "right_hand"          # wujihandros2 驱动命名空间
+
+# ===== wujihandros2 驱动参数 =====
+driver:
+  publish_rate: 1000.0        # 驱动发布频率 (Hz)
+  filter_cutoff_freq: 10.0    # 硬件 LP 滤波 (恢复默认, 待固件 PID 诊断后再调整)
+  diagnostics_rate: 10.0      # 诊断信息发布频率 (Hz)

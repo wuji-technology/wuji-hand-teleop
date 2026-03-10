@@ -1,7 +1,7 @@
 # Configuration for the manus_input ROS2 node (Manus Glove → ROS topics)
 
 # Publishing settings
-publish_rate_hz: 200.0
+publish_rate_hz: 120.0    # 匹配 Manus 手套硬件刷新率 (120Hz)
 publish_hand_topic: /hand_input
 
 # Hand selection

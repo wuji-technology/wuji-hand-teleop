@@ -1,0 +1,216 @@
+Panels:
+  - Class: rviz_common/Displays
+    Help Height: 78
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+        - /TF1
+      Splitter Ratio: 0.5
+    Tree Height: 143
+  - Class: rviz_common/Selection
+    Name: Selection
+  - Class: rviz_common/Tool Properties
+    Expanded: ~
+    Name: Tool Properties
+    Splitter Ratio: 0.5886790156364441
+  - Class: rviz_common/Views
+    Expanded:
+      - /Current View1
+    Name: Views
+    Splitter Ratio: 0.5
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Alpha: 0.5
+      Cell Size: 0.5
+      Class: rviz_default_plugins/Grid
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Grid
+      Normal Cell Count: 0
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz_default_plugins/TF
+      Enabled: true
+      Frame Timeout: 15
+      Frames:
+        All Enabled: true
+        head:
+          Value: true
+        left_chest:
+          Value: true
+        left_chest_base:
+          Value: true
+        left_wrist:
+          Value: true
+        left_arm:
+          Value: true
+        right_chest:
+          Value: true
+        right_chest_base:
+          Value: true
+        right_wrist:
+          Value: true
+        right_arm:
+          Value: true
+        tianji_left:
+          Value: true
+        tianji_right:
+          Value: true
+        world:
+          Value: true
+      Marker Scale: 0.30000001192092896
+      Name: TF
+      Show Arrows: true
+      Show Axes: true
+      Show Names: true
+      Tree:
+        world:
+          head:
+            {}
+          left_wrist:
+            tianji_left:
+              {}
+          right_wrist:
+            tianji_right:
+              {}
+          left_arm:
+            {}
+          right_arm:
+            {}
+          left_chest:
+            {}
+          right_chest:
+            {}
+      Update Interval: 0
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.5
+      Name: Head Axes
+      Radius: 0.03999999910593033
+      Reference Frame: head
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.4000000059604645
+      Name: Left Wrist Axes
+      Radius: 0.029999999329447746
+      Reference Frame: left_wrist
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.4000000059604645
+      Name: Right Wrist Axes
+      Radius: 0.029999999329447746
+      Reference Frame: right_wrist
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.30000001192092896
+      Name: Tianji Left
+      Radius: 0.02500000037252903
+      Reference Frame: tianji_left
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.30000001192092896
+      Name: Tianji Right
+      Radius: 0.02500000037252903
+      Reference Frame: tianji_right
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.3499999940395355
+      Name: Left Arm
+      Radius: 0.029999999329447746
+      Reference Frame: left_arm
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.3499999940395355
+      Name: Right Arm
+      Radius: 0.029999999329447746
+      Reference Frame: right_arm
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.25
+      Name: Left Chest
+      Radius: 0.02500000037252903
+      Reference Frame: left_chest
+      Value: true
+    - Class: rviz_default_plugins/Axes
+      Enabled: true
+      Length: 0.25
+      Name: Right Chest
+      Radius: 0.02500000037252903
+      Reference Frame: right_chest
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 48; 48; 48
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+      Hide Inactive Objects: true
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+      Line color: 128; 128; 0
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 1.5
+      Enable Stereo Rendering:
+        Stereo Eye Separation: 0.05999999865889549
+        Stereo Focal Distance: 1
+        Swap Stereo Eyes: false
+        Value: false
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 0.3
+      Focal Shape Fixed Size: true
+      Focal Shape Size: 0.05000000074505806
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.009999999776482582
+      Pitch: 0.4
+      Target Frame: <Fixed Frame>
+      Value: Orbit (rviz)
+      Yaw: 5.5
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 846
+  Hide Left Dock: false
+  Hide Right Dock: false
+  QMainWindow State: 000000ff00000000fd0000000100000000000001cb000002f4fc0200000004fb000000100044006900730070006c006100790073010000003d0000011a000000c900fffffffb0000001200530065006c0065006300740069006f006e010000015d000000890000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007301000001ec000000880000005c00fffffffb0000000a00560069006500770073010000027a000000b7000000a400ffffff000002df000002f400000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  Selection:
+    collapsed: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1200
+  X: 70
+  Y: 27
