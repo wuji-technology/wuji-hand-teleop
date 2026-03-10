@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>camera</name>
+  <version>0.1.0</version>
+  <description>
+    Camera integration package for Wuji teleoperation system.
+    Head: HBVCAM-F2439GS-2 (AR0234 global shutter). Wrist: RealSense D405/D435.
+    Wuji遥操作系统相机集成包。头部: HBVCAM全局快门双目, 腕部: RealSense D405/D435。
+  </description>
+  <maintainer email="amandahan223@gmail.com">Wuji Tech</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+
+  <!-- Camera drivers -->
+  <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>usb_cam</exec_depend>
+  <exec_depend>image_transport</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

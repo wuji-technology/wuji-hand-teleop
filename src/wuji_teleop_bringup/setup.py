@@ -19,7 +19,7 @@ setup(
         (os.path.join('share', package_name, 'config'),
             glob('config/*.yaml')),
     ],
-    install_requires=['setuptools'],
+    install_requires=['setuptools', 'pyyaml'],
     zip_safe=True,
     maintainer='Wentao Zhang',
     maintainer_email='zhangwt20011015@gmail.com',

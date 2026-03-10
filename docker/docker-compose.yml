@@ -1,0 +1,81 @@
+# ===========================================
+# Wuji Teleop Docker Compose
+# ===========================================
+#
+# 前置条件 (宿主机):
+#   sudo apt-get install docker.io docker-compose-plugin
+#   sudo usermod -aG docker $USER && newgrp docker
+#   sudo apt-get install git-lfs && git lfs install && git lfs pull
+#
+# 使用:
+#   cd docker
+#   docker compose build              # 构建镜像
+#   docker compose up -d              # 启动容器
+#   docker exec -it wuji-teleop bash  # 进入容器
+#
+# 容器内启动遥操作:
+#   ros2 launch wuji_teleop_bringup pico_teleop.launch.py
+#
+# 国内加速构建:
+#   docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+#
+# ===========================================
+
+services:
+  teleop:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: wuji-teleop:latest
+    container_name: wuji-teleop
+    # --- 网络 & IPC ---
+    network_mode: host                  # ROS2 DDS 多机通信
+    ipc: host                           # ROS2 共享内存传输
+    pid: host                           # SteamVR IPC 需要共享 PID 命名空间
+
+    # --- PID 1 管理 ---
+    # PC-Service 以后台进程运行, init 负责僵尸进程回收和信号转发
+    init: true
+
+    # --- GPU (可选, NVENC 硬件编码 H.264) ---
+    # 有 NVIDIA GPU 时取消注释以启用 NVENC, 需宿主机安装 nvidia-container-toolkit
+    # 无 GPU 时自动回退 libx264 软编码, 不影响功能
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+    # --- 设备访问 ---
+    device_cgroup_rules:
+      - 'c 81:* rmw'                   # video4linux (相机)
+      - 'c 189:* rmw'                  # USB (Manus, RealSense)
+
+    environment:
+      - DISPLAY=${DISPLAY}
+      - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
+      - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+      - TZ=Asia/Shanghai
+      - HOST_HOME=${HOME}                  # SteamVR 路径匹配
+
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw  # GUI (rviz, rqt)
+      - /dev:/dev:rw                       # 设备热插拔
+      - ../src:/home/wuji/ros2_ws/src:rw   # 宿主机源码挂载
+      # --- SteamVR / OpenVR (仅 HTC Vive Tracker 方案需要) ---
+      # PICO-only 用户: 此行可注释掉, 或保留 (自动创建空目录, 无副作用)
+      - ${HOME}/.steam:/home/wuji/.steam:ro
+
+    # --- 日志轮转 (防止长时间运行撑满磁盘) ---
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+    user: wuji
+    stdin_open: true
+    tty: true
+    command: bash

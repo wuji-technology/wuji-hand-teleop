@@ -1,0 +1,35 @@
+# OpenVR Tracker Input Configuration
+# ==================================
+
+# Tracker serial numbers
+# Run the following command to get your tracker serial numbers:
+#   python3 -c "import openvr; openvr.init(openvr.VRApplication_Other); vr=openvr.VRSystem(); [print(f'{i}: {vr.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)}') for i in range(64) if vr.getTrackedDeviceClass(i)==openvr.TrackedDeviceClass_GenericTracker]; openvr.shutdown()"
+# Or use the list_trackers.py script from teleop-wujihand-arm project
+tracker_serials:
+  chest: "LHR-7CB3B9FE"        # 胸部   LHR-7CB3B9FE
+  right_wrist: "LHR-6D76C4E0"  # 右腕   LHR-6D76C4E0
+  left_wrist: "LHR-E55BF559"   # 左腕    LHR-E55BF559
+  left_arm:  "LHR-A1F9840D"    # 左大臂   LHR-A1F9840D
+  right_arm:   "LHR-A722FD35"   # 右大臂   LHR-A722FD35
+
+  # head: "LHR-29A9B0BE"           # 头部
+
+# Wrist tracker offset in tracker's local frame [x, y, z] (meters)
+# This offset is applied BEFORE coordinate correction to map tracker position to actual wrist
+# Adjust these values based on how the tracker is mounted relative to your wrist
+# Example: if tracker is 5cm above wrist along tracker's -Z axis, use [0, 0, -0.05] The Z axis is go straight down
+# wrist_offset: [0.0, 0.04, 0.05]
+
+# For human data record system, the trackers are replaced
+wrist_offset: [0.0, -0.00275, 0.0535]
+
+# Publishing settings
+publish_rate_hz: 120.0
+
+# TF settings
+publish_tf: true
+parent_frame: "world"
+
+# Chest to head offset (meters)
+# The chest tracker is worn at chest level, we need to add 0.3m to get head position
+chest_to_head_offset_z: 0.3

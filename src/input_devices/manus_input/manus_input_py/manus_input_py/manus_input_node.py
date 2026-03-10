@@ -47,7 +47,7 @@ class ManusInputConfig:
     config_path: Optional[str] = None
 
     # Publishing behaviour
-    publish_rate_hz: float = 200.0
+    publish_rate_hz: float = 50.0
     publish_hand_topic: str = "/hand_input"
     include_right_hand: bool = True
     include_left_hand: bool = True
@@ -95,6 +95,9 @@ class ManusInputNode(Node):
         # Storage for latest data from each glove
         self._left_fingers: Optional[np.ndarray] = None
         self._right_fingers: Optional[np.ndarray] = None
+        # 新鲜度标志: 仅当 C++ 层有新数据到达时才发布
+        # 防止手套断连后无限重发过期数据导致灵巧手抖动
+        self._new_data_received: bool = False
 
         # Configure QoS for real-time performance
         qos_profile = QoSProfile(
@@ -108,16 +111,10 @@ class ManusInputNode(Node):
             Float32MultiArray, self.config.publish_hand_topic, qos_profile
         )
 
-        # Subscribers for Manus gloves
-        if self.config.include_left_hand:
-            left_topic = f"/manus_glove_{self.config.left_glove_id}"
-            self.create_subscription(ManusGlove, left_topic, self._left_glove_callback, 10)
-            self.get_logger().info(f"[Manus Input] Subscribed to {left_topic}")
-
-        if self.config.include_right_hand:
-            right_topic = f"/manus_glove_{self.config.right_glove_id}"
-            self.create_subscription(ManusGlove, right_topic, self._right_glove_callback, 10)
-            self.get_logger().info(f"[Manus Input] Subscribed to {right_topic}")
+        # Subscribe to all manus_glove topics, use msg.side to determine left/right
+        self.create_subscription(ManusGlove, "/manus_glove_0", self._glove_callback, qos_profile)
+        self.create_subscription(ManusGlove, "/manus_glove_1", self._glove_callback, qos_profile)
+        self.get_logger().info("[Manus Input] Subscribed to /manus_glove_0 and /manus_glove_1")
 
         # Timer for publishing
         self.timer = self.create_timer(
@@ -153,29 +150,44 @@ class ManusInputNode(Node):
 
         return mediapipe_pose
 
-    def _left_glove_callback(self, msg: ManusGlove) -> None:
-        """Callback for left glove data."""
-        self._left_fingers = self._convert_to_mediapipe(msg)
-
-    def _right_glove_callback(self, msg: ManusGlove) -> None:
-        """Callback for right glove data."""
-        self._right_fingers = self._convert_to_mediapipe(msg)
+    def _glove_callback(self, msg: ManusGlove) -> None:
+        """Callback for glove data, determines left/right based on msg.side."""
+        mediapipe_data = self._convert_to_mediapipe(msg)
+        if msg.side.lower() == "left":
+            self._left_fingers = mediapipe_data
+            self._new_data_received = True
+        elif msg.side.lower() == "right":
+            self._right_fingers = mediapipe_data
+            self._new_data_received = True
+        else:
+            self.get_logger().warning(f"Unknown side: {msg.side}")
 
     def _publish_latest_frame(self) -> None:
-        """Publish the latest hand data. Skip if no valid data received yet."""
+        """Publish the latest hand data. Skip if no valid data received yet.
+
+        仅当 C++ 层有新数据到达时才发布，防止手套断连后
+        无限重发过期数据导致灵巧手抖动。
+
+        Data format: [right_hand (63), left_hand (63)] - MediaPipe 21-point format.
+        """
+        # 无新数据: 不发布，避免过期数据导致下游持续 retarget
+        if not self._new_data_received:
+            return
+
+        # 先检查数据完整性，再清除标志 (防止数据丢失)
+        if self.config.include_right_hand and self._right_fingers is None:
+            return  # 右手数据尚未到达，保留标志等待下次重试
+        if self.config.include_left_hand and self._left_fingers is None:
+            return  # 左手数据尚未到达，保留标志等待下次重试
+
+        # 数据齐全，清除标志并发布
+        self._new_data_received = False
+
         payloads = []
-
-        if self.config.include_left_hand:
-            if self._left_fingers is not None:
-                payloads.append(self._left_fingers.flatten())
-            else:
-                return  # No data yet, skip publishing
-
         if self.config.include_right_hand:
-            if self._right_fingers is not None:
-                payloads.append(self._right_fingers.flatten())
-            else:
-                return  # No data yet, skip publishing
+            payloads.append(self._right_fingers.flatten())
+        if self.config.include_left_hand:
+            payloads.append(self._left_fingers.flatten())
 
         if payloads:
             hand_msg = Float32MultiArray()
