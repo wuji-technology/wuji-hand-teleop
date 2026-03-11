@@ -1,0 +1,38 @@
+# =============================================================================
+# 遥操作相机 udev 规则
+# =============================================================================
+# 作用: 为相机创建固定符号链接，不受插拔顺序影响
+# 安装: sudo cp 99-teleop-cameras.rules /etc/udev/rules.d/
+#        sudo udevadm control --reload-rules && sudo udevadm trigger
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 头部相机: 双目 USB 相机 → /dev/stereo_camera
+# -----------------------------------------------------------------------------
+# HBVCAM-F2439GS-2 V11 (Sunplus vendor=1bcf, product=2d4f, AR0234 全局快门)
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{idVendor}=="1bcf", ATTRS{idProduct}=="2d4f", SYMLINK+="stereo_camera", MODE="0666"
+
+# 备选: ZED Mini (Stereolabs vendor=2b03)
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{idVendor}=="2b03", ATTRS{product}=="ZED-M", SYMLINK+="stereo_camera", MODE="0666"
+
+# 备选: ZED 2i
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{idVendor}=="2b03", ATTRS{product}=="ZED 2i", SYMLINK+="stereo_camera", MODE="0666"
+
+# -----------------------------------------------------------------------------
+# 左手腕相机: RealSense (D405/D435) → /dev/cam_left_wrist
+# -----------------------------------------------------------------------------
+# 通过序列号匹配，D405↔D435 更换无需改规则，只需更新序列号
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{serial}=="409122273982", SYMLINK+="cam_left_wrist", MODE="0666"
+
+# -----------------------------------------------------------------------------
+# 右手腕相机: RealSense (D405/D435) → /dev/cam_right_wrist
+# -----------------------------------------------------------------------------
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{serial}=="352122272592", SYMLINK+="cam_right_wrist", MODE="0666"
+
+# =============================================================================
+# 更换相机时:
+#   1. 查序列号: rs-enumerate-devices | grep "Serial Number"
+#      或: udevadm info /dev/videoN | grep SERIAL
+#   2. 修改上方对应的 ATTRS{serial}
+#   3. 重新加载: sudo udevadm control --reload-rules && sudo udevadm trigger
+# =============================================================================

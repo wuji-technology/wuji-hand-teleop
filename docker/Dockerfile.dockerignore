@@ -1,0 +1,26 @@
+# ===========================================
+# Docker build context exclusions
+# BuildKit: <Dockerfile>.dockerignore
+# ===========================================
+
+# ROS2 / colcon build artifacts
+build/
+install/
+log/
+
+# Version control
+.git/
+
+# IDE & tools
+.claude/
+.devcontainer/
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Data recordings
+*.bag
+*.mcap
+*.tar.gz

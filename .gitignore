@@ -1,4 +1,4 @@
-# ROS2 build artifacts
+# ROS2
 build/
 install/
 log/
@@ -7,22 +7,44 @@ log/
 
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+# Exception: keep SDK library files
+!src/output_devices/tianji_output/tianji_output/lib/*.so
+!**/ManusSDK/lib/*.so
+!src/input_devices/pico_input/prebuilt/**/*.so
 .Python
-.DS_Store
-
-# Python build artifacts
 *.egg-info/
 dist/
-build/
 *.egg
-*.whl
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Logs
-logs/
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+
+# Config overrides (optional - uncomment if you want to ignore local configs)
+# **/config/*_local.yaml
+# **/config/*_override.yaml
 
 # Temporary files
 *.tmp
+*.bak
 *.log
+INTEGRATION_PLAN.md
