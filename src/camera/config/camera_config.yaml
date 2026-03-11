@@ -1,0 +1,171 @@
+# =============================================================================
+# 相机配置文件
+# =============================================================================
+# 支持三个相机位置: head(头部), left_wrist(左手腕), right_wrist(右手腕)
+# 头部: HBVCAM-F2439GS-2 V11 (AR0234 全局快门, USB双目, OpenCV UVC)
+# 腕部: RealSense D405 (全局快门, 通过序列号绑定)
+#       测试阶段可用 D435 替代 (launch参数: wrist_type:=d435i)
+#
+# 设备路径由 udev 规则固定，不受插拔顺序影响:
+#   /dev/stereo_camera   ← HBVCAM 双目相机
+#   /dev/cam_left_wrist  ← 左腕 RealSense
+#   /dev/cam_right_wrist ← 右腕 RealSense
+#
+# 首次使用请运行: bash src/camera/setup_cameras.sh
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 全局设置
+# -----------------------------------------------------------------------------
+global:
+  # 相机启动间隔延迟，避免USB带宽问题（秒）
+  startup_delay: 5.0
+  # 启用RealSense相机间同步（主从模式）
+  # D435i/D455 支持硬件同步
+  enable_sync: false
+
+# -----------------------------------------------------------------------------
+# 相机配置
+# -----------------------------------------------------------------------------
+cameras:
+  # -------------------------
+  # 头部相机 (HBVCAM-F2439GS-2 V11, AR0234 全局快门, OpenCV UVC)
+  # 传感器: AR0234CS (1/2.6" CMOS, 全局快门, 3.0µm pixel)
+  # 镜头: 2.96mm (125° H-FOV) / 基线: 60mm
+  # 运行时参数(H.264/ROS2话题)见: config/stereo_head/stereo_head_config.yaml
+  # 备选: ZED Mini (type: "usb", 2560x720@60, 85° H-FOV, 卷帘快门)
+  # -------------------------
+  head:
+    enabled: true
+    # 相机类型: d435i, d405, usb
+    type: "usb"
+
+    # USB 相机参数 (HBVCAM via udev symlink)
+    video_device: "/dev/stereo_camera"
+    pixel_format: "mjpeg2rgb"    # mjpeg2rgb, yuyv2rgb, raw_mjpeg, nv12
+    io_method: "mmap"            # mmap, read, userptr
+
+    # 通用参数 (HBVCAM side-by-side: 2560x720@60fps, H-FOV 125°)
+    resolution:
+      width: 2560
+      height: 720
+      fps: 60
+
+    # 话题名称
+    camera_name: "cam_head"
+
+    # 流设置 (RealSense专用, USB模式忽略)
+    streams:
+      enable_color: true
+      enable_depth: false
+      align_depth: false
+      enable_pointcloud: false
+      enable_gyro: false
+      enable_accel: false
+
+    # TF坐标系配置
+    tf:
+      parent_frame: "base_link"
+      child_frame: "cam_head_link"
+      translation: [0.0, 0.0, 0.5]    # [x, y, z] 米
+      rotation: [0.0, 0.3, 0.0]       # [roll, pitch, yaw] 弧度
+
+  # -------------------------
+  # 左手腕相机 (RealSense D405, 全局快门)
+  # 测试阶段可用 D435 替代: ros2 launch camera camera_launch.py wrist_type:=d435i
+  # -------------------------
+  left_wrist:
+    enabled: true
+    type: "d405"
+
+    # RealSense 参数 (通过序列号绑定，更换相机需更新)
+    serial_number: "409122273982"
+
+    # USB 相机参数 (udev symlink, 无需关心 /dev/videoN)
+    video_device: "/dev/cam_left_wrist"
+    pixel_format: "mjpeg2rgb"
+    io_method: "mmap"
+
+    # 通用参数
+    resolution:
+      width: 848
+      height: 480
+      fps: 30
+
+    camera_name: "cam_left_wrist"
+
+    streams:
+      enable_color: true
+      enable_depth: false
+      align_depth: false
+      enable_pointcloud: false
+      enable_gyro: false
+      enable_accel: false
+
+    tf:
+      parent_frame: "left_wrist_link"
+      child_frame: "cam_left_wrist_link"
+      translation: [0.0, 0.0, 0.0]
+      rotation: [0.0, 0.0, 0.0]
+
+  # -------------------------
+  # 右手腕相机 (RealSense D405, 全局快门)
+  # 测试阶段可用 D435 替代: ros2 launch camera camera_launch.py wrist_type:=d435i
+  # -------------------------
+  right_wrist:
+    enabled: true
+    type: "d405"
+
+    # RealSense 参数
+    serial_number: "352122272592"
+
+    # USB 相机参数
+    video_device: "/dev/cam_right_wrist"
+    pixel_format: "mjpeg2rgb"
+    io_method: "mmap"
+
+    # 通用参数
+    resolution:
+      width: 848
+      height: 480
+      fps: 30
+
+    camera_name: "cam_right_wrist"
+
+    streams:
+      enable_color: true
+      enable_depth: false
+      align_depth: false
+      enable_pointcloud: false
+      enable_gyro: false
+      enable_accel: false
+
+    tf:
+      parent_frame: "right_wrist_link"
+      child_frame: "cam_right_wrist_link"
+      translation: [0.0, 0.0, 0.0]
+      rotation: [0.0, 0.0, 0.0]
+
+# -----------------------------------------------------------------------------
+# 使用说明
+# -----------------------------------------------------------------------------
+# 1. 首次配置 (安装 udev 规则):
+#    bash src/camera/setup_cameras.sh
+#
+# 2. 查找RealSense相机序列号:
+#    rs-enumerate-devices | grep "Serial Number"
+#
+# 3. 更换腕部相机:
+#    a. 更新 serial_number
+#    b. 修改 config/udev/99-teleop-cameras.rules 中对应序列号
+#    c. 重新运行 setup_cameras.sh
+#
+# 4. Docker 挂载:
+#    docker run --device /dev/stereo_camera --device /dev/cam_left_wrist --device /dev/cam_right_wrist ...
+#
+# 5. 头部双目相机配置见: config/stereo_head/stereo_head_config.yaml
+#
+# 6. 启动后话题:
+#    /<camera_name>/color/image_raw        - RGB图像
+#    /<camera_name>/color/camera_info      - 相机内参
+#    /<camera_name>/depth/image_rect_raw   - 深度图像（如启用）

@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>pico_input</name>
+  <version>0.1.0</version>
+  <description>PICO VR input node for Wuji teleoperation (base-initialized tracking)</description>
+  <maintainer email="support@wuji.tech">Wuji Tech</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+  <exec_depend>tianji_world_output</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
