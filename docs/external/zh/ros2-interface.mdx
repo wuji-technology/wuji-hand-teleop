@@ -19,8 +19,7 @@ description: 节点列表、Topic 接口、系统架构和 TF 树
 | Topic | 类型 | 发布者 | 说明 |
 |-------|------|--------|------|
 | `/hand_input` | `Float32MultiArray` | manus_input, pico_input | MediaPipe 手部关键点（单手 63 值，双手 126 值 = 2 × 21 × 3） |
-| `/manus_glove_0` | `ManusGlove` | manus_data_publisher | 左手 MANUS 原始数据 |
-| `/manus_glove_1` | `ManusGlove` | manus_data_publisher | 右手 MANUS 原始数据 |
+| `/manus_glove_<n>` | `ManusGlove` | manus_data_publisher | MANUS 原始数据（编号按连接顺序分配，通过消息中的 `side_id` 字段判断左右手） |
 | `/tf` | `TFMessage` | openvr_input, pico_input_node | TF 坐标变换（由输入设备节点内部发布） |
 
 ## 系统架构

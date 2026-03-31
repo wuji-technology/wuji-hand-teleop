@@ -19,8 +19,7 @@ description: Node reference, topic interface, system architecture, and TF tree
 | Topic | Type | Publisher | Description |
 |-------|------|-----------|-------------|
 | `/hand_input` | `Float32MultiArray` | manus_input, pico_input | MediaPipe hand keypoints (63 values per hand, 126 = 2 x 21 x 3 for both) |
-| `/manus_glove_0` | `ManusGlove` | manus_data_publisher | Left hand MANUS raw data |
-| `/manus_glove_1` | `ManusGlove` | manus_data_publisher | Right hand MANUS raw data |
+| `/manus_glove_<n>` | `ManusGlove` | manus_data_publisher | MANUS raw data (index assigned by connection order; check the `side_id` field in the message to determine left/right) |
 | `/tf` | `TFMessage` | openvr_input, pico_input_node | TF transforms (published internally by input device nodes) |
 
 ## System architecture
