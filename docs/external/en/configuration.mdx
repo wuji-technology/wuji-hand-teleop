@@ -1,0 +1,84 @@
+---
+title: Configuration reference
+description: Wuji Hand, retargeting algorithm, and Tianji Arm configuration
+---
+
+## Wuji Hand configuration
+
+Edit `src/output_devices/wujihand_output/config/wujihand_ik.yaml`:
+
+```yaml
+# Input source (automatically loads the corresponding retarget config)
+input_source: "manus"
+
+# Dexterous hand hardware (see below for how to get serial numbers)
+left_hand:
+  serial_number: "307A377F3333"
+  name: "left_hand"
+
+right_hand:
+  serial_number: "358137563533"
+  name: "right_hand"
+
+# wujihandros2 driver parameters
+driver:
+  publish_rate: 1000.0          # Driver publish rate (Hz)
+  filter_cutoff_freq: 10.0      # Hardware low-pass filter cutoff frequency
+  diagnostics_rate: 10.0        # Diagnostics publish rate (Hz)
+```
+
+Get hand serial numbers:
+
+```bash
+lsusb -v -d 0483:2000 | grep iSerial
+```
+
+## Hand retargeting configuration
+
+Config files at `src/output_devices/wujihand_output/config/`:
+
+| Input source | Config file | Note |
+|--------------|-------------|------|
+| Manus (right) | `retarget_manus_right.yaml` | z rotation: -15 degrees |
+| Manus (left) | `retarget_manus_left.yaml` | z rotation: +15 degrees |
+
+Key parameters:
+
+```yaml
+optimizer:
+  type: "AdaptiveOptimizerAnalytical"
+
+retarget:
+  huber_delta: 2.0               # Position Huber threshold (cm)
+  huber_delta_dir: 0.5           # Direction Huber threshold
+  norm_delta: 0.04               # Velocity regularization weight
+  w_pos: 1.0                     # Tip position weight
+  w_dir: 10.0                    # Tip direction weight
+  w_full_hand: 1.0               # Full hand vector weight
+
+  mediapipe_rotation:
+    x: 0.0
+    y: 0.0
+    z: -15.0                     # Manus right: -15, left: +15
+
+  segment_scaling:               # Finger segment length scaling
+    thumb:  [0.98, 1, 1]
+    index:  [1.1, 0.989, 1.1]
+    middle: [1.10, 0.96, 0.96]
+    ring:   [1.1, 0.97, 0.99]
+    pinky:  [1.105, 1.15, 1.15]
+
+  lp_alpha: 0.3                  # Low-pass filter coefficient (smaller = smoother)
+```
+
+<Callout type="info">
+Manus left and right hands use separate config files due to coordinate system differences. When modifying retarget parameters, update both files—all parameters are identical except `mediapipe_rotation.z`.
+</Callout>
+
+## Tianji Arm configuration
+
+Edit `src/output_devices/tianji_output/tianji_output/config/tianji_output.yaml`:
+
+```yaml
+robot_ip: "192.168.1.190"
+```

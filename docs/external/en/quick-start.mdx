@@ -1,0 +1,90 @@
+---
+title: Quick start
+description: Launch commands for various teleoperation modes and Monitor GUI usage
+---
+
+## Launch modes
+
+### Full teleoperation (hand + arm)
+
+```bash
+# Manus hand + Tracker arm (default)
+ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker
+
+# With RViz visualization
+ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker enable_rviz:=true
+```
+
+### Single-side teleoperation (one hand + one arm)
+
+```bash
+# Right side
+ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=right hand_input:=manus arm_input:=tracker
+
+# Left side
+ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=left hand_input:=manus arm_input:=tracker
+```
+
+### Hand-only control
+
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
+```
+
+### Arm-only control
+
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_arm.launch.py arm_input:=tracker
+```
+
+### Debug arm axis
+
+Verify upper-arm tracker Y-axis direction and `zsp_para` without connecting the robot:
+
+```bash
+ros2 run tianji_output debug_arm_axis
+```
+
+### Launch parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hand_input` | `manus` | Hand input source: `manus` (MANUS Gloves) |
+| `arm_input` | `tracker` | Arm input source: `tracker` (HTC Vive Trackers) |
+| `side` | `right` | Single-side mode: `left` or `right` |
+| `enable_rviz` | `false` | Enable RViz visualization |
+| `hand_config` | default path | Hand configuration file path |
+
+## Monitor GUI
+
+Monitor is the recommended way to operate the teleoperation system. It provides device monitoring and one-click launch.
+
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 run wuji_teleop_monitor monitor
+```
+
+**Available launch presets** (all use Manus + Tracker):
+
+| Preset | Description | Launch file |
+|--------|-------------|-------------|
+| Hand only (Manus+Wuji) | Glove to dexterous hand | `wuji_teleop_hand.launch.py` |
+| Arm only (Tracker+Tianji) | Tracker to Tianji Arm | `wuji_teleop_arm.launch.py` |
+| Hand+Arm full | Full teleoperation | `wuji_teleop.launch.py` |
+| Hand+Arm+Camera full | With camera system | `wuji_teleop_camera.launch.py` |
+| Hand+Arm single (left) | Left side only | `wuji_teleop_single.launch.py` |
+| Hand+Arm single (right) | Right side only | `wuji_teleop_single.launch.py` |
+| PICO Teleop | PICO VR teleoperation | `pico_teleop.launch.py` |
+| PICO Teleop Minimal | PICO VR minimal mode | `pico_teleop_minimal.launch.py` |
+
+**Workflow**
+
+1. Launch Monitor
+2. Verify device connections (gloves, hands, arms, trackers)
+3. Select a launch preset from the dropdown
+4. Click **Start Teleoperation**
+5. Click **Stop** to safely shut down all nodes
+
+<Callout type="warning">
+After releasing the arm brake, the arm may drop due to gravity. Ensure safety before operating.
+</Callout>

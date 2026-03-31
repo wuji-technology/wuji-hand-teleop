@@ -1,0 +1,84 @@
+---
+title: 参数配置
+description: 灵巧手、retargeting 算法和天机臂的配置参考
+---
+
+## Wuji Hand 配置
+
+编辑 `src/output_devices/wujihand_output/config/wujihand_ik.yaml`：
+
+```yaml
+# 输入源（自动加载对应的 retarget 配置）
+input_source: "manus"
+
+# 灵巧手硬件（序列号获取方式见下方）
+left_hand:
+  serial_number: "307A377F3333"
+  name: "left_hand"
+
+right_hand:
+  serial_number: "358137563533"
+  name: "right_hand"
+
+# wujihandros2 驱动参数
+driver:
+  publish_rate: 1000.0          # 驱动发布频率 (Hz)
+  filter_cutoff_freq: 10.0      # 硬件低通滤波截止频率
+  diagnostics_rate: 10.0        # 诊断信息发布频率 (Hz)
+```
+
+获取灵巧手序列号：
+
+```bash
+lsusb -v -d 0483:2000 | grep iSerial
+```
+
+## Hand Retargeting 配置
+
+配置文件位于 `src/output_devices/wujihand_output/config/`：
+
+| 输入源 | 配置文件 | 备注 |
+|--------|----------|------|
+| Manus（右手） | `retarget_manus_right.yaml` | z 旋转 -15 度 |
+| Manus（左手） | `retarget_manus_left.yaml` | z 旋转 +15 度 |
+
+关键参数：
+
+```yaml
+optimizer:
+  type: "AdaptiveOptimizerAnalytical"
+
+retarget:
+  huber_delta: 2.0               # 位置 Huber 阈值 (cm)
+  huber_delta_dir: 0.5           # 方向 Huber 阈值
+  norm_delta: 0.04               # 速度正则化权重
+  w_pos: 1.0                     # 指尖位置权重
+  w_dir: 10.0                    # 指尖方向权重
+  w_full_hand: 1.0               # 全手向量权重
+
+  mediapipe_rotation:
+    x: 0.0
+    y: 0.0
+    z: -15.0                     # Manus 右手: -15，左手: +15
+
+  segment_scaling:               # 手指段长度缩放
+    thumb:  [0.98, 1, 1]
+    index:  [1.1, 0.989, 1.1]
+    middle: [1.10, 0.96, 0.96]
+    ring:   [1.1, 0.97, 0.99]
+    pinky:  [1.105, 1.15, 1.15]
+
+  lp_alpha: 0.3                  # 低通滤波系数（越小越平滑）
+```
+
+<Callout type="info">
+Manus 左右手使用独立配置文件，因坐标系不同。修改 retarget 参数时需同步更新两个文件，除 `mediapipe_rotation.z` 外所有参数一致。
+</Callout>
+
+## 天机臂配置
+
+编辑 `src/output_devices/tianji_output/tianji_output/config/tianji_output.yaml`：
+
+```yaml
+robot_ip: "192.168.1.190"
+```

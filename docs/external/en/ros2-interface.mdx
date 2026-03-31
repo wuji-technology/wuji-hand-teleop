@@ -1,0 +1,60 @@
+---
+title: ROS2 interface
+description: Node reference, topic interface, system architecture, and TF tree
+---
+
+## Node reference
+
+| Node | Package | Description |
+|------|---------|-------------|
+| `manus_data_publisher` | manus_ros2 | MANUS Glove C++ driver, publishes raw data |
+| `manus_input` | manus_input_py | MANUS data processor, converts to MediaPipe format |
+| `openvr_input` | openvr_input | HTC Vive Tracker data collection |
+| `pico_input_node` | pico_input | PICO VR hand and wrist tracking |
+| `wujihand_controller` | controller | Wuji Hand control node |
+| `tianji_arm_controller` | controller | Tianji Arm control node |
+
+## Topic interface
+
+| Topic | Type | Publisher | Description |
+|-------|------|-----------|-------------|
+| `/hand_input` | `Float32MultiArray` | manus_input, pico_input | MediaPipe hand keypoints (63 values per hand, 126 = 2 x 21 x 3 for both) |
+| `/manus_glove_0` | `ManusGlove` | manus_data_publisher | Left hand MANUS raw data |
+| `/manus_glove_1` | `ManusGlove` | manus_data_publisher | Right hand MANUS raw data |
+| `/tf` | `TFMessage` | openvr_input, pico_input_node | TF transforms (published internally by input device nodes) |
+
+## System architecture
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                        Input Devices                            │
+│  ┌──────────┐   ┌──────────────┐   ┌──────────┐                │
+│  │  MANUS   │   │ HTC Vive     │   │  PICO    │                │
+│  │  Glove   │   │ Tracker      │   │  VR      │                │
+│  └────┬─────┘   └──────┬───────┘   └────┬─────┘                │
+└───────┼────────────────┼────────────────┼───────────────────────┘
+        │                │                │
+        ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ manus_input  │ │ openvr_input │ │  pico_input  │
+│ (hand data)  │ │ (TF data)    │ │ (hand + TF)  │
+└──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+       │                │                │
+       ▼                ▼                ▼
+┌─────────────────────────────────────────────────┐
+│            Standard Topic Interface              │
+│  /hand_input (keypoints)    /tf (transforms)     │
+└──────────┬──────────────────────┬────────────────┘
+           │                     │
+           ▼                     ▼
+   ┌──────────────┐     ┌──────────────────┐
+   │ wujihand_ik  │     │  tianji_output   │
+   │ (retarget)   │     │  (TF query → IK) │
+   └──────┬───────┘     └──────┬───────────┘
+          │                    │
+          ▼                    ▼
+   ┌──────────────┐     ┌──────────────┐
+   │  Wuji Hand   │     │  Tianji Arm  │
+   │  (hardware)  │     │  (hardware)  │
+   └──────────────┘     └──────────────┘
+```

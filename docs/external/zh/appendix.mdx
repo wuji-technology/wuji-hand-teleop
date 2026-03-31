@@ -1,0 +1,60 @@
+---
+title: 附录
+description: 故障排查和相关资源
+---
+
+## 故障排查
+
+| 问题 | 解决方案 |
+|------|----------|
+| 找不到灵巧手序列号 | 运行 `lsusb -v -d 0483:2000 \| grep iSerial` |
+| 机器人连接失败 | 确认机器人已上电，用 `ping` 验证 IP 地址，检查网络连接 |
+| TF 树不完整 | 确保 `openvr_input` 或 `pico_input_node` 节点正在运行 |
+| `ImportError: wuji_retargeting` | 从源码安装：`pip install -e .` |
+| `wujihandcpp not found` | 安装 C++ SDK：`sudo apt install ./wujihandcpp-*.deb`（参考 wujihandros2/README.md） |
+| 找不到包 | 运行 `colcon build` 后执行 `source install/setup.bash` |
+| Tracker 闪烁/丢失追踪 | 检查基站摆放位置和角度 |
+| SteamVR "No HMD" 错误 | 确认无头模式配置正确 |
+| Tracker 未识别 | 确认接收器已插入、Tracker 已开机并配对 |
+| 相机未识别 | 检查 USB 连接，运行 `lsusb` 或 `v4l2-ctl --list-devices` |
+| RealSense 启动失败 | 验证 librealsense 安装，使用 `realsense-viewer` 测试 |
+| StereoVR 无画面 | 检查 v4l2loopback 模块：`lsmod \| grep v4l2loopback` |
+| 标定后漂移 | 确认左右手 `.mcal` 文件对应正确，重新编译并 source |
+
+**启用调试日志**
+
+```bash
+# 单节点
+ros2 run controller wujihand_controller --ros-args --log-level debug
+
+# 动态调整（在另一个终端）
+ros2 service call /wujihand_controller/set_logger_level rcl_interfaces/srv/SetLoggerLevel \
+  "{logger_name: 'wujihand_controller', level: 10}"
+# level: 10=DEBUG, 20=INFO, 30=WARN, 40=ERROR
+```
+
+## 致谢
+
+- **StereoVR 立体视觉模块** — Liang ZHU (lzhu686@connect.hkust-gz.edu.cn)
+- **天机臂控制器** — 基于 [TJ_FX_ROBOT_CONTRL_SDK](https://github.com/cynthia-you/TJ_FX_ROBOT_CONTRL_SDK)
+
+## 相关资源
+
+- [wuji-retargeting](https://github.com/wuji-technology/wuji-retargeting) — 手势 Retargeting 算法
+- [wujihandros2](https://github.com/wuji-technology/wujihandros2) — Wuji Hand ROS2 驱动
+- [pico-ros2-bridge](https://github.com/wuji-technology/pico-ros2-bridge) — PICO VR to ROS2 桥接
+
+## 引用
+
+```bibtex
+@software{wuji2025handteleop,
+  title   = {Wuji Hand Teleop: ROS2 Teleoperation for Dexterous Hands and Robot Arms},
+  author  = {Guanqi He and Wentao Zhang and Liang Zhu},
+  year    = {2025},
+  url     = {https://github.com/wuji-technology/wuji-hand-teleop}
+}
+```
+
+## 获取帮助
+
+如有问题或功能建议，请在 [GitHub Issues](https://github.com/wuji-technology/wuji-hand-teleop/issues) 中反馈。

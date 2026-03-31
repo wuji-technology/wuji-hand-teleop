@@ -1,0 +1,60 @@
+---
+title: ROS2 接口
+description: 节点列表、Topic 接口、系统架构和 TF 树
+---
+
+## 节点参考
+
+| 节点 | 包 | 说明 |
+|------|-----|------|
+| `manus_data_publisher` | manus_ros2 | MANUS Glove C++ 驱动，发布原始数据 |
+| `manus_input` | manus_input_py | MANUS 数据处理，转换为 MediaPipe 格式 |
+| `openvr_input` | openvr_input | HTC Vive Tracker 数据采集 |
+| `pico_input_node` | pico_input | PICO VR 手部和手腕追踪 |
+| `wujihand_controller` | controller | Wuji Hand 控制节点 |
+| `tianji_arm_controller` | controller | 天机臂控制节点 |
+
+## Topic 接口
+
+| Topic | 类型 | 发布者 | 说明 |
+|-------|------|--------|------|
+| `/hand_input` | `Float32MultiArray` | manus_input, pico_input | MediaPipe 手部关键点（单手 63 值，双手 126 值 = 2 × 21 × 3） |
+| `/manus_glove_0` | `ManusGlove` | manus_data_publisher | 左手 MANUS 原始数据 |
+| `/manus_glove_1` | `ManusGlove` | manus_data_publisher | 右手 MANUS 原始数据 |
+| `/tf` | `TFMessage` | openvr_input, pico_input_node | TF 坐标变换（由输入设备节点内部发布） |
+
+## 系统架构
+
+```text
+┌─────────────────────────────────────────────────────────────────┐
+│                        输入设备                                  │
+│  ┌──────────┐   ┌──────────────┐   ┌──────────┐                │
+│  │  MANUS   │   │ HTC Vive     │   │  PICO    │                │
+│  │  Glove   │   │ Tracker      │   │  VR      │                │
+│  └────┬─────┘   └──────┬───────┘   └────┬─────┘                │
+└───────┼────────────────┼────────────────┼───────────────────────┘
+        │                │                │
+        ▼                ▼                ▼
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ manus_input  │ │ openvr_input │ │  pico_input  │
+│ (手部数据)    │ │ (TF 数据)    │ │ (手部 + TF)  │
+└──────┬───────┘ └──────┬───────┘ └──────┬───────┘
+       │                │                │
+       ▼                ▼                ▼
+┌─────────────────────────────────────────────────┐
+│               标准 Topic 接口                    │
+│  /hand_input (关键点)    /tf (坐标变换)           │
+└──────────┬──────────────────────┬────────────────┘
+           │                     │
+           ▼                     ▼
+   ┌──────────────┐     ┌──────────────────┐
+   │ wujihand_ik  │     │  tianji_output   │
+   │ (retarget)   │     │  (TF 查询 → IK) │
+   └──────┬───────┘     └──────┬───────────┘
+          │                    │
+          ▼                    ▼
+   ┌──────────────┐     ┌──────────────┐
+   │  Wuji Hand   │     │  天机臂       │
+   │  (硬件)       │     │  (硬件)       │
+   └──────────────┘     └──────────────┘
+```

@@ -1,0 +1,11 @@
+{
+  "title": "Teleoperation user guide",
+  "pages": [
+    "introduction",
+    "quick-start",
+    "input-devices",
+    "configuration",
+    "ros2-interface",
+    "appendix"
+  ]
+}

@@ -1,0 +1,197 @@
+---
+title: 输入设备配置
+description: MANUS 手套、HTC Vive Tracker、PICO VR 和相机系统设置
+---
+
+## MANUS Glove
+
+项目内置 MANUS C++ SDK，位于 `src/input_devices/manus_input/manus_ros2/ManusSDK/`。
+
+### 标定（每位用户需执行一次）
+
+1. 在 Windows PC 上下载 Manus Core 软件
+2. 连接并按提示分别标定左右手
+3. 导出标定文件（`.mcal` 格式）
+4. 复制到标定目录：
+
+```bash
+cd src/input_devices/manus_input/manus_ros2/calibration/
+cp /path/to/left_calibration.mcal LeftMetaglovePro.mcal
+cp /path/to/right_calibration.mcal RightMetaglovePro.mcal
+```
+
+5. 重新编译：
+
+```bash
+colcon build --packages-select manus_ros2 && source install/setup.bash
+```
+
+### 运行 MANUS 节点
+
+MANUS 数据流分两级：C++ 驱动发布原始手套数据，Python 节点转换为标准 MediaPipe 格式。
+
+```bash
+# C++ 驱动：发布原始手套数据
+ros2 run manus_ros2 manus_data_publisher
+
+# Python 节点：转换为 /hand_input（由 launch 文件自动启动，通常无需手动运行）
+ros2 run manus_input_py manus_input
+```
+
+**发布的 Topic**
+
+| Topic | 类型 | 频率 | 说明 |
+|-------|------|------|------|
+| `/manus_glove_0`, `/manus_glove_1` | `manus_ros2_msgs/ManusGlove` | — | C++ 驱动发布的原始手套数据（编号取决于连接顺序） |
+| `/hand_input` | `std_msgs/Float32MultiArray` | 120 Hz | Python 节点转换后的 MediaPipe 21 点关键点 |
+
+**手套配置** `src/input_devices/manus_input/manus_input_py/manus_input_py/config/manus_input.yaml`：
+
+```yaml
+publish_rate_hz: 120.0          # 匹配 Manus 手套硬件刷新率
+publish_hand_topic: /hand_input
+include_right_hand: true
+include_left_hand: true
+left_glove_id: 0
+right_glove_id: 1
+```
+
+## HTC Vive Tracker
+
+### 硬件准备
+
+1. 插入两个 Tracker USB 接收器
+2. 在机器人前后各放置一个基站，水平且无遮挡
+3. 两个基站设置不同信道（A/B/C），避免干扰
+
+### SteamVR 无头模式
+
+仅使用 Tracker 不连接 VR 头显时，需要配置无头模式：
+
+1. 安装 Steam 和 SteamVR：`sudo apt install steam`
+2. 修改 SteamVR `default.vrsettings`：
+   - `"requireHmd": false`
+   - `"forcedDriver": "null"`
+   - `"activateMultipleDrivers": true`
+
+### 获取 Tracker 序列号
+
+SteamVR 运行后执行：
+
+```python
+python3 -c "
+import openvr
+openvr.init(openvr.VRApplication_Other)
+vr = openvr.VRSystem()
+for i in range(64):
+    if vr.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_GenericTracker:
+        serial = vr.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)
+        connected = vr.isTrackedDeviceConnected(i)
+        status = 'Online' if connected else 'Offline'
+        print(f'Tracker: {serial} [{status}]')
+openvr.shutdown()
+"
+```
+
+### 配置 Tracker 映射
+
+编辑 `src/input_devices/openvr_input/config/openvr_input.yaml`：
+
+```yaml
+tracker_serials:
+  chest: "LHR-XXXXXXXX"        # 胸部 Tracker
+  right_wrist: "LHR-XXXXXXXX"  # 右手腕 Tracker
+  left_wrist: "LHR-XXXXXXXX"   # 左手腕 Tracker
+  right_arm: "LHR-XXXXXXXX"    # 右上臂 Tracker（用于臂角度跟随）
+  left_arm: "LHR-XXXXXXXX"     # 左上臂 Tracker（可选）
+```
+
+**Tracker 安装位置**
+
+| Tracker | 位置 | 用途 |
+|---------|------|------|
+| `chest` | 胸部中央 | 身体坐标原点 |
+| `left_wrist` | 左手腕 | 左臂末端位置 |
+| `right_wrist` | 右手腕 | 右臂末端位置 |
+| `left_arm` | 左上臂 | 左臂角度跟随（可选） |
+| `right_arm` | 右上臂 | 右臂角度跟随（可选） |
+
+## 相机系统
+
+编辑 `src/camera/config/camera_config.yaml`：
+
+```yaml
+global:
+  startup_delay: 5.0            # 相机启动间隔延迟，避免 USB 带宽问题（秒）
+  enable_sync: false
+
+cameras:
+  head:
+    enabled: true
+    type: "usb"                  # HBVCAM 双目相机（AR0234 全局快门）
+    video_device: "/dev/stereo_camera"   # udev 规则固定路径
+    pixel_format: "mjpeg2rgb"
+    camera_name: "cam_head"
+    resolution:
+      width: 2560
+      height: 720
+      fps: 60
+
+  left_wrist:
+    enabled: true
+    type: "d405"                 # RealSense D405（全局快门）
+    serial_number: "409122273982"
+    camera_name: "cam_left_wrist"
+    resolution:
+      width: 848
+      height: 480
+      fps: 30
+
+  right_wrist:
+    enabled: true
+    type: "d405"
+    serial_number: "352122272592"
+    camera_name: "cam_right_wrist"
+    # ...
+```
+
+<Callout type="info">
+首次使用相机系统前，运行 `bash src/camera/setup_cameras.sh` 安装 udev 规则，固定设备路径。
+</Callout>
+
+```bash
+# 启动相机
+ros2 launch camera camera_launch.py
+
+# 启动头部双目相机
+ros2 launch camera stereo_head_launch.py
+
+# 获取 RealSense 序列号
+rs-enumerate-devices | grep "Serial Number"
+```
+
+## 自定义输入设备
+
+发布以下接口即可集成自定义输入设备。
+
+### 手部控制
+
+发布到 `/hand_input`（`std_msgs/Float32MultiArray`）：
+
+- 单手：63 个值（21 个关键点 × 3 坐标）
+- 双手：126 个值（先右手，后左手）
+
+**关键点顺序（每只手 21 个点，MediaPipe 格式）**
+
+```text
+0: WRIST
+1-4: THUMB (CMC, MCP, IP, TIP)
+5-8: INDEX (MCP, PIP, DIP, TIP)
+9-12: MIDDLE (MCP, PIP, DIP, TIP)
+13-16: RING (MCP, PIP, DIP, TIP)
+17-20: PINKY (MCP, PIP, DIP, TIP)
+```
+
+### 臂部控制
+
+发布 TF 到 `left_wrist` / `right_wrist` / `chest` 坐标系。

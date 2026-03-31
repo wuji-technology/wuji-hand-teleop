@@ -1,0 +1,75 @@
+---
+title: 概述与安装
+description: 系统要求、支持设备和安装步骤
+---
+
+## 概述
+
+[wuji-hand-teleop](https://github.com/wuji-technology/wuji-hand-teleop) 是基于 ROS2 的遥操作系统，支持使用多种输入设备实时控制 Wuji Hand 灵巧手和天机机械臂。提供 Monitor GUI 用于一键启动和设备监控。
+
+<Callout type="warning">
+本项目当前不再主动维护，不保证售后支持。如遇问题，可在 [GitHub Issues](https://github.com/wuji-technology/wuji-hand-teleop/issues) 中反馈，但无法保证响应时效。产品版即将推出。
+</Callout>
+
+**支持设备**
+
+| 类型 | 设备 | 说明 |
+|------|------|------|
+| 手部输入 | MANUS Glove | 数据手套 |
+| 手部输入 | PICO 4 + Tracker | VR 头显 + 手部追踪 |
+| 手部输入 | 自定义设备 | 发布到 `/hand_input` Topic |
+| 臂部输入 | HTC Vive Tracker | 外部追踪器 |
+| 臂部输入 | 自定义设备 | 发布 TF 到 `left_wrist`/`right_wrist` |
+
+**关联仓库**
+
+| 仓库 | 用途 |
+|------|------|
+| [wujihandros2](https://github.com/wuji-technology/wujihandros2) | Wuji Hand ROS2 C++ 驱动（作为 Submodule 引用） |
+| [wuji-retargeting](https://github.com/wuji-technology/wuji-retargeting) | 手势 Retargeting 算法（pip 安装） |
+| [wuji-hand-description](https://github.com/wuji-technology/wuji-hand-description) | URDF / MJCF 模型描述（本仓库 `src/wujihand_urdf/` 包含 RViz 可视化所需的 URDF） |
+
+## 硬件清单
+
+搭建遥操作系统所需的全部硬件组件，参见 [Hardware Bill of Materials](https://docs.google.com/document/d/19Md8R5tw9OyTvOUD-JKt7S6xMivlHVSCSNAKuoZr1eo/edit?tab=t.0)。
+
+## 系统要求
+
+| 项目 | 要求 |
+|------|------|
+| 操作系统 | Ubuntu 22.04 LTS |
+| ROS2 | Humble |
+| Python | 3.10+ |
+
+## 安装
+
+### 1. 安装 ROS2 依赖
+
+```bash
+sudo apt install ros-humble-desktop
+sudo apt install ros-humble-ament-cmake ros-humble-rclpy ros-humble-std-msgs ros-humble-tf2-ros
+pip install numpy scipy pyyaml PyQt5 openvr
+```
+
+### 2. 安装外部依赖
+
+```bash
+# wujihandcpp C++ SDK（Docker 环境中已预装；裸机安装参考 src/wujihandros2/README.md）
+
+# Hand retargeting 算法
+cd ~/ros2_ws/src
+git clone --recurse-submodules https://github.com/wuji-technology/wuji-retargeting.git
+cd wuji-retargeting && pip install -e .
+```
+
+<Callout type="info">
+`--recurse-submodules` 参数必须添加，因为仓库包含 Git Submodule。
+</Callout>
+
+### 3. 编译
+
+```bash
+cd ~/ros2_ws
+colcon build --symlink-install
+source install/setup.bash
+```

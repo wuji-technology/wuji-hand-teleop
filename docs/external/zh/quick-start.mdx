@@ -1,0 +1,90 @@
+---
+title: 快速开始
+description: 各种遥操作模式的启动命令和 Monitor GUI 使用
+---
+
+## 启动模式
+
+### 全遥操作（手 + 臂）
+
+```bash
+# Manus 手套 + Tracker 臂（默认）
+ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker
+
+# 启用 RViz 可视化
+ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker enable_rviz:=true
+```
+
+### 单侧遥操作（单手 + 单臂）
+
+```bash
+# 右侧
+ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=right hand_input:=manus arm_input:=tracker
+
+# 左侧
+ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=left hand_input:=manus arm_input:=tracker
+```
+
+### 仅手部控制
+
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
+```
+
+### 仅臂部控制
+
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_arm.launch.py arm_input:=tracker
+```
+
+### 调试臂轴方向
+
+验证上臂 Tracker Y 轴方向和 `zsp_para`，无需连接机器人：
+
+```bash
+ros2 run tianji_output debug_arm_axis
+```
+
+### Launch 参数
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `hand_input` | `manus` | 手部输入源：`manus`（MANUS Glove） |
+| `arm_input` | `tracker` | 臂部输入源：`tracker`（HTC Vive Tracker） |
+| `side` | `right` | 单侧模式：`left` 或 `right` |
+| `enable_rviz` | `false` | 启用 RViz 可视化 |
+| `hand_config` | 默认路径 | 手部配置文件路径 |
+
+## Monitor GUI
+
+Monitor 是操作遥操作系统的推荐方式，提供设备监控和一键启动。
+
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 run wuji_teleop_monitor monitor
+```
+
+**可用的启动预设**（均使用 Manus + Tracker）：
+
+| 预设 | 说明 | Launch 文件 |
+|------|------|-------------|
+| Hand only (Manus+Wuji) | 手套控制灵巧手 | `wuji_teleop_hand.launch.py` |
+| Arm only (Tracker+Tianji) | Tracker 控制天机臂 | `wuji_teleop_arm.launch.py` |
+| Hand+Arm full | 全遥操作 | `wuji_teleop.launch.py` |
+| Hand+Arm+Camera full | 全遥操作 + 相机 | `wuji_teleop_camera.launch.py` |
+| Hand+Arm single (left) | 仅左侧 | `wuji_teleop_single.launch.py` |
+| Hand+Arm single (right) | 仅右侧 | `wuji_teleop_single.launch.py` |
+| PICO Teleop | PICO VR 遥操作 | `pico_teleop.launch.py` |
+| PICO Teleop Minimal | PICO VR 精简模式 | `pico_teleop_minimal.launch.py` |
+
+**操作流程**
+
+1. 启动 Monitor
+2. 确认设备连接状态（手套、灵巧手、机械臂、Tracker）
+3. 从下拉菜单选择启动预设
+4. 点击 **Start Teleoperation**
+5. 点击 **Stop** 安全关闭所有节点
+
+<Callout type="warning">
+释放机械臂刹车后，臂可能因重力下坠。操作前确保安全。
+</Callout>

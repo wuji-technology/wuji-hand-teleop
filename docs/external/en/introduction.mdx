@@ -1,0 +1,75 @@
+---
+title: Overview and installation
+description: System requirements, supported devices, and installation steps
+---
+
+## Overview
+
+[wuji-hand-teleop](https://github.com/wuji-technology/wuji-hand-teleop) is a ROS2-based teleoperation system for real-time control of Wuji Hand and Tianji Arm using multiple input devices. It includes a Monitor GUI for one-click launch and device monitoring.
+
+<Callout type="warning">
+This project is not actively maintained, and no after-sales support is provided. If you encounter issues, please [open an issue](https://github.com/wuji-technology/wuji-hand-teleop/issues)—responses aren't guaranteed. Product version coming soon.
+</Callout>
+
+**Supported devices**
+
+| Type | Device | Description |
+|------|--------|-------------|
+| Hand input | MANUS Glove | Data glove |
+| Hand input | PICO 4 + Tracker | VR headset + hand tracker |
+| Hand input | Custom device | Publish to `/hand_input` topic |
+| Arm input | HTC Vive Tracker | External tracker |
+| Arm input | Custom device | Publish TF to `left_wrist`/`right_wrist` |
+
+**Related repositories**
+
+| Repository | Purpose |
+|------------|---------|
+| [wujihandros2](https://github.com/wuji-technology/wujihandros2) | Wuji Hand ROS2 C++ driver (included as submodule) |
+| [wuji-retargeting](https://github.com/wuji-technology/wuji-retargeting) | Hand pose retargeting algorithm (pip install) |
+| [wuji-hand-description](https://github.com/wuji-technology/wuji-hand-description) | URDF / MJCF model descriptions (this repo's `src/wujihand_urdf/` contains the URDF for RViz visualization) |
+
+## Hardware BOM
+
+For the complete list of hardware components required to build this teleoperation system, see the [Hardware Bill of Materials](https://docs.google.com/document/d/19Md8R5tw9OyTvOUD-JKt7S6xMivlHVSCSNAKuoZr1eo/edit?tab=t.0).
+
+## System requirements
+
+| Item | Requirement |
+|------|-------------|
+| OS | Ubuntu 22.04 LTS |
+| ROS2 | Humble |
+| Python | 3.10+ |
+
+## Installation
+
+### 1. Install ROS2 dependencies
+
+```bash
+sudo apt install ros-humble-desktop
+sudo apt install ros-humble-ament-cmake ros-humble-rclpy ros-humble-std-msgs ros-humble-tf2-ros
+pip install numpy scipy pyyaml PyQt5 openvr
+```
+
+### 2. Install external dependencies
+
+```bash
+# wujihandcpp C++ SDK (pre-installed in Docker; for bare metal see src/wujihandros2/README.md)
+
+# Hand retargeting algorithm
+cd ~/ros2_ws/src
+git clone --recurse-submodules https://github.com/wuji-technology/wuji-retargeting.git
+cd wuji-retargeting && pip install -e .
+```
+
+<Callout type="info">
+The `--recurse-submodules` flag is required because the repository contains Git submodules.
+</Callout>
+
+### 3. Build
+
+```bash
+cd ~/ros2_ws
+colcon build --symlink-install
+source install/setup.bash
+```

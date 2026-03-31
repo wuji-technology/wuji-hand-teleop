@@ -1,0 +1,197 @@
+---
+title: Input device setup
+description: MANUS Glove, HTC Vive Tracker, PICO VR, and camera system configuration
+---
+
+## MANUS Glove
+
+The project includes a built-in MANUS C++ SDK at `src/input_devices/manus_input/manus_ros2/ManusSDK/`.
+
+### Calibration (required per user)
+
+1. Download Manus Core software on a Windows PC
+2. Connect and calibrate both hands following the software prompts
+3. Export calibration files (`.mcal` format) for left and right hands separately
+4. Copy files to the calibration directory:
+
+```bash
+cd src/input_devices/manus_input/manus_ros2/calibration/
+cp /path/to/left_calibration.mcal LeftMetaglovePro.mcal
+cp /path/to/right_calibration.mcal RightMetaglovePro.mcal
+```
+
+5. Rebuild:
+
+```bash
+colcon build --packages-select manus_ros2 && source install/setup.bash
+```
+
+### Run the MANUS node
+
+MANUS data flows through two stages: a C++ driver publishes raw glove data, and a Python node converts it to the standard MediaPipe format.
+
+```bash
+# C++ driver: publishes raw glove data
+ros2 run manus_ros2 manus_data_publisher
+
+# Python node: converts to /hand_input (automatically started by launch files, usually no need to run manually)
+ros2 run manus_input_py manus_input
+```
+
+**Published topics**
+
+| Topic | Type | Frequency | Description |
+|-------|------|-----------|-------------|
+| `/manus_glove_0`, `/manus_glove_1` | `manus_ros2_msgs/ManusGlove` | — | Raw glove data from C++ driver (numbering depends on connection order) |
+| `/hand_input` | `std_msgs/Float32MultiArray` | 120 Hz | MediaPipe 21-point keypoints converted by Python node |
+
+**Glove configuration** at `src/input_devices/manus_input/manus_input_py/manus_input_py/config/manus_input.yaml`:
+
+```yaml
+publish_rate_hz: 120.0          # Matches Manus glove hardware refresh rate
+publish_hand_topic: /hand_input
+include_right_hand: true
+include_left_hand: true
+left_glove_id: 0
+right_glove_id: 1
+```
+
+## HTC Vive Tracker
+
+### Hardware setup
+
+1. Plug in two Tracker USB dongles
+2. Place two base stations in front of and behind the robot, level and unobstructed
+3. Set base stations to different channels (A/B/C) to avoid interference
+
+### SteamVR headless mode
+
+Required for tracker-only use without a VR headset:
+
+1. Install Steam and SteamVR: `sudo apt install steam`
+2. Modify SteamVR `default.vrsettings`:
+   - `"requireHmd": false`
+   - `"forcedDriver": "null"`
+   - `"activateMultipleDrivers": true`
+
+### Get tracker serial numbers
+
+Run with SteamVR active:
+
+```python
+python3 -c "
+import openvr
+openvr.init(openvr.VRApplication_Other)
+vr = openvr.VRSystem()
+for i in range(64):
+    if vr.getTrackedDeviceClass(i) == openvr.TrackedDeviceClass_GenericTracker:
+        serial = vr.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)
+        connected = vr.isTrackedDeviceConnected(i)
+        status = 'Online' if connected else 'Offline'
+        print(f'Tracker: {serial} [{status}]')
+openvr.shutdown()
+"
+```
+
+### Configure tracker mapping
+
+Edit `src/input_devices/openvr_input/config/openvr_input.yaml`:
+
+```yaml
+tracker_serials:
+  chest: "LHR-XXXXXXXX"        # Chest tracker
+  right_wrist: "LHR-XXXXXXXX"  # Right wrist tracker
+  left_wrist: "LHR-XXXXXXXX"   # Left wrist tracker
+  right_arm: "LHR-XXXXXXXX"    # Right upper-arm tracker (for arm angle following)
+  left_arm: "LHR-XXXXXXXX"     # Left upper-arm tracker (optional)
+```
+
+**Tracker placement**
+
+| Tracker | Position | Purpose |
+|---------|----------|---------|
+| `chest` | Center of chest | Body coordinate origin |
+| `left_wrist` | Left wrist | Left arm end position |
+| `right_wrist` | Right wrist | Right arm end position |
+| `left_arm` | Left upper arm | Left arm angle following (optional) |
+| `right_arm` | Right upper arm | Right arm angle following (optional) |
+
+## Camera system
+
+Edit `src/camera/config/camera_config.yaml`:
+
+```yaml
+global:
+  startup_delay: 5.0            # Camera startup delay to avoid USB bandwidth issues (seconds)
+  enable_sync: false
+
+cameras:
+  head:
+    enabled: true
+    type: "usb"                  # HBVCAM stereo camera (AR0234 global shutter)
+    video_device: "/dev/stereo_camera"   # Fixed path via udev rule
+    pixel_format: "mjpeg2rgb"
+    camera_name: "cam_head"
+    resolution:
+      width: 2560
+      height: 720
+      fps: 60
+
+  left_wrist:
+    enabled: true
+    type: "d405"                 # RealSense D405 (global shutter)
+    serial_number: "409122273982"
+    camera_name: "cam_left_wrist"
+    resolution:
+      width: 848
+      height: 480
+      fps: 30
+
+  right_wrist:
+    enabled: true
+    type: "d405"
+    serial_number: "352122272592"
+    camera_name: "cam_right_wrist"
+    # ...
+```
+
+<Callout type="info">
+Before first use of the camera system, run `bash src/camera/setup_cameras.sh` to install udev rules and fix device paths.
+</Callout>
+
+```bash
+# Launch cameras
+ros2 launch camera camera_launch.py
+
+# Launch head stereo camera
+ros2 launch camera stereo_head_launch.py
+
+# Get RealSense serial numbers
+rs-enumerate-devices | grep "Serial Number"
+```
+
+## Custom input device
+
+Publish to the following interfaces to integrate a custom input device.
+
+### Hand control
+
+Publish to `/hand_input` (`std_msgs/Float32MultiArray`):
+
+- Single hand: 63 values (21 keypoints x 3 coordinates)
+- Dual hands: 126 values (right hand first, then left)
+
+**Keypoint order (21 points per hand, MediaPipe format)**
+
+```text
+0: WRIST
+1-4: THUMB (CMC, MCP, IP, TIP)
+5-8: INDEX (MCP, PIP, DIP, TIP)
+9-12: MIDDLE (MCP, PIP, DIP, TIP)
+13-16: RING (MCP, PIP, DIP, TIP)
+17-20: PINKY (MCP, PIP, DIP, TIP)
+```
+
+### Arm control
+
+Publish TF transforms to `left_wrist` / `right_wrist` / `chest` frames.
