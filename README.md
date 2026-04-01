@@ -7,7 +7,7 @@ ROS2-based teleoperation system for Wuji Hand and Tianji Arm. Supports multiple 
 > [!WARNING]
 > This project is **not actively maintained** and **no after-sales support** is provided. If you encounter any issues, please [open an issue](https://github.com/wuji-technology/wuji-hand-teleop/issues) — but responses are not guaranteed. **Product version coming soon.**
 
-**Get started with [Quick Start](#quick-start). For detailed documentation, please refer to [Teleop User Guide](https://docs.wuji.technology/docs/en/wuji-hand/latest/teleop-user-guide/introduction/) on Wuji Docs Center.**
+**Get started with [Quick Start](#quick-start). For detailed documentation, please refer to [Teleop User Guide](https://docs.wuji.tech/docs/en/wuji-hand/latest/teleop-user-guide/introduction/) on Wuji Docs Center.**
 
 ## Repository Structure
 
@@ -88,7 +88,7 @@ If you find our project useful, please cite it as follows:
 
 ## Appendix
 
-- **Documentation**: [Teleop User Guide](https://docs.wuji.technology/docs/en/wuji-hand/latest/teleop-user-guide/introduction/)
+- **Documentation**: [Teleop User Guide](https://docs.wuji.tech/docs/en/wuji-hand/latest/teleop-user-guide/introduction/)
 - **Hardware BOM**: [Bill of Materials](https://docs.google.com/document/d/19Md8R5tw9OyTvOUD-JKt7S6xMivlHVSCSNAKuoZr1eo/edit?tab=t.0)
 - **Related Projects**:
   - [wuji-retargeting](https://github.com/wuji-technology/wuji-retargeting) — Hand pose retargeting algorithm
