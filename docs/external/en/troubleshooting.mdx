@@ -1,0 +1,76 @@
+---
+title: Troubleshooting
+description: Common issues and solutions
+---
+
+## Connection Issues
+
+**Q: Hand serial not found?**
+
+Run `lsusb -v -d 0483:2000 | grep iSerial` to find the device serial number.
+
+**Q: Robot connection failed?**
+
+Verify the robot is powered on, confirm the IP address with `ping`, and check the network connection.
+
+**Q: Package not found?**
+
+Run `colcon build` then `source install/setup.bash`.
+
+## Tracker Issues
+
+**Q: Tracker flickering or lost tracking?**
+
+Check base station placement and angles.
+
+**Q: SteamVR "No HMD" error?**
+
+Verify headless mode configuration.
+
+**Q: Tracker not recognized?**
+
+Confirm the dongle is plugged in, the tracker is powered on and paired.
+
+## TF and Retargeting Issues
+
+**Q: TF tree incomplete?**
+
+Ensure `openvr_input` or `pico_input_node` node is running.
+
+**Q: `ImportError: wuji_retargeting`?**
+
+Install from source: `pip install -e .`
+
+**Q: `wujihandcpp not found`?**
+
+Install the C++ SDK: `sudo apt install ./wujihandcpp-*.deb` (see wujihandros2/README.md).
+
+**Q: Calibration drift after applying?**
+
+Verify the correct `.mcal` file for each hand, rebuild and re-source.
+
+## Camera Issues
+
+**Q: Camera not recognized?**
+
+Check the USB connection, run `lsusb` or `v4l2-ctl --list-devices`.
+
+**Q: RealSense launch failure?**
+
+Verify librealsense installation, test with `realsense-viewer`.
+
+**Q: StereoVR no image?**
+
+Check the v4l2loopback module: `lsmod | grep v4l2loopback`.
+
+## Debug Logging
+
+```bash
+# Single node
+ros2 run controller wujihand_controller --ros-args --log-level debug
+
+# Dynamically adjust in another terminal
+ros2 service call /wujihand_controller/set_logger_level rcl_interfaces/srv/SetLoggerLevel \
+  "{logger_name: 'wujihand_controller', level: 10}"
+# level: 10=DEBUG, 20=INFO, 30=WARN, 40=ERROR
+```

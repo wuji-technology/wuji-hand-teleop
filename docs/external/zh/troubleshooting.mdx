@@ -1,0 +1,76 @@
+---
+title: 故障排查
+description: 常见问题和解决方案
+---
+
+## 连接问题
+
+**Q: 找不到灵巧手序列号？**
+
+运行 `lsusb -v -d 0483:2000 | grep iSerial` 查看设备序列号。
+
+**Q: 机器人连接失败？**
+
+确认机器人已上电，用 `ping` 验证 IP 地址，检查网络连接。
+
+**Q: 找不到包？**
+
+运行 `colcon build` 后执行 `source install/setup.bash`。
+
+## Tracker 问题
+
+**Q: Tracker 闪烁或丢失追踪？**
+
+检查基站摆放位置和角度。
+
+**Q: SteamVR 提示 "No HMD" 错误？**
+
+确认无头模式配置正确。
+
+**Q: Tracker 未识别？**
+
+确认接收器已插入、Tracker 已开机并配对。
+
+## TF 和 Retargeting 问题
+
+**Q: TF 树不完整？**
+
+确保 `openvr_input` 或 `pico_input_node` 节点正在运行。
+
+**Q: `ImportError: wuji_retargeting`？**
+
+从源码安装：`pip install -e .`
+
+**Q: `wujihandcpp not found`？**
+
+安装 C++ SDK：`sudo apt install ./wujihandcpp-*.deb`（参考 wujihandros2/README.md）。
+
+**Q: 标定后出现漂移？**
+
+确认左右手 `.mcal` 文件对应正确，重新编译并 source。
+
+## 相机问题
+
+**Q: 相机未识别？**
+
+检查 USB ��接，运行 `lsusb` 或 `v4l2-ctl --list-devices`。
+
+**Q: RealSense 启动失败？**
+
+验证 librealsense 安装，使用 `realsense-viewer` 测试。
+
+**Q: StereoVR 无画面？**
+
+检查 v4l2loopback 模块：`lsmod | grep v4l2loopback`。
+
+## 调试日志
+
+```bash
+# 单节点
+ros2 run controller wujihand_controller --ros-args --log-level debug
+
+# 动态调整（在另一个终端）
+ros2 service call /wujihand_controller/set_logger_level rcl_interfaces/srv/SetLoggerLevel \
+  "{logger_name: 'wujihand_controller', level: 10}"
+# level: 10=DEBUG, 20=INFO, 30=WARN, 40=ERROR
+```

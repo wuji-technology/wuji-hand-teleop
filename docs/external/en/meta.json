@@ -6,6 +6,6 @@
     "input-devices",
     "configuration",
     "ros2-interface",
-    "appendix"
+    "troubleshooting"
   ]
 }
