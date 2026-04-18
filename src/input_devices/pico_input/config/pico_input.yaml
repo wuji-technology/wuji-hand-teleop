@@ -1,125 +1,125 @@
-# PICO Input Node 配置
-# 增量控制模式 - 只关注四个 tracker 的位置变化
+# PICO Input Node Configuration
+# Incremental control mode - only tracks position changes of four trackers
 
 pico_input_node:
   ros__parameters:
-    # ==================== PC-Service 连接 ====================
-    # 注意: Pybind SDK 使用本地共享内存通信，以下参数仅用于未来扩展
-    # 实际连接通过 PC-Service 的共享内存实现，无需网络配置
-    pc_service_host: "127.0.0.1"  # 保留参数，当前未使用
-    pc_service_port: 60061        # 保留参数，当前未使用
+    # ==================== PC-Service Connection ====================
+    # Note: Pybind SDK uses local shared memory communication, the following parameters are reserved for future extension
+    # Actual connection is through PC-Service shared memory, no network configuration needed
+    pc_service_host: "127.0.0.1"  # Reserved parameter, currently unused
+    pc_service_port: 60061        # Reserved parameter, currently unused
 
-    # ==================== 参数 ====================
+    # ==================== Parameters ====================
     publish_rate: 90.0
 
-    # ==================== 初始化设置 ====================
-    # 自动初始化延迟 (秒)，设为 0 禁用自动初始化
-    # 启动后等待此时间，建议用户尽量模仿机器人当前姿势
+    # ==================== Initialization Settings ====================
+    # Auto-initialization delay (seconds), set to 0 to disable auto-initialization
+    # After startup, wait this duration; users are advised to mimic the robot's current pose as closely as possible
     auto_init_delay: 5.0
 
-    # ==================== One-Euro Filter 自适应滤波参数 ====================
-    # 自适应低通滤波 (Casiez et al., CHI 2012)
-    # 静止时: 低截止频率 → 强平滑 (抑制传感器抖动)
-    # 快速运动时: 高截止频率 → 弱平滑 (低延迟, 跟手)
-    # 位置、姿态、肘部方向统一使用 One-Euro Filter
+    # ==================== One-Euro Filter Adaptive Filtering Parameters ====================
+    # Adaptive low-pass filter (Casiez et al., CHI 2012)
+    # At rest: low cutoff frequency -> strong smoothing (suppresses sensor jitter)
+    # During fast motion: high cutoff frequency -> weak smoothing (low latency, responsive)
+    # Position, orientation, and elbow direction all use One-Euro Filter
     #
-    # min_cutoff: 最小截止频率 (Hz), 控制静止时平滑强度
-    #   越小 → 静止越平滑, 但快速启动延迟越大
-    #   90Hz 下: 1.0Hz → alpha≈0.065 (强平滑)
-    # beta: 速度响应系数 (内部按信号类型自动缩放)
-    #   越大 → 快速运动时跟踪越紧, 但可能漏过抖动
-    #   内部缩放: 位置×20, 姿态×4, 肘部×4
-    # elbow_min_cutoff: 肘部方向的最小截止频率 (通常 < min_cutoff)
-    #   肘部方向变化慢, 需要更强的静止平滑
-    one_euro_min_cutoff: 1.0    # 最小截止频率 (Hz)
-    one_euro_beta: 0.7          # 速度响应系数
-    elbow_min_cutoff: 0.3       # 肘部方向最小截止频率 (Hz)
-    # ⚠️ 动态臂角控制始终开启 (必须发布 elbow direction 给 IK)
-    # 方向被钳位到下半球 (肘部只能朝下或水平, 不会朝天)
-    # 手臂几乎伸直时 (arm tracker 到肩-腕轴距离 < 15mm) 自动锁定最后有效方向
-    # 角速率限制: 每帧最大变化 3° (270°/s), 防止方向突变导致 IK 永久失败
-    # 实测证明: 静态 default_zsp_para 在手臂到达工作空间边缘时会导致 IK 永久失败
-    # 动态臂角可以随手臂姿态自适应，确保 IK 在全工作空间稳定求解
+    # min_cutoff: Minimum cutoff frequency (Hz), controls smoothing strength at rest
+    #   Lower -> smoother at rest, but higher latency on fast startup
+    #   At 90Hz: 1.0Hz -> alpha~=0.065 (strong smoothing)
+    # beta: Speed response coefficient (internally auto-scaled by signal type)
+    #   Higher -> tighter tracking during fast motion, but may miss jitter
+    #   Internal scaling: position x20, orientation x4, elbow x4
+    # elbow_min_cutoff: Minimum cutoff frequency for elbow direction (typically < min_cutoff)
+    #   Elbow direction changes slowly, requires stronger smoothing at rest
+    one_euro_min_cutoff: 1.0    # Minimum cutoff frequency (Hz)
+    one_euro_beta: 0.7          # Speed response coefficient
+    elbow_min_cutoff: 0.3       # Elbow direction minimum cutoff frequency (Hz)
+    # Warning: Dynamic arm angle control is always enabled (must publish elbow direction to IK)
+    # Direction is clamped to the lower hemisphere (elbow can only point down or horizontal, not upward)
+    # When arm is nearly straight (arm tracker distance to shoulder-wrist axis < 15mm), auto-locks last valid direction
+    # Angular rate limit: max 3 deg per frame (270 deg/s), prevents direction jumps causing permanent IK failure
+    # Testing shows: static default_zsp_para causes permanent IK failure when arm reaches workspace boundary
+    # Dynamic arm angle adapts to arm pose, ensuring stable IK solving across the full workspace
 
-    # ==================== 数据源配置 (新增) ====================
-    data_source_type: "live"  # "live" (真实 PICO SDK) 或 "recorded" (回放文件)
+    # ==================== Data Source Configuration ====================
+    data_source_type: "live"  # "live" (real PICO SDK) or "recorded" (playback file)
 
-    # RecordedDataSource 配置 (仅当 data_source_type="recorded" 时使用)
+    # RecordedDataSource configuration (only used when data_source_type="recorded")
     recorded_file_path: "record/trackingData_sample_static.txt"
-    playback_speed: 1.0  # 回放速度倍率 (1.0 = 实时)
-    loop_playback: true  # 是否循环回放
+    playback_speed: 1.0  # Playback speed multiplier (1.0 = real-time)
+    loop_playback: true  # Whether to loop playback
 
-    # ==================== Topic 发布 ====================
-    # 发布目标位姿到 tianji_world_output_node (修复接口不匹配问题)
-    enable_topic_publishing: true  # 发布 /left_arm_target_pose 和 /right_arm_target_pose
-    enable_legacy_topics: false    # 发布 /pico/* 话题 (仅调试用)
+    # ==================== Topic Publishing ====================
+    # Publish target poses to tianji_world_output_node (fixes interface mismatch issue)
+    enable_topic_publishing: true  # Publish /left_arm_target_pose and /right_arm_target_pose
+    enable_legacy_topics: false    # Publish /pico/* topics (debug only)
     topic_prefix: "pico"
 
-    # ==================== Tracker 序列号 → 角色映射 (统一命名规范) ====================
-    # 使用 PICO Motion Tracker 序列号进行精确映射
-    # 序列号格式: PC2310MLKC190058G (可省略前缀 PC2310MLKC 和后缀 G)
+    # ==================== Tracker Serial Number to Role Mapping (Unified Naming Convention) ====================
+    # Use PICO Motion Tracker serial numbers for precise mapping
+    # Serial number format: PC2310MLKC190058G (prefix PC2310MLKC and suffix G can be omitted)
     #
-    # 命名规范:
-    #   - pico_* 前缀表示 PICO tracker
-    #   - left_dh_ee / right_dh_ee 保留用于机器人 DH 末端参考
+    # Naming convention:
+    #   - pico_* prefix indicates PICO tracker
+    #   - left_dh_ee / right_dh_ee reserved for robot DH end-effector reference
     #
-    # 佩戴位置说明:
-    #   - pico_left_wrist:  左手腕 (控制天机左臂末端)
-    #   - pico_right_wrist: 右手腕 (控制天机右臂末端)
-    #   - pico_left_arm:    左前臂 (臂角约束)
-    #   - pico_right_arm:   右前臂 (臂角约束)
+    # Wearing position description:
+    #   - pico_left_wrist:  Left wrist (controls Tianji left arm end-effector)
+    #   - pico_right_wrist: Right wrist (controls Tianji right arm end-effector)
+    #   - pico_left_arm:    Left forearm (arm angle constraint)
+    #   - pico_right_arm:   Right forearm (arm angle constraint)
     #
-    # 请根据实际佩戴的 tracker 序列号配置:
-    tracker_serial_190058: "pico_left_wrist"   # 左手腕
-    tracker_serial_190046: "pico_left_arm"     # 左前臂
-    tracker_serial_190600: "pico_right_wrist"  # 右手腕
-    tracker_serial_190023: "pico_right_arm"    # 右前臂
+    # Configure according to the actual tracker serial numbers worn:
+    tracker_serial_190058: "pico_left_wrist"   # Left wrist
+    tracker_serial_190046: "pico_left_arm"     # Left forearm
+    tracker_serial_190600: "pico_right_wrist"  # Right wrist
+    tracker_serial_190023: "pico_right_arm"    # Right forearm
 
-    # ==================== 机器人配置 ====================
-    # ⚠️ 机器人初始位姿、坐标变换等配置已统一到:
+    # ==================== Robot Configuration ====================
+    # Warning: Robot initial pose, coordinate transforms and other configurations are unified in:
     #    tianji_world_output/config/tianji_robot.yaml
     #
-    # pico_input_node 会从 tianji_robot.yaml 加载以下配置:
-    #   - init_pos: 末端初始位置
-    #   - init_quat: 末端初始姿态
-    #   - world_to_chest_quat: 坐标变换四元数
-    #   - pico_to_robot: PICO → Robot 坐标变换矩阵
+    # pico_input_node loads the following from tianji_robot.yaml:
+    #   - init_pos: End-effector initial position
+    #   - init_quat: End-effector initial orientation
+    #   - world_to_chest_quat: Coordinate transform quaternion
+    #   - pico_to_robot: PICO to Robot coordinate transform matrix
     #
-    # 如需修改机器人参数，请编辑 tianji_robot.yaml
+    # To modify robot parameters, edit tianji_robot.yaml
 
-# ==================== 增量控制模式说明 ====================
+# ==================== Incremental Control Mode Description ====================
 #
-# 坐标系变换:
-#   PICO (右手坐标系): +X 右, +Y 上, +Z 向用户面向方向
-#   机器人坐标系:      +X 前, +Y 左, +Z 上
-#   变换: -PICO_Z → Robot_X, -PICO_X → Robot_Y, PICO_Y → Robot_Z
+# Coordinate system transforms:
+#   PICO (right-hand coordinate system): +X right, +Y up, +Z toward user's facing direction
+#   Robot coordinate system:              +X forward, +Y left, +Z up
+#   Transform: -PICO_Z -> Robot_X, -PICO_X -> Robot_Y, PICO_Y -> Robot_Z
 #
-# 工作流程:
-#   1. 天机驱动启动，机器人移动到 init_joints 对应的初始位姿
-#   2. 启动 pico_input_node
-#   3. 用户摆好姿势 (建议模仿机器人当前姿势)
-#   4. 等待 5 秒 (或调用 /pico_input/init 服务)
-#   5. 系统记录所有 tracker 的初始位置
-#   6. 后续只发布增量变化:
-#      - 用户手移动 Δ → 机器人手移动 Δ (经坐标变换)
-#      - 机器人目标 = 配置中初始位置 + Δ
+# Workflow:
+#   1. Tianji driver starts, robot moves to initial pose corresponding to init_joints
+#   2. Start pico_input_node
+#   3. User assumes pose (recommended to mimic robot's current pose)
+#   4. Wait 5 seconds (or call /pico_input/init service)
+#   5. System records initial positions of all trackers
+#   6. Subsequently only publishes incremental changes:
+#      - User hand moves delta -> Robot hand moves delta (with coordinate transform)
+#      - Robot target = configured initial position + delta
 #
-# TF 树结构 (pico_input_node 发布):
-#   world (机器人基座)
-#   ├── head (HMD, 仅可视化)
-#   ├── world_left (左臂 chest 坐标系, Y=+0.2)
-#   │   ├── pico_left_wrist (PICO 左手腕, 动态)
-#   │   └── pico_left_arm (PICO 左前臂, 动态)
-#   └── world_right (右臂 chest 坐标系, Y=-0.2)
-#       ├── pico_right_wrist (PICO 右手腕, 动态)
-#       └── pico_right_arm (PICO 右前臂, 动态)
+# TF tree structure (published by pico_input_node):
+#   world (robot base)
+#   +-- head (HMD, visualization only)
+#   +-- world_left (left arm chest coordinate system, Y=+0.2)
+#   |   +-- pico_left_wrist (PICO left wrist, dynamic)
+#   |   +-- pico_left_arm (PICO left forearm, dynamic)
+#   +-- world_right (right arm chest coordinate system, Y=-0.2)
+#       +-- pico_right_wrist (PICO right wrist, dynamic)
+#       +-- pico_right_arm (PICO right forearm, dynamic)
 #
-# Topics (统一命名规范):
-#   /pico_hmd, /pico_left_wrist, /pico_right_wrist (PICO 数据)
-#   /pico_left_arm, /pico_right_arm (PICO 前臂数据)
-#   /left_arm_target_pose, /right_arm_target_pose (机器人控制)
-#   /left_arm_elbow_direction, /right_arm_elbow_direction (臂角约束)
+# Topics (unified naming convention):
+#   /pico_hmd, /pico_left_wrist, /pico_right_wrist (PICO data)
+#   /pico_left_arm, /pico_right_arm (PICO forearm data)
+#   /left_arm_target_pose, /right_arm_target_pose (robot control)
+#   /left_arm_elbow_direction, /right_arm_elbow_direction (arm angle constraint)
 #
-# 服务:
+# Services:
 #   ros2 service call /pico_input/init std_srvs/srv/Trigger
 #   ros2 service call /pico_input/reset std_srvs/srv/Trigger

@@ -32,7 +32,7 @@ setup(
         'setuptools',
         'numpy>=1.21.0',
         'scipy>=1.8.0',
-        # xrobotoolkit_sdk 需要单独安装: pip install ~/Desktop/XRoboToolkit-PC-Service-Pybind
+        # xrobotoolkit_sdk must be installed separately: pip install ~/Desktop/XRoboToolkit-PC-Service-Pybind
     ],
     zip_safe=True,
     maintainer='Wuji Tech',

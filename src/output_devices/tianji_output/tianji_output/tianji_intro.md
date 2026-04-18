@@ -1,60 +1,61 @@
-# 7自由度机械臂冗余参数说明文档
 
-## 1. 核心概念：冗余自由度 (Redundancy)
-对于7自由度机械臂，给定末端位姿（位置+姿态，共6个约束），存在**无穷多组**关节角解。这些解在几何上表现为：在保持手部和肩部位置不变的情况下，肘部可以绕 **"肩-腕连线"** 旋转。
+# 7-DOF Robotic Arm Redundancy Parameter Documentation
 
-为了从无穷多解中选定唯一的构型，SDK 引入了两个关键参数：
-1.  **臂向量 (Arm Vector)**：定义 $0^\circ$ 的参考方向。
-2.  **臂形角 (Arm Angle)**：在参考方向基础上的旋转角度。
+## 1. Core Concept: Redundancy
+For a 7-DOF robotic arm, given an end-effector pose (position + orientation, 6 constraints total), there exist **infinitely many** joint angle solutions. Geometrically, these solutions manifest as: while keeping the hand and shoulder positions fixed, the elbow can rotate around the **"shoulder-wrist line"**.
 
----
-
-## 2. 几何模型
-我们将机械臂简化为 **肩点 ($P_A$)**、**肘点 ($P_{Elbow}$)** 和 **腕点 ($P_B$)** 的三角关系。
-* **旋转轴**：肩点指向腕点的向量。
-* **轨道圆**：肘部在垂直于旋转轴的平面上运动。
-
-### 参数详解
-
-#### 2.1 臂向量 (ZSPPara / Reference Vector)
-定义 **"零位平面"**。算法会自动将用户输入的向量投影到垂直于旋转轴的平面上。
-
-* **SDK对应**: `m_Input_IK_ZSPPara`
-* **常用设置**:
-    * `[0, 0, -1]`: **肘部自然向下** (推荐默认)。
-    * `[0, 0, 1]`: 肘部向上 (避开下方障碍)。
-    * `[0, 1, 0]`: 肘部向侧面。
-
-#### 2.2 臂形角 (ZSP_Angle / Arm Angle)
-定义肘部相对于参考平面的 **旋转角度**。
-
-* **SDK对应**: `m_Input_ZSP_Angle`
-* **单位**: 度 (Degree)。
-* **作用**: 在确定了大方向（由臂向量决定）后，通过调整此角度进行精细避障。
+To select a unique configuration from the infinitely many solutions, the SDK introduces two key parameters:
+1.  **Arm Vector**: Defines the reference direction for $0^\circ$.
+2.  **Arm Angle**: The rotation angle relative to the reference direction.
 
 ---
 
-## 3. SDK 结构体映射 (FX_InvKineSolvePara)
+## 2. Geometric Model
+We simplify the robotic arm into a triangular relationship between **shoulder point ($P_A$)**, **elbow point ($P_{Elbow}$)**, and **wrist point ($P_B$)**.
+* **Rotation axis**: The vector from the shoulder point to the wrist point.
+* **Orbit circle**: The elbow moves on a plane perpendicular to the rotation axis.
 
-在使用调试工具时，右侧的数据框直接对应 SDK 的输入输出：
+### Parameter Details
 
-### 输入 (Input)
-* `m_Input_IK_TargetTCP`: 目标末端的 4x4 矩阵 (包含位置和旋转)。
-* `m_Input_IK_ZSPType`: 设置为 **1** (NEAR_DIR 模式)。
-* `m_Input_IK_ZSPPara`: 输入参考向量 (如 `0,0,-1`)。
-* `m_Input_ZSP_Angle`: 臂形角 (如 `30.0` 度)。
+#### 2.1 Arm Vector (ZSPPara / Reference Vector)
+Defines the **"zero position plane"**. The algorithm automatically projects the user-input vector onto the plane perpendicular to the rotation axis.
 
-### 输出 (Output)
-* `m_Output_RetJoint`: 计算出的关节角度。
-* `m_Output_IsOutRange`: **[重要]** 如果为 True (红色)，说明目标点太远，机械臂够不到。此时需检查 `TCP` 坐标。
+* **SDK mapping**: `m_Input_IK_ZSPPara`
+* **Common settings**:
+    * `[0, 0, -1]`: **Elbow naturally pointing down** (recommended default).
+    * `[0, 0, 1]`: Elbow pointing up (to avoid obstacles below).
+    * `[0, 1, 0]`: Elbow pointing sideways.
+
+#### 2.2 Arm Angle (ZSP_Angle / Arm Angle)
+Defines the **rotation angle** of the elbow relative to the reference plane.
+
+* **SDK mapping**: `m_Input_ZSP_Angle`
+* **Unit**: Degrees.
+* **Purpose**: After determining the general direction (set by the arm vector), fine-tune obstacle avoidance by adjusting this angle.
 
 ---
 
-## 4. 调试工具使用指南
+## 3. SDK Structure Mapping (FX_InvKineSolvePara)
 
-1.  **修改位置**: 拖动 `TCP X/Y/Z` 滑块，或直接在文本框输入数字并回车。
-2.  **观察冗余**: 保持 TCP 不变，仅拖动 `Arm Angle`，观察肘部如何绕轴旋转。
-3.  **理解参考向量**: 
-    * 勾选 `Show Ref Vector`。
-    * 修改 `RefVec Z`。
-    * 观察绿色的参考箭头如何改变 $0^\circ$ 的起始位置。
+When using the debugging tool, the data fields on the right side directly correspond to SDK inputs and outputs:
+
+### Input
+* `m_Input_IK_TargetTCP`: Target end-effector 4x4 matrix (containing position and rotation).
+* `m_Input_IK_ZSPType`: Set to **1** (NEAR_DIR mode).
+* `m_Input_IK_ZSPPara`: Input reference vector (e.g., `0,0,-1`).
+* `m_Input_ZSP_Angle`: Arm angle (e.g., `30.0` degrees).
+
+### Output
+* `m_Output_RetJoint`: Computed joint angles.
+* `m_Output_IsOutRange`: **[Important]** If True (red), the target point is too far and the robotic arm cannot reach it. Check the `TCP` coordinates in this case.
+
+---
+
+## 4. Debugging Tool User Guide
+
+1.  **Modify position**: Drag the `TCP X/Y/Z` sliders, or type numbers directly into the text fields and press Enter.
+2.  **Observe redundancy**: Keep TCP unchanged, only drag `Arm Angle`, and observe how the elbow rotates around the axis.
+3.  **Understand the reference vector**: 
+    * Check `Show Ref Vector`.
+    * Modify `RefVec Z`.
+    * Observe how the green reference arrow changes the starting position of $0^\circ$.

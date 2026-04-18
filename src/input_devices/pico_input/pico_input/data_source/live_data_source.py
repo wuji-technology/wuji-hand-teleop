@@ -89,7 +89,7 @@ class LiveDataSource(DataSource):
             if pose is None or len(pose) < 7:
                 return None
 
-            # 直接使用 SDK 返回的列表切片，避免 np.array 开销
+            # Directly use SDK returned list slice, avoiding np.array overhead
             orientation = pose[3:7]
             quat = np.array(orientation, dtype=np.float64)
             if not self.validate_quaternion(quat):
@@ -140,7 +140,7 @@ class LiveDataSource(DataSource):
                 else:
                     sn = f"tracker_{i}"
 
-                # Validate quaternion (使用列表切片，仅在有效时创建 np.array)
+                # Validate quaternion (use list slice, only create np.array when valid)
                 quat_raw = pose[3:7]
                 norm_sq = quat_raw[0]**2 + quat_raw[1]**2 + quat_raw[2]**2 + quat_raw[3]**2
                 is_valid = 0.9025 < norm_sq < 1.1025  # (1-0.05)² < norm² < (1+0.05)²

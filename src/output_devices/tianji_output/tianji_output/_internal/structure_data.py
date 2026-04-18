@@ -1,95 +1,95 @@
 from ctypes import *
 
 
-# 定义StateCtr结构体
+# Define StateCtr structure
 class StateCtr(Structure):
     _fields_ = [
-        ("m_CurState", c_int),  # * 当前状态 */ ArmState
-        ("m_CmdState", c_int),  # * 指令状态 */ DCSSCmdType 0
-        ("m_ERRCode", c_int)  # * 错误码   */
+        ("m_CurState", c_int),  # * Current state */ ArmState
+        ("m_CmdState", c_int),  # * Command state */ DCSSCmdType 0
+        ("m_ERRCode", c_int)  # * Error code   */
     ]
 
 
-# 定义RT_IN结构体
+# Define RT_IN structure
 class RT_IN(Structure):
     _fields_ = [
-        ("m_RtInSwitch", c_int),  # * 实时输入开关 用户实时数据 进行开关设置 0 -  close rt_in ;1- open rt_in*
-        ("m_ImpType", c_int),  #阻抗类型
-        ("m_InFrameSerial", c_int),  # short 输入帧序号   0 -  1000000 取模
-        ("m_FrameMissCnt", c_short),  # short 丢帧计数
-        ("m_MaxFrameMissCnt", c_short),  # short 开 启 后 最 大 丢 帧 计 数
+        ("m_RtInSwitch", c_int),  # * Real-time input switch for user real-time data on/off: 0 - close rt_in; 1 - open rt_in *
+        ("m_ImpType", c_int),  #Impedance type
+        ("m_InFrameSerial", c_int),  # short input frame serial number 0 - 1000000 modulo
+        ("m_FrameMissCnt", c_short),  # short frame miss count
+        ("m_MaxFrameMissCnt", c_short),  # short max frame miss count before triggering backward
 
         ("m_SysCyc", c_int),  # 0 -  1000000
-        ("m_SysCycMissCnt", c_short),  # short 实 时 性  Miss 计 数
-        ("m_MaxSysCycMissCnt", c_short),  # short开 启 后 最 大 实 时 性Miss 计 数
+        ("m_SysCycMissCnt", c_short),  # short Real-time miss count
+        ("m_MaxSysCycMissCnt", c_short),  # short max real-time miss count before triggering backward
 
-        ("m_ToolKine", c_float * 6),  # 工 具 运 动 学 参 数 1
-        ("m_ToolDyn", c_float * 10),  # 工 具 动 力 学 参 数 1
+        ("m_ToolKine", c_float * 6),  # Tool kinematics parameters 1
+        ("m_ToolDyn", c_float * 10),  # Tool dynamics parameters 1
 
-        ("m_Joint_CMD_Pos", c_float * 7),  # 关 节 位 置 指 令
-        ("m_Joint_Vel_Ratio", c_short),  # short 关 节 速 度 限 制 百分比 2
-        ("m_Joint_Acc_Ratio", c_short),  # short 关 节 加 速 度 限 制  百分比 2
+        ("m_Joint_CMD_Pos", c_float * 7),  # Joint position command
+        ("m_Joint_Vel_Ratio", c_short),  # short Joint velocity limit percentage 2
+        ("m_Joint_Acc_Ratio", c_short),  # short Joint acceleration limit percentage 2
 
-        ("m_Joint_K", c_float * 7),  # 关节阻抗刚度K指令 3
-        ("m_Joint_D", c_float * 7),  # 关节阻抗刚度D指令 4
+        ("m_Joint_K", c_float * 7),  # Joint impedance stiffness K command 3
+        ("m_Joint_D", c_float * 7),  # Joint impedance damping D command 4
 
-        ("m_DragSpType", c_int),  # 零空间类型 5
-        ("m_DragSpPara", c_float * 6),  # 零空间参数类型 5
+        ("m_DragSpType", c_int),  # Nullspace type 5
+        ("m_DragSpPara", c_float * 6),  # Nullspace parameter type 5
 
-        ("m_Cart_KD_Type", c_int),  # 坐标阻抗类型
-        ("m_Cart_K", c_float*6),  # 坐标阻抗刚度K指令 4
-        ("m_Cart_D", c_float*6),  # 坐标阻抗阻尼D指令 4
+        ("m_Cart_KD_Type", c_int),  # Cartesian impedance type
+        ("m_Cart_K", c_float*6),  # Cartesian impedance stiffness K command 4
+        ("m_Cart_D", c_float*6),  # Cartesian impedance damping D command 4
         ("m_Cart_KN", c_float),  # 4
         ("m_Cart_DN", c_float),  # 4
 
-        ("m_Force_FB_Type", c_int),  # 力控反馈源类型
-        ("m_Force_Type", c_int),  # 力控类型 6
-        ("m_Force_Dir", c_float * 6),  # 力控方向6维空间方向 6
-        ("m_Force_PIDUL", c_float * 7),  # 力控pid 6
-        ("m_Force_AdjLmt", c_float),  # 允许调节最大范围 6
+        ("m_Force_FB_Type", c_int),  # Force control feedback source type
+        ("m_Force_Type", c_int),  # Force control type 6
+        ("m_Force_Dir", c_float * 6),  # Force control direction in 6D space 6
+        ("m_Force_PIDUL", c_float * 7),  # Force control PID 6
+        ("m_Force_AdjLmt", c_float),  # Maximum allowable adjustment range 6
 
-        ("m_Force_Cmd", c_float),  # 力控指令 8
+        ("m_Force_Cmd", c_float),  # Force control command 8
 
-        ("m_SET_Tags", c_ubyte * 16),  # 零空间类型 5
-        ("m_Update_Tags", c_ubyte * 16),  # 零空间类型 5
+        ("m_SET_Tags", c_ubyte * 16),  # Nullspace type 5
+        ("m_Update_Tags", c_ubyte * 16),  # Nullspace type 5
 
-        ("m_PvtID", c_ubyte),  #设置的PVT号
-        ("m_PvtID_Update", c_ubyte),  #PVT号更新情况
-        ("m_Pvt_RunID", c_ubyte), #0: no pvt file; 1~99: 用户上传的PVT
-        ("m_Pvt_RunState", c_ubyte),  #0: idle空闲; 1: loading正在加载 ; 2: running正在运行; 3: error出错啦
+        ("m_PvtID", c_ubyte),  #Set PVT ID
+        ("m_PvtID_Update", c_ubyte),  #PVT ID update status
+        ("m_Pvt_RunID", c_ubyte), #0: no pvt file; 1~99: user uploaded PVT
+        ("m_Pvt_RunState", c_ubyte),  #0: idle; 1: loading ; 2: running; 3: error
 
     ]
 
 
-# 定义RT_OUT结构体
+# Define RT_OUT structure
 class RT_OUT(Structure):
     _fields_ = [
-        ("m_OutFrameSerial", c_int),  # 输出帧序号   0 -  1000000 取模
-        ("m_FB_Joint_Pos", c_float * 7),  # 关节位置反馈
-        ("m_FB_Joint_Vel", c_float * 7),  # 关节速度反馈
-        ("m_FB_Joint_PosE", c_float * 7),  # 关节位置(外编)
-        ("m_FB_Joint_Cmd", c_float * 7),  # 位置关节指令
-        ("m_FB_Joint_CToq", c_float * 7),  # 关节指令扭矩
-        ("m_FB_Joint_SToq", c_float * 7),  # 关节实际扭矩
-        ("m_FB_Joint_Them", c_float * 7),  # 关节温度
-        ("m_EST_Joint_Firc", c_float * 7),  # 关节摩擦估计
-        ("m_EST_Joint_Firc_Dot", c_float * 7),  # 关节力扰动估计值微分
-        ("m_EST_Joint_Force", c_float * 7),  # 关节力扰动估计值
-        ("m_EST_Cart_FN", c_float * 6),  # 末端笛卡尔空间力扰动估计值
-        ("m_TipDI", c_char),  # 末端数字输入
-        ("m_LowSpdFlag", c_char),  # 低速标志
-        # ("m_pad", c_char * 2)  # 填充字节
+        ("m_OutFrameSerial", c_int),  # output frame serial number 0 - 1000000 modulo
+        ("m_FB_Joint_Pos", c_float * 7),  # Joint position feedback
+        ("m_FB_Joint_Vel", c_float * 7),  # Joint velocity feedback
+        ("m_FB_Joint_PosE", c_float * 7),  # Joint position (external encoder)
+        ("m_FB_Joint_Cmd", c_float * 7),  # Joint position command
+        ("m_FB_Joint_CToq", c_float * 7),  # Joint command torque
+        ("m_FB_Joint_SToq", c_float * 7),  # Joint actual torque
+        ("m_FB_Joint_Them", c_float * 7),  # Joint temperature
+        ("m_EST_Joint_Firc", c_float * 7),  # Joint friction estimate
+        ("m_EST_Joint_Firc_Dot", c_float * 7),  # Joint force disturbance estimate derivative
+        ("m_EST_Joint_Force", c_float * 7),  # Joint force disturbance estimate
+        ("m_EST_Cart_FN", c_float * 6),  # End-effector Cartesian space force disturbance estimate
+        ("m_TipDI", c_char),  # End-effector digital input
+        ("m_LowSpdFlag", c_char),  # Low speed flag
+        # ("m_pad", c_char * 2)  # Padding bytes
     ]
 
 
-# 定义DCSS结构体
+# Define DCSS structure
 class DCSS(Structure):
     _fields_ = [
-        ("m_State", StateCtr * 2),  # 状态控制器数组
-        ("m_In", RT_IN * 2),  # 输出数据数组
-        ("m_Out", RT_OUT * 2),  # 输出数据数组
+        ("m_State", StateCtr * 2),  # Status controller array
+        ("m_In", RT_IN * 2),  # Input data array
+        ("m_Out", RT_OUT * 2),  # Output data array
 
-        ("m_ParaName", c_char * 30),  # 参数名称，结合配置机器人参数相关
+        ("m_ParaName", c_char * 30),  # Parameter name, related to robot configuration parameters
         ("m_ParaType", c_ubyte),  # 0: FX_INT32; 1: FX_DOUBLE; 2: FX_STRING
         ("m_ParaIns", c_ubyte),  # DCSSCfgOperationType
         ("m_ParaValueI", c_int),  # FX_INT32 value
@@ -103,31 +103,31 @@ class DCSS(Structure):
 
 
 def call_on_get_buf():
-    # 创建DCSS结构体实例
+    # Create DCSS structure instance
     dcss = DCSS()
 
-    # 初始化结构体数据（可选）
-    dcss.m_ParaName = b"DefaultParameters"  # 字节字符串
+    # Initialize structure data (optional)
+    dcss.m_ParaName = b"DefaultParameters"  # byte string
 
-    # 调用C函数
+    # Call C function
     result = lib.OnGetBuf(byref(dcss))
 
     if not result:
-        print("函数调用失败")
+        print("Function call failed")
         return None
 
-    # 处理返回的数据
+    # Process return data
     return process_dcss_data(dcss)
 
 
 def process_dcss_data(dcss):
-    """处理并提取DCSS结构体中的数据"""
+    """Process and extract data from DCSS structure"""
     data = {}
 
-    # 提取参数名
+    # Extract parameter name
     data['para_name'] = dcss.m_ParaName.decode().strip('\x00')
 
-    # 处理两个StateCtr实例
+    # Process two StateCtr instances
     states = []
     for i in range(2):
         state = {
@@ -138,14 +138,14 @@ def process_dcss_data(dcss):
         states.append(state)
     data['states'] = states
 
-    # 处理两个RT_OUT实例
+    # Process two RT_OUT instances
     outputs = []
     for i in range(2):
         output = {
             'frame_serial': dcss.m_Out[i].m_OutFrameSerial,
             'joint_pos': list(dcss.m_Out[i].m_FB_Joint_Pos),
             'joint_vel': list(dcss.m_Out[i].m_FB_Joint_Vel),
-            # 其他字段可根据需要添加...
+            # Other fields can be added as needed...
             'tip_di': dcss.m_Out[i].m_TipDI,
             'low_speed_flag': dcss.m_Out[i].m_LowSpdFlag
         }
@@ -155,27 +155,27 @@ def process_dcss_data(dcss):
     return data
 
 
-# 示例调用
+# Example usage
 if __name__ == "__main__":
     '''
-    ctypes      类型	C           等价类型	大小 (字节)	        取值范围
-    c_int16	    int16_t     	    2	                    -32,768 到 32,767
-    c_ubyte	    unsigned char	    1	                    0 到 255
-    c_int8	    int8_t	            1	                    -128 到 127
-    c_uint8	    uint8_t	            1	                    0 到 255
-    c_int32	    int32_t	            4	                    -2,147,483,648 到 2,147,483,647
-    c_uint32	uint32_t	        4	                    0 到 4,294,967,295
-    c_float	    float	            4	                    约 ±3.4e38 (7位精度)
-    c_double	double	            8	                    约 ±1.8e308 (15位精度)
-    c_char	    char	            1	                    -128 到 127 或 0 到 255
-    c_bool	    bool (C99+)	        1	                    0 或 1
-    c_size_t	size_t	            4或8	                 平台相关
+    ctypes      type	C           equivalent type	Size (bytes)	        Value range
+    c_int16	    int16_t     	    2	                    -32,768 to 32,767
+    c_ubyte	    unsigned char	    1	                    0 to 255
+    c_int8	    int8_t	            1	                    -128 to 127
+    c_uint8	    uint8_t	            1	                    0 to 255
+    c_int32	    int32_t	            4	                    -2,147,483,648 to 2,147,483,647
+    c_uint32	uint32_t	        4	                    0 to 4,294,967,295
+    c_float	    float	            4	                    approx. ±3.4e38 (7 digits precision)
+    c_double	double	            8	                    approx. ±1.8e308 (15 digits precision)
+    c_char	    char	            1	                    -128 to 127 or 0 to 255
+    c_bool	    bool (C99+)	        1	                    0 or 1
+    c_size_t	size_t	            4or8	                 platform dependent
     '''
-    lib = CDLL("MarvinLib/libMarvinSDK.so")  # 替换为实际库路径
+    lib = CDLL("MarvinLib/libMarvinSDK.so")  # Replace with actual library path
     lib.OnGetBuf.argtypes = [POINTER(DCSS)]
     lib.OnGetBuf.restype = c_bool
 
-    # 检查结构体大小是否匹配C端
+    # Check whether structure sizes match the C side
     print(f"StateCtr size: {sizeof(StateCtr)} ")
     print(f"RT_IN size: {sizeof(RT_IN)} ")
     print(f"RT_OUT size: {sizeof(RT_OUT)} ")

@@ -1,20 +1,19 @@
-# 头部双目相机配置 (unified_stereo_node.py 运行时参数)
-# 相机设备路径和物理参数见: ../camera_config.yaml (head 节)
+# Head stereo camera configuration (unified_stereo_node.py runtime parameters)
+# Camera device path and physical parameters see: ../camera_config.yaml (head section)
 
 stereo_head:
-  # 设备路径 / Device Paths
-  camera_device: "/dev/stereo_camera"      # 双目相机设备（udev规则创建的符号链接）
+  # Device Paths
+  camera_device: "/dev/stereo_camera"      # Stereo camera device (symlink created by udev rules)
 
-  # 视频参数 / Video Parameters
+  # Video Parameters
   resolution:
-    width: 2560          # 双目总宽度 / Total width for stereo (1280x2)
-    height: 720          # 单目高度 / Single camera height (MJPG格式支持)
-    fps: 30              # ROS2发布帧率 / ROS2 publishing FPS
-                         # 注: PICO H.264 使用相机原生帧率(60fps)，由FFmpeg直接采集
+    width: 2560          # Total width for stereo (1280x2)
+    height: 720          # Single camera height (MJPG format supported)
+    fps: 30              # ROS2 publishing FPS
                          # Note: PICO H.264 uses camera native FPS(60fps), captured by FFmpeg directly
 
-  # ROS2话题 (硬编码在 unified_stereo_node.py 中，此处仅供参考)
-  # ROS2 Topics (hardcoded in unified_stereo_node.py, listed here for reference only)
+  
+  
   # topics:
   #   left: "/stereo/left/compressed"
   #   right: "/stereo/right/compressed"

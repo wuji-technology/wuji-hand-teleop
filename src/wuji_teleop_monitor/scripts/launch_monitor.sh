@@ -1,20 +1,20 @@
 #!/bin/bash
-# Wuji Teleop Monitor 启动脚本
+# Wuji Teleop Monitor Launch Script
 
-# 设置工作目录为用户 HOME 目录
+# Set working directory to user HOME
 cd "$HOME"
 
-# 加载 ROS2 环境
+# Load ROS2 environment
 if [ -f "/opt/ros/humble/setup.bash" ]; then
     source /opt/ros/humble/setup.bash
 elif [ -f "/opt/ros/foxy/setup.bash" ]; then
     source /opt/ros/foxy/setup.bash
 fi
 
-# 加载工作空间环境
+# Load workspace environment
 if [ -f "$HOME/ros2_ws/install/setup.bash" ]; then
     source "$HOME/ros2_ws/install/setup.bash"
 fi
 
-# 启动 Monitor
+# Launch Monitor
 ros2 run wuji_teleop_monitor monitor

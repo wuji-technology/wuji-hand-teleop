@@ -1,10 +1,10 @@
 """
-wujihand_output 内部模块 - 不建议直接导入
+wujihand_output internal module - not recommended for direct import
 
-此目录包含底层实现，供高级控制器使用：
-- hand_interface: 灵巧手硬件接口封装
+This directory contains low-level implementations used by high-level controllers:
+- hand_interface: Dexterous hand hardware interface wrapper
 
-推荐使用顶层接口:
+Recommended to use top-level interfaces:
     from wujihand_output import JointController, IKController
 """
 

@@ -1,61 +1,61 @@
 #!/bin/bash
 # ============================================================================
-# PICO 测试环境清理脚本
+# PICO Test Environment Cleanup Script
 # ============================================================================
-# 用途：清理所有 PICO 相关的后台进程和 ROS2 节点
-# 使用：./cleanup.sh 或 bash cleanup.sh
+# Purpose: Clean up all PICO-related background processes and ROS2 nodes
+# Usage: ./cleanup.sh or bash cleanup.sh
 # ============================================================================
 
 echo "=========================================="
-echo "清理 PICO 测试环境"
+echo "Cleaning up PICO test environment"
 echo "=========================================="
 
-# 1. 查找并显示所有相关进程
+# 1. Find and display all related processes
 echo ""
-echo "查找相关进程..."
+echo "Finding related processes..."
 echo "------------------------------------------"
 ps aux | grep -E "(step4|step5|pico_input|recorded_data|test_pose)" | grep -v grep | grep -v cleanup
 
-# 2. 终止 Python 测试脚本
+# 2. Terminate Python test scripts
 echo ""
-echo "终止测试脚本..."
+echo "Terminating test scripts..."
 pkill -9 -f "step4_visualize"
 pkill -9 -f "step5_incremental"
 pkill -9 -f "test_pose_publisher"
 pkill -9 -f "pico_input_node"
 sleep 0.5
 
-# 3. 终止 ROS2 静态 TF 发布器
-echo "终止静态 TF 发布器..."
+# 3. Terminate ROS2 static TF broadcasters
+echo "Terminating static TF broadcasters..."
 pkill -9 -f "static_tf"
 sleep 0.5
 
-# 4. 可选：终止 RViz（根据需要取消注释）
-# echo "终止 RViz..."
+# 4. Optional: Terminate RViz (uncomment if needed)
+# echo "Terminating RViz..."
 # pkill -9 rviz2
 
-# 5. 验证清理结果
+# 5. Verify cleanup results
 echo ""
 echo "=========================================="
-echo "清理完成！剩余进程检查："
+echo "Cleanup complete! Checking remaining processes:"
 echo "=========================================="
 remaining=$(ps aux | grep -E "(step4|step5|pico_input|recorded_data|test_pose)" | grep -v grep | grep -v cleanup)
 
 if [ -z "$remaining" ]; then
-    echo "✓ 所有 PICO 相关进程已清理"
+    echo "All PICO-related processes have been cleaned up"
 else
-    echo "⚠️ 仍有以下进程运行："
+    echo "The following processes are still running:"
     echo "$remaining"
 fi
 
-# 6. 检查 ROS2 节点
+# 6. Check ROS2 nodes
 echo ""
-echo "ROS2 活动节点："
+echo "ROS2 active nodes:"
 echo "------------------------------------------"
-timeout 2 ros2 node list 2>&1 || echo "无活动节点"
+timeout 2 ros2 node list 2>&1 || echo "No active nodes"
 
 echo ""
 echo "=========================================="
-echo "如需重新测试，请运行："
+echo "To re-run tests, execute:"
 echo "  python3 step4_visualize_recorded_data.py --file ../record/trackingData_sample_static.txt"
 echo "=========================================="

@@ -1,75 +1,75 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-Step 2: ROS2 Topic 位姿控制（你的简化架构）
+Step 2: ROS2 Topic Pose Control (Simplified Architecture)
 =============================================================================
 
-测试目的：
-  验证 ROS2 topic 通信和机械臂控制
+Test Purpose:
+  Verify ROS2 topic communication and robot arm control
 
-输入输出：
-  输入：目标位姿（PoseStamped topic）
-  处理：tianji_world_output_node 订阅 → IK 计算 → 关节角
-  输出：发送关节角指令到真机
+Input/Output:
+  Input: Target pose (PoseStamped topic)
+  Processing: tianji_world_output_node subscribes -> IK calculation -> joint angles
+  Output: Send joint angle commands to the real robot
 
-架构：
-  step2_pose_topic_control.py (发布 topic)
-      ↓
+Architecture:
+  step2_pose_topic_control.py (publishes topic)
+      |
   /left_arm_target_pose, /right_arm_target_pose (PoseStamped)
-      ↓
-  tianji_world_output_node (订阅 topic → IK → 真机)
+      |
+  tianji_world_output_node (subscribes topic -> IK -> real robot)
 
-使用方式：
-  # 终端 1：启动机械臂控制节点
-  cd ~/Desktop/wuji-teleop-ros2-private
+Usage:
+  # Terminal 1: Start the arm control node
+  cd ~/Desktop/wuji-hand-teleop
   source install/setup.bash
   ros2 launch wuji_teleop_bringup test_arm_control.launch.py
 
-  # 终端 2：发布测试位姿
+  # Terminal 2: Publish test poses
   cd src/input_devices/pico_input/test
 
-  # 静止（保持初始位姿）
+  # Static (maintain initial pose)
   python3 step2_pose_topic_control.py --mode static --duration 5.0
 
-  # 前进（world +X）- 推荐参数
+  # Forward (world +X) - recommended parameters
   python3 step2_pose_topic_control.py --mode forward --speed 0.03 --duration 3.0
 
-  # 后退（world -X）
+  # Backward (world -X)
   python3 step2_pose_topic_control.py --mode back --speed 0.03 --duration 3.0
 
-  # 左移（world +Y）
+  # Move left (world +Y)
   python3 step2_pose_topic_control.py --mode left --speed 0.02 --duration 3.0
 
-  # 右移（world -Y）
+  # Move right (world -Y)
   python3 step2_pose_topic_control.py --mode right --speed 0.02 --duration 3.0
 
-  # 上升（world +Z）
+  # Move up (world +Z)
   python3 step2_pose_topic_control.py --mode up --speed 0.02 --duration 3.0
 
-  # 下降（world -Z）
+  # Move down (world -Z)
   python3 step2_pose_topic_control.py --mode down --speed 0.02 --duration 3.0
 
-  # 绕 world X 轴旋转（Roll）
+  # Rotate around world X axis (Roll)
   python3 step2_pose_topic_control.py --mode rotate_x --speed 0.5 --duration 3.0
 
-  # 绕 world Y 轴旋转（Pitch）
+  # Rotate around world Y axis (Pitch)
   python3 step2_pose_topic_control.py --mode rotate_y --speed 0.5 --duration 3.0
 
-  # 绕 world Z 轴旋转（Yaw）
+  # Rotate around world Z axis (Yaw)
   python3 step2_pose_topic_control.py --mode rotate_z --speed 0.5 --duration 3.0
 
-  # 运动完成后自动退出 ✅
+  # Auto-exits after motion completes
 
-需要：
-  ✅ ROS2
-  ❌ TF（不需要坐标转换）
-  ✅ Launch 文件
+Requirements:
+  ROS2 required
+  TF not required (no coordinate transforms needed)
+  Launch file required
 
-验证结果：
-  ✅ ROS2 节点启动成功
-  ✅ Topic 通信正常
-  ✅ 机械臂跟随 topic 运动
-  ✅ 测试脚本自动退出
+Verification Results:
+  ROS2 node starts successfully
+  Topic communication works
+  Robot arm follows topic motion
+  Test script auto-exits
 
 =============================================================================
 """
@@ -87,23 +87,23 @@ import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import PoseStamped, Vector3Stamped
 
-# 全局变量用于信号处理清理
+# Global variables for signal handling cleanup
 _node = None
 _shutdown_requested = False
 
 
 def _signal_handler(signum, frame):
-    """信号处理器，确保 Ctrl+C 和 kill 时能正确清理"""
+    """Signal handler to ensure proper cleanup on Ctrl+C and kill"""
     global _shutdown_requested
     if not _shutdown_requested:
         _shutdown_requested = True
-        print("\n收到退出信号，正在清理...")
+        print("\nReceived exit signal, cleaning up...")
         _cleanup()
         sys.exit(0)
 
 
 def _cleanup():
-    """清理函数，确保节点正确销毁"""
+    """Cleanup function to ensure node is properly destroyed"""
     global _node
     if _node is not None:
         try:
@@ -118,14 +118,14 @@ def _cleanup():
         pass
 
 
-# 注册退出时清理
+# Register cleanup on exit
 atexit.register(_cleanup)
 
-# 注册信号处理
+# Register signal handlers
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 
-# 导入共享模块（使用相对路径）
+# Import shared modules (using relative path)
 _test_dir = str(Path(__file__).resolve().parent)
 if _test_dir not in sys.path:
     sys.path.insert(0, _test_dir)
@@ -145,7 +145,7 @@ from common.transform_utils import (
 
 
 class PosePublisher(Node):
-    """位姿发布节点"""
+    """Pose publishing node"""
 
     def __init__(self, mode: str, speed: float, duration: float):
         super().__init__('pose_publisher')
@@ -154,46 +154,46 @@ class PosePublisher(Node):
         self.speed = speed
         self.duration = duration
 
-        # 创建发布者
+        # Create publishers
         self.left_pose_pub = self.create_publisher(PoseStamped, '/left_arm_target_pose', 10)
         self.right_pose_pub = self.create_publisher(PoseStamped, '/right_arm_target_pose', 10)
         self.left_elbow_pub = self.create_publisher(Vector3Stamped, '/left_arm_elbow_direction', 10)
         self.right_elbow_pub = self.create_publisher(Vector3Stamped, '/right_arm_elbow_direction', 10)
 
-        # 旋转状态（用于累积旋转）
+        # Rotation state (for accumulated rotation)
         self.current_rot = {
             'left': TIANJI_INIT_ROT['left'].copy(),
             'right': TIANJI_INIT_ROT['right'].copy()
         }
 
-        # 等待订阅者就绪
-        self.get_logger().info("等待 tianji_world_output_node 订阅者...")
+        # Wait for subscribers to be ready
+        self.get_logger().info("Waiting for tianji_world_output_node subscribers...")
         wait_count = 0
         while self.left_pose_pub.get_subscription_count() == 0:
             time.sleep(0.5)
             wait_count += 1
             if wait_count % 2 == 0:
-                self.get_logger().info(f"等待中... ({wait_count * 0.5:.1f}s)")
+                self.get_logger().info(f"Waiting... ({wait_count * 0.5:.1f}s)")
 
-        self.get_logger().info(f"✓ 订阅者就绪! 开始发布位姿 - 模式: {mode}, 速度: {speed}, 持续: {duration}s")
+        self.get_logger().info(f"Subscribers ready! Starting pose publishing - mode: {mode}, speed: {speed}, duration: {duration}s")
 
-        # 记录开始时间 (在订阅者就绪后)
+        # Record start time (after subscribers are ready)
         self.start_time = time.time()
 
-        # 创建定时器 (在订阅者就绪后)
+        # Create timer (after subscribers are ready)
         self.timer = self.create_timer(0.01, self.publish_poses)  # 100Hz
 
     def publish_poses(self):
-        """发布位姿"""
+        """Publish poses"""
         elapsed = time.time() - self.start_time
 
-        # 检查是否结束
+        # Check if finished
         if elapsed > self.duration:
-            self.get_logger().info("运动完成!")
+            self.get_logger().info("Motion complete!")
             self.timer.cancel()
             raise SystemExit(0)
 
-        # 计算当前位置
+        # Compute current position
         if self.mode == 'static':
             left_pos = TIANJI_INIT_POS['left'].copy()
             right_pos = TIANJI_INIT_POS['right'].copy()
@@ -209,18 +209,18 @@ class PosePublisher(Node):
             right_pos = TIANJI_INIT_POS['right'] + right_disp
 
         elif self.mode in ['rotate_x', 'rotate_y', 'rotate_z']:
-            # 旋转模式：使用共享库 apply_world_rotation_to_chest_pose
+            # Rotation mode: use shared library apply_world_rotation_to_chest_pose
             left_pos = TIANJI_INIT_POS['left'].copy()
             right_pos = TIANJI_INIT_POS['right'].copy()
 
-            # 计算旋转增量
-            dt = 0.01  # 定时器周期
-            rotation_angle = self.speed * dt  # speed 作为角速度 (rad/s)
+            # Compute rotation increment
+            dt = 0.01  # Timer period
+            rotation_angle = self.speed * dt  # speed as angular velocity (rad/s)
 
-            # 获取旋转轴（在 world 坐标系中）
+            # Get rotation axis (in world coordinate system)
             axis_world = get_rotation_axis_world(self.mode)
 
-            # 使用共享库执行 4 步算法: target_chest = R_w2c @ R_delta @ R_c2w @ base_chest
+            # Use shared library to execute 4-step algorithm: target_chest = R_w2c @ R_delta @ R_c2w @ base_chest
             R_delta = R.from_rotvec(axis_world * rotation_angle)
 
             self.current_rot = {
@@ -231,37 +231,37 @@ class PosePublisher(Node):
             }
 
         else:
-            self.get_logger().error(f"未知模式: {self.mode}")
+            self.get_logger().error(f"Unknown mode: {self.mode}")
             return
 
-        # 发布位姿
+        # Publish poses
         if self.mode in ['rotate_x', 'rotate_y', 'rotate_z']:
-            # 旋转模式：使用累积的旋转
+            # Rotation mode: use accumulated rotation
             self._publish_pose(self.left_pose_pub, 'world_left', left_pos, self.current_rot['left'])
             self._publish_pose(self.right_pose_pub, 'world_right', right_pos, self.current_rot['right'])
         else:
-            # 位置模式：使用初始旋转
+            # Position mode: use initial rotation
             self._publish_pose(self.left_pose_pub, 'world_left', left_pos, TIANJI_INIT_ROT['left'])
             self._publish_pose(self.right_pose_pub, 'world_right', right_pos, TIANJI_INIT_ROT['right'])
 
-        # 发布臂角参考平面参数 (从统一配置加载)
+        # Publish arm angle reference plane parameters (loaded from unified config)
         self._publish_elbow_direction(self.left_elbow_pub, 'world_left', DEFAULT_ZSP_DIRECTION['left'])
         self._publish_elbow_direction(self.right_elbow_pub, 'world_right', DEFAULT_ZSP_DIRECTION['right'])
 
-        # 进度显示（每秒一次）
+        # Progress display (once per second)
         if int(elapsed * 10) % 10 == 0:
             progress = int(elapsed / self.duration * 100)
             if self.mode in ['rotate_x', 'rotate_y', 'rotate_z']:
-                # 旋转模式：打印当前姿态的 euler 角
+                # Rotation mode: print current orientation euler angles
                 euler_left = R.from_matrix(self.current_rot['left']).as_euler('ZYX', degrees=True)
                 self.get_logger().info(
-                    f"进度: {progress}% | 发布euler=[{euler_left[0]:.1f}, {euler_left[1]:.1f}, {euler_left[2]:.1f}]°"
+                    f"Progress: {progress}% | Publishing euler=[{euler_left[0]:.1f}, {euler_left[1]:.1f}, {euler_left[2]:.1f}] deg"
                 )
             else:
-                self.get_logger().info(f"进度: {progress}% - 位置: [{left_pos[0]:.3f}, {left_pos[1]:.3f}, {left_pos[2]:.3f}]")
+                self.get_logger().info(f"Progress: {progress}% - Position: [{left_pos[0]:.3f}, {left_pos[1]:.3f}, {left_pos[2]:.3f}]")
 
     def _publish_pose(self, publisher, frame_id: str, pos: np.ndarray, rot: np.ndarray):
-        """发布位姿消息"""
+        """Publish pose message"""
         msg = PoseStamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = frame_id
@@ -279,12 +279,12 @@ class PosePublisher(Node):
         publisher.publish(msg)
 
     def _publish_elbow_direction(self, publisher, frame_id: str, direction: np.ndarray):
-        """发布肘部方向"""
+        """Publish elbow direction"""
         msg = Vector3Stamped()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = frame_id
 
-        # 归一化
+        # Normalize
         norm = np.linalg.norm(direction)
         if norm > 1e-6:
             direction = direction / norm
@@ -299,15 +299,15 @@ class PosePublisher(Node):
 def main():
     global _node, _shutdown_requested
 
-    parser = argparse.ArgumentParser(description='测试位姿发布器')
+    parser = argparse.ArgumentParser(description='Test pose publisher')
     parser.add_argument('--mode', type=str, default='static',
                         choices=['static', 'forward', 'back', 'left', 'right', 'up', 'down',
                                  'rotate_x', 'rotate_y', 'rotate_z'],
-                        help='测试模式')
+                        help='Test mode')
     parser.add_argument('--speed', type=float, default=0.02,
-                        help='移动速度 (m/s) 或旋转速度 (rad/s)')
+                        help='Movement speed (m/s) or rotation speed (rad/s)')
     parser.add_argument('--duration', type=float, default=5.0,
-                        help='持续时间 (秒)')
+                        help='Duration (seconds)')
 
     args = parser.parse_args()
 

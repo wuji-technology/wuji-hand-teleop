@@ -31,12 +31,12 @@ setup(
     zip_safe=False,  # Must be False because of shared libraries
     maintainer='wuji',
     maintainer_email='your_email@example.com',
-    description='天机臂硬件接口库 - 提供 CartesianController 等底层控制接口',
+    description='Tianji arm hardware interface library - provides low-level control interfaces such as CartesianController',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # 工具脚本
+            # Tool scripts
             'analyze_recording = tianji_output.analyze_recording:main',
             'debug_arm_axis = tianji_output.debug_arm_axis:main',
         ],

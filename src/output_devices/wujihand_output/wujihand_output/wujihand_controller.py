@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Wuji 灵巧手统一控制器 / Wuji Hand Unified Controller
+Wuji Dexterous Hand Unified Controller
 
-通过 wujihandros2 驱动 (C++ wujihandcpp SDK) 进行 ROS2 通信
-支持关节角度控制和 IK 重定向控制
+Communicates via wujihandros2 driver (C++ wujihandcpp SDK) over ROS2
+Supports joint angle control and IK retargeting control
 """
 import logging
 from pathlib import Path
@@ -15,7 +15,7 @@ try:
 except ImportError:
     from ._internal.hand_interface import WujiHandROS2
 
-# IK 重定向器（可选）
+# IK retargeter (optional)
 try:
     from wuji_retargeting import Retargeter
     RETARGETER_AVAILABLE = True
@@ -24,16 +24,16 @@ except ImportError:
 
 
 class WujiHandController:
-    """Wuji 灵巧手统一控制器 / Wuji Hand Unified Controller
+    """Wuji Dexterous Hand Unified Controller
 
-    通过 wujihandros2 驱动进行硬件通信 (1000Hz 控制频率)
+    Communicates with hardware via wujihandros2 driver (1000Hz control frequency)
 
-    支持两种控制模式：
-    1. 关节角度控制：直接设置 20 个关节角度
-    2. IK 控制：使用手部关键点（21 个）进行逆运动学重定向
+    Supports two control modes:
+    1. Joint angle control: directly set 20 joint angles
+    2. IK control: use hand keypoints (21 points) for inverse kinematics retargeting
     """
 
-    NUM_JOINTS = 20  # 5 手指 × 4 关节
+    NUM_JOINTS = 20  # 5 fingers x 4 joints
     JOINT_NAMES = [
         "thumb_joint_0", "thumb_joint_1", "thumb_joint_2", "thumb_joint_3",
         "index_joint_0", "index_joint_1", "index_joint_2", "index_joint_3",
@@ -49,25 +49,25 @@ class WujiHandController:
         right_retarget_config: Optional[str] = None,
         enable_ik: bool = True,
         logger=None,
-        # ROS2 参数 (wujihandros2)
+        # ROS2 parameters (wujihandros2)
         node=None,
         left_hand_name: Optional[str] = None,
         right_hand_name: Optional[str] = None,
     ):
         """
-        初始化 Wuji 灵巧手控制器
+        Initialize Wuji dexterous hand controller
 
         Args:
-            input_source: 输入源类型 "manus", 用于选择 IK 重定向配置
-            left_retarget_config: 左手重定向配置文件路径（可选，用于 IK 控制）
-            right_retarget_config: 右手重定向配置文件路径（可选，用于 IK 控制）
-            enable_ik: 是否启用 IK 控制功能（默认 True）
-            logger: 外部传入的 logger（可选）
-            node: ROS2 节点实例（必需）
-            left_hand_name: 左手 wujihandros2 驱动命名空间（如 "left_hand"）
-            right_hand_name: 右手 wujihandros2 驱动命名空间（如 "right_hand"）
+            input_source: Input source type "manus", used to select IK retarget config
+            left_retarget_config: Left hand retarget config file path (optional, for IK control)
+            right_retarget_config: Right hand retarget config file path (optional, for IK control)
+            enable_ik: Whether to enable IK control (default True)
+            logger: External logger (optional)
+            node: ROS2 node instance (required)
+            left_hand_name: Left hand wujihandros2 driver namespace (e.g. "left_hand")
+            right_hand_name: Right hand wujihandros2 driver namespace (e.g. "right_hand")
         """
-        # 日志
+        # Logger
         if logger is not None:
             self.logger = logger
         else:
@@ -80,30 +80,30 @@ class WujiHandController:
 
         self.input_source = input_source
 
-        # ROS2 参数
+        # ROS2 parameters
         self.node = node
         self.left_hand_name = left_hand_name
         self.right_hand_name = right_hand_name
 
-        # 硬件接口 (WujiHandROS2)
+        # Hardware interface (WujiHandROS2)
         self.left_hand = None
         self.right_hand = None
 
-        # IK 重定向器
+        # IK retargeters
         self.left_retargeter: Optional['Retargeter'] = None
         self.right_retargeter: Optional['Retargeter'] = None
         self._ik_enabled = False
 
-        # 初始化 IK 重定向器（如果启用且可用）
+        # Initialize IK retargeters (if enabled and available)
         if enable_ik and RETARGETER_AVAILABLE:
             self._init_retargeters(left_retarget_config, right_retarget_config)
         elif enable_ik and not RETARGETER_AVAILABLE:
-            self.logger.warning("wuji_retargeting 未安装，IK 控制不可用")
+            self.logger.warning("wuji_retargeting not installed, IK control unavailable")
 
-        # 初始化硬件 (通过 wujihandros2)
+        # Initialize hardware (via wujihandros2)
         self._init_hands()
 
-        self.logger.info("Wuji 灵巧手控制器初始化完成 (wujihandros2 模式)")
+        self.logger.info("Wuji dexterous hand controller initialization complete (wujihandros2 mode)")
 
     def _resolve_retarget_config(self, side: str) -> Optional[str]:
         """Resolve retarget config path for a given input source and side.
@@ -133,37 +133,37 @@ class WujiHandController:
         left_config: Optional[str],
         right_config: Optional[str]
     ) -> None:
-        """初始化 IK 重定向器"""
+        """Initialize IK retargeters"""
         default_left_config = self._resolve_retarget_config("left")
         default_right_config = self._resolve_retarget_config("right")
 
-        # 使用用户提供的配置或默认配置
+        # Use user-provided config or default config
         right_config_path = right_config or default_right_config
         left_config_path = left_config or default_left_config
 
-        # 初始化右手重定向器
+        # Initialize right hand retargeter
         if right_config_path and Path(right_config_path).exists():
             self.right_retargeter = Retargeter.from_yaml(right_config_path, "right")
-            self.logger.info(f"右手 IK 重定向配置: {Path(right_config_path).name}")
+            self.logger.info(f"Right hand IK retarget config: {Path(right_config_path).name}")
         else:
-            self.logger.warning("未找到右手 IK 重定向配置文件")
+            self.logger.warning("Right hand IK retarget config file not found")
 
-        # 初始化左手重定向器
+        # Initialize left hand retargeter
         if left_config_path and Path(left_config_path).exists():
             self.left_retargeter = Retargeter.from_yaml(left_config_path, "left")
-            self.logger.info(f"左手 IK 重定向配置: {Path(left_config_path).name}")
+            self.logger.info(f"Left hand IK retarget config: {Path(left_config_path).name}")
         else:
-            self.logger.warning("未找到左手 IK 重定向配置文件")
+            self.logger.warning("Left hand IK retarget config file not found")
 
-        # 标记 IK 是否可用
+        # Mark whether IK is available
         self._ik_enabled = self.left_retargeter is not None or self.right_retargeter is not None
 
     def _init_hands(self) -> None:
-        """初始化灵巧手硬件 (通过 wujihandros2 驱动)"""
+        """Initialize dexterous hand hardware (via wujihandros2 driver)"""
         if self.node is None:
-            raise RuntimeError("ROS2 节点未提供，无法初始化 wujihandros2 接口")
+            raise RuntimeError("ROS2 node not provided, cannot initialize wujihandros2 interface")
 
-        self.logger.info("通过 wujihandros2 驱动连接灵巧手 (1000Hz)")
+        self.logger.info("Connecting to dexterous hands via wujihandros2 driver (1000Hz)")
 
         if self.left_hand_name:
             self.left_hand = WujiHandROS2(
@@ -173,7 +173,7 @@ class WujiHandController:
                 logger=self.logger
             )
             self.left_hand.connect()
-            self.logger.info(f"左手 ROS2 接口已创建 -> /{self.left_hand_name}")
+            self.logger.info(f"Left hand ROS2 interface created -> /{self.left_hand_name}")
 
         if self.right_hand_name:
             self.right_hand = WujiHandROS2(
@@ -183,9 +183,9 @@ class WujiHandController:
                 logger=self.logger
             )
             self.right_hand.connect()
-            self.logger.info(f"右手 ROS2 接口已创建 -> /{self.right_hand_name}")
+            self.logger.info(f"Right hand ROS2 interface created -> /{self.right_hand_name}")
 
-    # ==================== 关节角度控制 ====================
+    # ==================== Joint Angle Control ====================
 
     def set_joint_positions(
         self,
@@ -193,14 +193,14 @@ class WujiHandController:
         right_positions: Optional[np.ndarray] = None
     ) -> Tuple[bool, bool]:
         """
-        设置双手关节角度（非阻塞，用于实时控制）
+        Set dual-hand joint angles (non-blocking, for real-time control)
 
         Args:
-            left_positions: 左手关节角度，形状 (20,) 或 (5, 4)，None 表示不控制
-            right_positions: 右手关节角度，形状 (20,) 或 (5, 4)，None 表示不控制
+            left_positions: Left hand joint angles, shape (20,) or (5, 4), None means no control
+            right_positions: Right hand joint angles, shape (20,) or (5, 4), None means no control
 
         Returns:
-            Tuple[bool, bool]: (左手成功, 右手成功)
+            Tuple[bool, bool]: (left_success, right_success)
         """
         left_success = False
         right_success = False
@@ -218,39 +218,39 @@ class WujiHandController:
         flat_positions: np.ndarray
     ) -> Tuple[bool, bool]:
         """
-        从扁平数组设置双手关节角度
+        Set dual-hand joint angles from a flat array
 
         Args:
-            flat_positions: 扁平化关节角度数组
-                - 20 个值: 单手（根据启用的手分配）
-                - 40 个值: 双手（右手在前，左手在后）
+            flat_positions: Flattened joint angle array
+                - 20 values: Single hand (assigned based on enabled hand)
+                - 40 values: Dual hands (right hand first, left hand second)
 
         Returns:
-            Tuple[bool, bool]: (左手成功, 右手成功)
+            Tuple[bool, bool]: (left_success, right_success)
         """
         flat_positions = np.asarray(flat_positions, dtype=np.float32)
 
         if flat_positions.size == 40:
-            # 双手: 右手(0:20) + 左手(20:40)
+            # Dual hands: right(0:20) + left(20:40)
             right_pos = flat_positions[:20]
             left_pos = flat_positions[20:]
             return self.set_joint_positions(left_pos, right_pos)
         elif flat_positions.size == 20:
-            # 单手: 根据启用的手分配
+            # Single hand: assign based on enabled hand
             if self.left_hand is not None and self.right_hand is None:
                 return self.set_joint_positions(flat_positions, None)
             else:
                 return self.set_joint_positions(None, flat_positions)
         else:
-            self.logger.error(f"无效的关节角度数量: {flat_positions.size}，期望 20 或 40")
+            self.logger.error(f"Invalid joint angle count: {flat_positions.size}, expected 20 or 40")
             return False, False
 
     def get_joint_positions(self) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
-        获取当前双手关节角度
+        Get current dual-hand joint angles
 
         Returns:
-            Tuple: (左手关节角度, 右手关节角度)，各为 (20,) 数组或 None
+            Tuple: (left_hand_joint_angles, right_hand_joint_angles), each is (20,) array or None
         """
         left_pos = None
         right_pos = None
@@ -263,10 +263,10 @@ class WujiHandController:
 
         return left_pos, right_pos
 
-    # ==================== IK 控制 ====================
+    # ==================== IK Control ====================
 
     def is_ik_available(self) -> bool:
-        """检查 IK 控制是否可用"""
+        """Check whether IK control is available"""
         return self._ik_enabled
 
     def retarget(
@@ -275,14 +275,14 @@ class WujiHandController:
         right_keypoints: Optional[np.ndarray] = None
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """
-        对手部关键点进行重定向，计算关节角度
+        Retarget hand keypoints to compute joint angles
 
         Args:
-            left_keypoints: 左手关键点，形状 (21, 3)，None 表示不处理
-            right_keypoints: 右手关键点，形状 (21, 3)，None 表示不处理
+            left_keypoints: Left hand keypoints, shape (21, 3), None means skip
+            right_keypoints: Right hand keypoints, shape (21, 3), None means skip
 
         Returns:
-            Tuple: (左手关节角度, 右手关节角度)，各为 (20,) 数组或 None
+            Tuple: (left_hand_joint_angles, right_hand_joint_angles), each is (20,) array or None
         """
         left_angles = None
         right_angles = None
@@ -294,7 +294,7 @@ class WujiHandController:
                     left_keypoints = left_keypoints.reshape(21, 3)
                 left_angles = self.left_retargeter.retarget(left_keypoints)
             except Exception as e:
-                self.logger.error(f"左手 IK 重定向异常: {e}")
+                self.logger.error(f"Left hand IK retarget error: {e}")
 
         if right_keypoints is not None and self.right_retargeter is not None:
             try:
@@ -303,7 +303,7 @@ class WujiHandController:
                     right_keypoints = right_keypoints.reshape(21, 3)
                 right_angles = self.right_retargeter.retarget(right_keypoints)
             except Exception as e:
-                self.logger.error(f"右手 IK 重定向异常: {e}")
+                self.logger.error(f"Right hand IK retarget error: {e}")
 
         return left_angles, right_angles
 
@@ -313,26 +313,26 @@ class WujiHandController:
         right_keypoints: Optional[np.ndarray] = None
     ) -> Tuple[bool, bool, Optional[np.ndarray], Optional[np.ndarray]]:
         """
-        使用手部关键点控制灵巧手（IK 重定向 + 硬件控制）
+        Control dexterous hands using hand keypoints (IK retargeting + hardware control)
 
         Args:
-            left_keypoints: 左手关键点，形状 (21, 3) 或 (63,)，None 表示不控制
-            right_keypoints: 右手关键点，形状 (21, 3) 或 (63,)，None 表示不控制
+            left_keypoints: Left hand keypoints, shape (21, 3) or (63,), None means no control
+            right_keypoints: Right hand keypoints, shape (21, 3) or (63,), None means no control
 
         Returns:
-            Tuple: (左手成功, 右手成功, 左手关节角度, 右手关节角度)
+            Tuple: (left_success, right_success, left_joint_angles, right_joint_angles)
         """
-        # 重定向计算关节角度
+        # Retarget to compute joint angles
         left_angles, right_angles = self.retarget(left_keypoints, right_keypoints)
 
         left_success = False
         right_success = False
 
-        # 控制左手
+        # Control left hand
         if left_angles is not None and self.left_hand is not None:
             left_success = self.left_hand.set_joint_positions(left_angles)
 
-        # 控制右手
+        # Control right hand
         if right_angles is not None and self.right_hand is not None:
             right_success = self.right_hand.set_joint_positions(right_angles)
 
@@ -343,48 +343,48 @@ class WujiHandController:
         flat_keypoints: np.ndarray
     ) -> Tuple[bool, bool, Optional[np.ndarray], Optional[np.ndarray]]:
         """
-        从扁平数组设置手部关键点
+        Set hand keypoints from a flat array
 
         Args:
-            flat_keypoints: 扁平化关键点数组
-                - 63 个值: 单手 (21 * 3)，根据启用的手分配
-                - 126 个值: 双手（右手在前，左手在后）
+            flat_keypoints: Flattened keypoint array
+                - 63 values: Single hand (21 * 3), assigned based on enabled hand
+                - 126 values: Dual hands (right hand first, left hand second)
 
         Returns:
-            Tuple: (左手成功, 右手成功, 左手关节角度, 右手关节角度)
+            Tuple: (left_success, right_success, left_joint_angles, right_joint_angles)
         """
         flat_keypoints = np.asarray(flat_keypoints, dtype=np.float32)
         single_len = 21 * 3  # 63
         double_len = single_len * 2  # 126
 
         if flat_keypoints.size == double_len:
-            # 双手: 右手(0:63) + 左手(63:126)
+            # Dual hands: right(0:63) + left(63:126)
             right_kp = flat_keypoints[:single_len].reshape(21, 3)
             left_kp = flat_keypoints[single_len:].reshape(21, 3)
             return self.set_keypoints(left_kp, right_kp)
         elif flat_keypoints.size == single_len:
-            # 单手: 根据启用的手分配
+            # Single hand: assign based on enabled hand
             kp = flat_keypoints.reshape(21, 3)
             if self.left_hand is not None and self.right_hand is None:
                 return self.set_keypoints(kp, None)
             else:
                 return self.set_keypoints(None, kp)
         else:
-            self.logger.error(f"无效的关键点数量: {flat_keypoints.size}，期望 63 或 126")
+            self.logger.error(f"Invalid keypoint count: {flat_keypoints.size}, expected 63 or 126")
             return False, False, None, None
 
-    # ==================== 状态检查与释放 ====================
+    # ==================== Status Check and Release ====================
 
     def is_left_connected(self) -> bool:
-        """检查左手是否已连接"""
+        """Check whether left hand is connected"""
         return self.left_hand is not None and self.left_hand.is_connected()
 
     def is_right_connected(self) -> bool:
-        """检查右手是否已连接"""
+        """Check whether right hand is connected"""
         return self.right_hand is not None and self.right_hand.is_connected()
 
     def get_enabled_hands(self) -> List[str]:
-        """获取已启用的手列表"""
+        """Get list of enabled hands"""
         hands = []
         if self.is_left_connected():
             hands.append("left")
@@ -393,8 +393,8 @@ class WujiHandController:
         return hands
 
     def disable_and_release(self) -> None:
-        """下使能并释放双手"""
-        self.logger.info("灵巧手下使能...")
+        """Disable and release both hands"""
+        self.logger.info("Disabling dexterous hands...")
 
         if self.left_hand is not None:
             self.left_hand.release()
@@ -404,4 +404,4 @@ class WujiHandController:
             self.right_hand.release()
             self.right_hand = None
 
-        self.logger.info("已安全退出")
+        self.logger.info("Safely exited")

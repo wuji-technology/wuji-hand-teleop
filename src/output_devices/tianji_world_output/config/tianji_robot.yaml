@@ -1,44 +1,44 @@
 # =============================================================================
-# 天机机器人统一配置文件
+# Tianji Robot Unified Configuration File
 # =============================================================================
-# 此文件是所有天机机器人参数的单一数据源 (Single Source of Truth)
+# This file is the Single Source of Truth for all Tianji robot parameters
 #
-# 使用方法:
+# Usage:
 #   from tianji_world_output.config_loader import TianjiConfig
 #   config = TianjiConfig.load()
 #   init_pos = config.init_pos['left']
 #
-# 配置来源:
-#   - INIT_JOINTS: 手动标定的初始关节角度 (双臂平举姿态)
-#   - INIT_POS/ROT: 通过 FK(INIT_JOINTS) 计算得到
-#   - WORLD_TO_CHEST_QUAT: 绕 X 轴 ±90° 旋转 (实验验证)
+# Configuration sources:
+#   - INIT_JOINTS: Manually calibrated initial joint angles (arms-extended pose)
+#   - INIT_POS/ROT: Computed via FK(INIT_JOINTS)
+#   - WORLD_TO_CHEST_QUAT: Rotation of ±90 degrees around X axis (experimentally verified)
 # =============================================================================
 
-# 机器人连接参数
+# Robot connection parameters
 robot_ip: "192.168.1.190"
 
-# 运动学配置文件 (相对于 tianji_world_output 包的 config 目录)
+# Kinematics configuration file (relative to tianji_world_output package config directory)
 kine_config_file: "ccs_m6.MvKDCfg"
 
 # =============================================================================
-# 初始关节角度 (度)
+# Initial joint angles (degrees)
 # =============================================================================
-# 双臂平举姿态，是所有末端位姿参数的计算基准
+# Arms-extended pose, serves as the computation basis for all end-effector pose parameters
 init_joints:
   left:  [55.0, -65.0, -70.0, -60.0, 60.0, 0.0, 0.0]
   right: [-55.0, -65.0, 70.0, -60.0, -60.0, 0.0, 0.0]
 
 # =============================================================================
-# 初始末端位姿 (Chest 坐标系)
+# Initial end-effector pose (Chest coordinate system)
 # =============================================================================
-# 通过 FK(init_joints) 计算得到，使用 verify_fk_values.py 验证
+# Computed via FK(init_joints), verified using verify_fk_values.py
 
-# 末端位置 [x, y, z] 米
+# End-effector position [x, y, z] meters
 init_pos:
   left:  [0.5733, 0.2237, 0.2762]
   right: [0.5733, -0.2237, 0.2762]
 
-# 末端姿态 - 旋转矩阵 (3x3, 行优先)
+# End-effector orientation - rotation matrix (3x3, row-major)
 init_rot:
   left:
     - [-0.0573, -0.0055, 0.9983]
@@ -49,89 +49,89 @@ init_rot:
     - [-0.0250, 0.9997, -0.0070]
     - [-0.9980, -0.0254, -0.0571]
 
-# 末端姿态 - 四元数 [qx, qy, qz, qw] (从旋转矩阵转换)
+# End-effector orientation - quaternion [qx, qy, qz, qw] (converted from rotation matrix)
 init_quat:
   left:  [0.0067, 0.7270, 0.0111, 0.6865]
   right: [-0.0067, 0.7270, -0.0111, 0.6865]
 
 # =============================================================================
-# World → Chest 坐标变换
+# World -> Chest Coordinate Transform
 # =============================================================================
-# World 坐标系 (ROS REP 103): X=前, Y=左, Z=上
-# Chest 坐标系:
-#   Left:  X=前, Y=下, Z=左 (绕 World X 轴旋转 +90°)
-#   Right: X=前, Y=上, Z=右 (绕 World X 轴旋转 -90°)
+# World coordinate system (ROS REP 103): X=forward, Y=left, Z=up
+# Chest coordinate system:
+#   Left:  X=forward, Y=down, Z=left (rotated +90 deg around World X axis)
+#   Right: X=forward, Y=up, Z=right (rotated -90 deg around World X axis)
 #
-# 这些四元数表示 world→chest 向量变换方向，与 PICO_TELEOP_GUIDE.md 一致：
-#   Left:  world→chest: [x, -z, y] 对应绕 X 轴 +90°
-#   Right: world→chest: [x, z, -y] 对应绕 X 轴 -90°
+# These quaternions represent the world->chest vector transform direction, consistent with PICO_TELEOP_GUIDE.md:
+#   Left:  world→chest: [x, -z, y] corresponding to +90 deg rotation around X axis
+#   Right: world→chest: [x, z, -y] corresponding to -90 deg rotation around X axis
 #
-# 注意：TF 可视化需要 chest→world 方向，应使用这些四元数的逆！
+# Note: TF visualization requires chest->world direction, use the inverse of these quaternions!
 
-# 四元数 [qx, qy, qz, qw]
+# Quaternion [qx, qy, qz, qw]
 world_to_chest_quat:
-  left:  [0.7071067811865475, 0.0, 0.0, 0.7071067811865475]   # 绕 X 轴 +90°
-  right: [0.7071067811865475, 0.0, 0.0, -0.7071067811865475]  # 绕 X 轴 -90°
+  left:  [0.7071067811865475, 0.0, 0.0, 0.7071067811865475]   # Rotation +90 deg around X axis
+  right: [0.7071067811865475, 0.0, 0.0, -0.7071067811865475]  # Rotation -90 deg around X axis
 
-# 平移 (用于 RViz 可视化)
+# Translation (for RViz visualization)
 world_to_chest_trans:
   left:  [0.0, 0.2, 0.0]
   right: [0.0, -0.2, 0.0]
 
 # =============================================================================
-# 前臂 Tracker 初始位置 (Chest 坐标系) — 物理正确值
+# Forearm Tracker Initial Position (Chest Coordinate System) - Physically Correct Values
 # =============================================================================
-# 用于 PICO arm tracker 的增量控制参考位置 + 臂角几何方向计算
+# Used for PICO arm tracker incremental control reference position + arm angle geometric direction calculation
 #
-# 物理含义: 肘部在肩膀下方30cm + 外侧20cm (沉肘+外展姿态)
-#   Left Chest:  Y+=下, Z+=左(外侧)  → [0.2, +0.3, +0.2]
-#   Right Chest: Y-=下, Z+=右(外侧)  → [0.2, -0.3, +0.2]
+# Physical meaning: elbow 30cm below shoulder + 20cm outward (relaxed elbow + abduction posture)
+#   Left Chest:  Y+=down, Z+=left(outer side)  → [0.2, +0.3, +0.2]
+#   Right Chest: Y-=down, Z+=right(outer side)  → [0.2, -0.3, +0.2]
 #
-# World 坐标验证:
-#   Left:  [0.2, +0.3, +0.2] → World [0.2, +0.2, -0.3] → Z=-0.3 = 下方30cm ✓
-#   Right: [0.2, -0.3, +0.2] → World [0.2, -0.2, -0.3] → Z=-0.3 = 下方30cm ✓
+# World coordinate verification:
+#   Left:  [0.2, +0.3, +0.2] → World [0.2, +0.2, -0.3] → Z=-0.3 = 30cm below ✓
+#   Right: [0.2, -0.3, +0.2] → World [0.2, -0.2, -0.3] → Z=-0.3 = 30cm below ✓
 #
-# 注意: 几何计算的肘部偏移方向指向重力方向(下)，发布给 IK 前需取反(-direction)
-#       因为 IK zsp_para 要求反重力方向 (见 default_zsp_para)
+# Note: geometrically computed elbow offset direction points toward gravity (down), negate (-direction) before publishing to IK
+#       Because IK zsp_para requires anti-gravity direction (see default_zsp_para)
 arm_init_pos:
-  left:  [0.2,  0.3,  0.2]
-  right: [0.2, -0.3,  0.2]
+  left:  [0.2, 0.3, 0.2]
+  right: [0.2, -0.3, 0.2]
 
 arm_init_quat:
   left:  [0.4177, -0.0283, 0.5206, 0.7441]
   right: [0.7448, -0.5141, 0.0058, 0.4254]
 
 # =============================================================================
-# IK 参数
+# IK Parameters
 # =============================================================================
-# 零空间约束类型 (1=使用肘部方向提示)
+# Nullspace constraint type (1=use elbow direction hint)
 zsp_type: 1
 
-# 默认臂角参考平面参数 [x, y, z, a, b, c]
-# 前3个定义参考平面方向（Chest 坐标系），IK 选择与此平面最近的臂角解
+# Default arm angle reference plane parameters [x, y, z, a, b, c]
+# First 3 define reference plane direction (Chest coordinate system), IK selects arm angle solution closest to this plane
 #
-# 注意: zsp_para 不是肘部方向！经 FK→IK 闭环验证 (diagnose_zsp_para.py):
-#   - 实际含义是"参考平面法向量"，Y 分量方向与重力方向相反
-#   - 左臂 GRV=[0,+9.81,0] (重力=+Y)，zsp_para Y 取负
-#   - 右臂 GRV=[0,-9.81,0] (重力=-Y)，zsp_para Y 取正
+# Note: zsp_para is not the elbow direction!Verified through FK->IK closed-loop (diagnose_zsp_para.py):
+#   - Actual meaning is "reference plane normal vector", Y component direction is opposite to gravity
+#   - Left arm GRV=[0,+9.81,0] (gravity=+Y), zsp_para Y is negative
+#   - Right arm GRV=[0,-9.81,0] (gravity=-Y), zsp_para Y is positive
 #
-# 经验最优值 (diagnose_zsp_para.py 网格搜索, FK→IK 闭环误差 < 0.55°):
+# Empirically optimal values (diagnose_zsp_para.py grid search, FK->IK closed-loop error < 0.55 deg):
 default_zsp_para:
   left:  [0, -0.5, -0.3, 0, 0, 0]
   right: [0, 0.5, -0.3, 0, 0, 0]
 
-# 臂角旋转角度 (度)，0=不额外旋转
+# Arm angle rotation angle (degrees), 0=no extra rotation
 zsp_angle: 0.0
 
-# 奇异点允许角度范围 (度)
+# Singularity tolerance angle range (degrees)
 dgr: [5.0, 5.0, 5.0]
 
 # =============================================================================
-# PICO → Robot 坐标变换
+# PICO -> Robot Coordinate Transform
 # =============================================================================
-# PICO 坐标系: +X=右, +Y=上, +Z=朝向用户(后)
-# Robot 坐标系: +X=前, +Y=左, +Z=上
-# 变换矩阵 (3x3):
+# PICO coordinate system: +X=right, +Y=up, +Z=toward user (back)
+# Robot coordinate system: +X=forward, +Y=left, +Z=up
+# Transform matrix (3x3):
 #   Robot_X = -PICO_Z
 #   Robot_Y = -PICO_X
 #   Robot_Z = +PICO_Y
@@ -141,26 +141,26 @@ pico_to_robot:
   - [0, 1, 0]
 
 # =============================================================================
-# 注意: Tracker 序列号映射已移至 pico_input/config/pico_input.yaml
+# Note: Tracker serial number mapping has been moved to pico_input/config/pico_input.yaml
 # =============================================================================
-# tianji_world_output 只负责接收标准化的控制接口:
-#   - /left_arm_target_pose (PoseStamped, chest 坐标系)
-#   - /right_arm_target_pose (PoseStamped, chest 坐标系)
+# tianji_world_output only responsible for receiving standardized control interfaces:
+#   - /left_arm_target_pose (PoseStamped, chest coordinate system)
+#   - /right_arm_target_pose (PoseStamped, chest coordinate system)
 #   - /left_arm_elbow_direction (Vector3Stamped)
 #   - /right_arm_elbow_direction (Vector3Stamped)
 #
-# 所有输入设备相关的配置 (PICO tracker 映射、坐标转换等) 都在各自的 input 包中
+# All input device related configuration (PICO tracker mapping, coordinate transforms, etc.) are in their respective input packages
 #
 # =============================================================================
-# Topic 命名规范 (P4)
+# Topic Naming Convention (P4)
 # =============================================================================
-# 手臂系统 (pico_input <-> tianji_world_output):
-#   格式: /{side}_arm_{type}  (扁平风格)
-#   示例: /left_arm_target_pose, /right_arm_elbow_direction
+# Arm system (pico_input <-> tianji_world_output):
+#   Format: /{side}_arm_{type}  (Flat style)
+#   Example: /left_arm_target_pose, /right_arm_elbow_direction
 #
-# 灵巧手系统 (manus_input <-> wujihand_ik):
-#   格式: /wuji_hand/{side}/{type}  (层级风格)
-#   示例: /wuji_hand/left/joint_command, /wuji_hand/right/joint_state
+# Dexterous hand system (manus_input <-> wujihand_ik):
+#   Format: /wuji_hand/{side}/{type}  (Hierarchical style)
+#   Example: /wuji_hand/left/joint_command, /wuji_hand/right/joint_state
 #
-# 注意: 两套系统风格不同，因灵巧手 topic 涉及多个不可修改的包。
-# 未来统一时建议采用层级风格: /tianji_arm/{side}/{type}
+# Note: The two systems have different styles, because dexterous hand topics involve multiple unmodifiable packages.
+# Hierarchical style is recommended for future unification: /tianji_arm/{side}/{type}

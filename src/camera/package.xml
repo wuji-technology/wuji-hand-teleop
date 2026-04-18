@@ -5,8 +5,7 @@
   <version>0.1.0</version>
   <description>
     Camera integration package for Wuji teleoperation system.
-    Head: HBVCAM-F2439GS-2 (AR0234 global shutter). Wrist: RealSense D405/D435.
-    Wuji遥操作系统相机集成包。头部: HBVCAM全局快门双目, 腕部: RealSense D405/D435。
+    Head: HBVCAM-F2439GS-2 (AR0234 global shutter stereo). Wrist: RealSense D405/D435.
   </description>
   <maintainer email="amandahan223@gmail.com">Wuji Tech</maintainer>
   <license>MIT</license>

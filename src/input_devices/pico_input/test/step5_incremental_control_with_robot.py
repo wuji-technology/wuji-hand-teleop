@@ -1,200 +1,200 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-Step 5: 使用录制数据增量控制真机器人（验证完整遥操流程）
+Step 5: Incremental Control of Real Robot Using Recorded Data (Verify Complete Teleoperation Flow)
 =============================================================================
 
-功能：读取 PICO 录制数据 → 坐标变换 → 计算增量位姿 → 控制真实机器人
+Function: Read PICO recorded data -> coordinate transform -> compute incremental pose -> control real robot
 
-用途：
-  - 验证完整的 PICO → Robot 遥操流程是否正确
-  - 使用录制数据进行可重复测试
-  - 不需要 PICO 硬件，只需要机器人
+Purpose:
+  - Verify the complete PICO -> Robot teleoperation flow is correct
+  - Use recorded data for repeatable testing
+  - No PICO hardware required, only robot needed
 
-⚠️ 前置条件：
-  - ✓ step4 测试通过（坐标变换正确）
-  - ✓ 机器人已开机并连接
-  - ✓ 机器人处于安全位置
+⚠️ Prerequisites:
+  - ✓ step4 test passed (coordinate transforms correct)
+  - ✓ Robot is powered on and connected
+  - ✓ Robot is in a safe position
 
-💡 如需单独测试旋转/位置/臂角，请使用 step6_arm_angle_stability_test.py
-
-
-=============================================================================
-坐标变换速查
-=============================================================================
-
-PICO → Robot 位置映射:
-  Robot X = -PICO Z  (PICO 向前伸手 → Robot 向前)
-  Robot Y = -PICO X  (PICO 向右移动 → Robot 向右)
-  Robot Z = +PICO Y  (PICO 向上抬手 → Robot 向上)
-
-PICO → Robot 旋转轴映射 (ROS REP 103 右手定则，从轴正端向原点看逆时针为正):
-  绕 PICO +X → 绕 Robot -Y → 手指向下压 (Pitch down)
-  绕 PICO -X → 绕 Robot +Y → 手指向上翘 (Pitch up)
-  绕 PICO Y → 绕 Robot +Z (手指向右偏/偏航)
-  绕 PICO Z → 绕 Robot -X (手腕向右翻滚)
+💡 For individual rotation/position/arm angle testing, use step6_arm_angle_stability_test.py
 
 
 =============================================================================
-使用方法
+Coordinate Transform Quick Reference
 =============================================================================
 
-  步骤 1: 干运行测试（推荐先执行）
+PICO -> Robot position mapping:
+  Robot X = -PICO Z  (PICO reaches forward -> Robot forward)
+  Robot Y = -PICO X  (PICO moves right -> Robot right)
+  Robot Z = +PICO Y  (PICO raises hand up -> Robot up)
+
+PICO -> Robot rotation axis mapping (ROS REP 103 right-hand rule, counterclockwise positive when looking from axis positive end toward origin):
+  Around PICO +X -> around Robot -Y -> fingers press down (Pitch down)
+  Around PICO -X -> around Robot +Y -> fingers tilt up (Pitch up)
+  Around PICO Y -> around Robot +Z (fingers yaw right)
+  Around PICO Z -> around Robot -X (wrist rolls right)
+
+
+=============================================================================
+Usage
+=============================================================================
+
+  Step 1: Dry run test (recommended first)
   --------------------------------
-  cd /home/wuji-08/Desktop/wuji-teleop-ros2-private/src/input_devices/pico_input/test
+  cd ~/Desktop/wuji-hand-teleop/src/input_devices/pico_input/test
 
-  # 干运行：仅打印位姿，不控制机器人
+  # Dry run: only print poses, do not control robot
   python3 step5_incremental_control_with_robot.py --dry-run
 
-  # 验证输出位姿是否合理（应该在 TIANJI_INIT_POS 附近）
+  # Verify output poses are reasonable (should be near TIANJI_INIT_POS)
 
 
-  步骤 2: 将机器人移动到初始位置
+  Step 2: Move robot to initial position
   ------------------------------
   python3 tool/move_to_init_pose.py
 
 
-  步骤 3: 启动增量控制
+  Step 3: Start incremental control
   --------------------
-  # 使用默认静态数据 (trackingData_sample_static.txt, 150 帧静态数据)
+  # Use default static data (trackingData_sample_static.txt, 150 frames of static data)
   python3 step5_incremental_control_with_robot.py
 
-  # 慢速回放更安全
+  # Slower playback is safer
   python3 step5_incremental_control_with_robot.py --speed 0.3
 
-  # 仅控制左臂
+  # Control left arm only
   python3 step5_incremental_control_with_robot.py --left-only
 
-  # 仅控制右臂
+  # Control right arm only
   python3 step5_incremental_control_with_robot.py --right-only
 
-  # 使用大数据集
+  # Use large dataset
   python3 step5_incremental_control_with_robot.py --file ../record/trackingData_whole_data.txt
 
-  # 指定帧范围测试
+  # Specify frame range for testing
   python3 step5_incremental_control_with_robot.py --file ../record/trackingData_whole_data.txt --start-frame 100 --end-frame 200 --left-only --speed 0.5 -v
 
 
 =============================================================================
-相关工具
+Related Tools
 =============================================================================
 
-  分析录制数据中的运动片段:
+  Analyze motion segments in recorded data:
     cd ../record && python3 analyze_motion_data.py --file trackingData_whole_data.txt --all
 
-  单独测试旋转/位置/臂角（推荐用于调试）:
+  Test rotation/position/arm angle individually (recommended for debugging):
     python3 step6_arm_angle_stability_test.py --mode rotation --rot-axis X --rot-angle 30 --left-only
     python3 step6_arm_angle_stability_test.py --mode position --pos-x-range -0.05 0.05 0.01
 
 
 =============================================================================
-测试数据文件（均在 record/ 目录下）
+Test data files (all in record/ directory)
 =============================================================================
 
-  高质量静态数据 (推荐初次测试):
-    ../record/trackingData_sample_static.txt (150 帧，平均位移 <0.1mm)
+  High-quality static data (recommended for first test):
+    ../record/trackingData_sample_static.txt (150 frames, avg displacement <0.1mm)
 
-  大数据集 (包含明显运动):
-    ../record/trackingData_whole_data.txt (5780 帧) - 推荐验证测试
-    ../record/trackingData_head_tracker_static.txt (8384 帧)
-    ../record/trackingData_head_tracker.txt (5703 帧)
+  Large datasets (contain noticeable motion):
+    ../record/trackingData_whole_data.txt (5780 frames) - Recommended for verification testing
+    ../record/trackingData_head_tracker_static.txt (8384 frames)
+    ../record/trackingData_head_tracker.txt (5703 frames)
 
-  运动分析工具:
-    # 分析位置运动
+  Motion analysis tools:
+    # Analyze position motion
     python3 ../record/analyze_motion_data.py --file ../record/trackingData_whole_data.txt
 
-    # 分析旋转运动
+    # Analyze rotation motion
     python3 ../record/analyze_motion_data.py --file ../record/trackingData_whole_data.txt --rotation
 
-    # 同时分析位置和旋转
+    # Analyze both position and rotation
     python3 ../record/analyze_motion_data.py --file ../record/trackingData_whole_data.txt --all
 
 
 =============================================================================
-Tracker SN 映射
+Tracker SN Mapping
 =============================================================================
 
-  190058 → pico_left_wrist  (左手腕，控制左臂)
-  190600 → pico_right_wrist (右手腕，控制右臂)
-  190046 → pico_left_arm    (左前臂，臂角约束)
-  190023 → pico_right_arm   (右前臂，臂角约束)
-
-
-=============================================================================
-增量控制原理
-=============================================================================
-
-  1. 初始化: 记录第一帧的 PICO tracker 位姿
-  2. 每一帧:
-     a. 计算 PICO 位姿增量: Δ_pico = current - init
-     b. 坐标变换: Δ_world = PICO_TO_ROBOT @ Δ_pico
-     c. 转换到 chest 坐标系: Δ_chest = WORLD_TO_CHEST @ Δ_world
-     d. 计算目标位姿: target = TIANJI_INIT_POS + Δ_chest
-     e. 发送给机器人
+  190058 → pico_left_wrist  (Left wrist, controls left arm)
+  190600 → pico_right_wrist (Right wrist, controls right arm)
+  190046 → pico_left_arm    (Left forearm, arm angle constraint)
+  190023 → pico_right_arm   (Right forearm, arm angle constraint)
 
 
 =============================================================================
-与 pico_teleop_minimal.launch.py 的差异
+Incremental Control Principle
 =============================================================================
 
-本脚本和 launch 使用相同的增量控制算法，但有以下区别:
-
-1. 臂角控制:
-   - step5 (本脚本): 静态默认臂角。使用 DEFAULT_ZSP_DIRECTION 固定值，
-     不使用 arm tracker 数据。肘部始终维持默认沉肘姿态。
-     适合验证基本位姿变换是否正确。
-   - launch: 实时动态臂角。pico_input_node 从 arm tracker 位置计算
-     肘部偏移方向，经灰色区间防抖 + EMA 平滑后发布给 tianji_world_output。
-     机器人肘部跟随人的实际肘部位置。
-
-2. 位置平滑:
-   - step5 (本脚本): 无平滑，直接使用原始计算值。
-   - launch: pico_input_node 对位置做 EMA 平滑 (alpha=0.6)，
-     减少 tracker 抖动，动作更柔和但响应略慢。
-
-3. 架构:
-   - step5 (本脚本): 直接调用 CartesianController，无中间节点。
-   - launch: pico_input → ROS2 topic → tianji_world_output → 机器人。
+  1. Initialization: record first frame PICO tracker pose
+  2. Each frame:
+     a. Compute PICO pose increment: Δ_pico = current - init
+     b. Coordinate transform: Δ_world = PICO_TO_ROBOT @ Δ_pico
+     c. Convert to chest coordinate system: Δ_chest = WORLD_TO_CHEST @ Δ_world
+     d. Compute target pose: target = TIANJI_INIT_POS + Δ_chest
+     e. Send to robot
 
 
 =============================================================================
-安全提示
+Differences from pico_teleop_minimal.launch.py
 =============================================================================
 
-⚠️ 首次运行时：
-  1. 先使用 --dry-run 验证输出位姿
-  2. 确保机器人周围无人和障碍物
-  3. 准备好急停按钮
-  4. 使用慢速回放 (--speed 0.3) 观察机器人动作
+This script and launch use the same incremental control algorithm, but with the following differences:
 
-⚠️ 如果机器人动作异常：
-  - 立即按 Ctrl+C 停止
-  - 检查坐标变换是否正确
-  - 回到 step4 验证可视化
+1. Arm angle control:
+   - step5 (this script): Static default arm angle. Uses DEFAULT_ZSP_DIRECTION fixed values,
+     does not use arm tracker data. Elbow always maintains default relaxed posture.
+     Suitable for verifying basic pose transforms are correct.
+   - launch: Real-time dynamic arm angle. pico_input_node computes from arm tracker position
+     elbow offset direction, published to tianji_world_output after deadzone debouncing + EMA smoothing.
+     Robot elbow follows the human's actual elbow position.
 
+2. Position smoothing:
+   - step5 (this script): No smoothing, directly uses raw computed values.
+   - launch: pico_input_node applies EMA smoothing to position (alpha=0.6),
+     reduces tracker jitter, smoother motion but slightly slower response.
 
-=============================================================================
-命令行参数
-=============================================================================
-
-  --file FILE         数据文件路径 (默认: ../record/trackingData_sample_static.txt)
-  --speed SPEED       回放速度倍率 (默认: 1.0)
-  --dry-run           干运行模式，仅打印不控制
-  --left-only         仅控制左臂
-  --right-only        仅控制右臂
-  --start-frame N     起始帧序号（从0开始）
-  --end-frame N       结束帧序号
-  -v, --verbose       显示详细变换日志（PICO增量 → Chest增量）
+3. Architecture:
+   - step5 (this script): Directly calls CartesianController, no intermediate nodes.
+   - launch: pico_input → ROS2 topic → tianji_world_output → robot.
 
 
 =============================================================================
-下一步
+Safety Notes
 =============================================================================
 
-测试通过后，可以：
-  1. 使用真实 PICO 设备进行实时控制
-  2. 录制更多测试数据，建立测试数据集
-  3. 进行 step6 臂角稳定性测试
+⚠️ For first run:
+  1. First use --dry-run to verify output poses
+  2. Ensure no people or obstacles around the robot
+  3. Have the emergency stop button ready
+  4. Use slow playback (--speed 0.3) to observe robot motion
+
+⚠️ If robot motion is abnormal:
+  - Immediately press Ctrl+C to stop
+  - Check if coordinate transforms are correct
+  - Go back to step4 to verify visualization
+
+
+=============================================================================
+Command Line Parameters
+=============================================================================
+
+  --file FILE         Data file path (default: ../record/trackingData_sample_static.txt)
+  --speed SPEED       Playback speed multiplier (default: 1.0)
+  --dry-run           Dry run mode, print only without control
+  --left-only         Control left arm only
+  --right-only        Control right arm only
+  --start-frame N     Start frame index (from 0)
+  --end-frame N       End frame index
+  -v, --verbose       Show detailed transform log (PICO increment -> Chest increment)
+
+
+=============================================================================
+Next Step
+=============================================================================
+
+After passing tests, you can:
+  1. Use real PICO device for real-time control
+  2. Record more test data to build test datasets
+  3. Proceed to step6 arm angle stability test
 
 =============================================================================
 """
@@ -206,7 +206,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-# 导入共享模块（使用相对路径）
+# Import shared modules (using relative path)
 _test_dir = str(Path(__file__).resolve().parent)
 _pico_input_dir = str(Path(__file__).resolve().parent.parent)
 _src_dir = str(Path(__file__).resolve().parent.parent.parent.parent)
@@ -229,113 +229,113 @@ from common.transform_utils import (
     apply_world_rotation_to_chest_pose,
 )
 
-# 导入数据源和机器人控制
+# Import data source and robot control
 from pico_input.data_source import RecordedDataSource
 from tianji_world_output.cartesian_controller import CartesianController
 
 
-# PICO → 机器人坐标变换 (从共享配置加载)
-# 详见 tianji_world_output/transform_utils.py 和 PICO_TELEOP_GUIDE.md §3.1
+# PICO -> Robot coordinate transform (loaded from shared config)
+# See tianji_world_output/transform_utils.py and PICO_TELEOP_GUIDE.md §3.1
 
-# World → Chest 转换: 使用 transform_utils 中的共享函数
-# (transform_world_to_chest, apply_world_rotation_to_chest_pose 等)
+# World -> Chest conversion: using shared functions from transform_utils
+# (transform_world_to_chest, apply_world_rotation_to_chest_pose etc.)
 
-# Tracker SN → 角色映射 (与 step4 保持一致)
+# Tracker SN -> role mapping (consistent with step4)
 TRACKER_SN_MAP = {
-    '190058': 'pico_left_wrist',   # PICO 左手腕 → 控制左臂
-    '190600': 'pico_right_wrist',  # PICO 右手腕 → 控制右臂
-    '190046': 'pico_left_arm',     # PICO 左前臂 (臂角约束)
-    '190023': 'pico_right_arm',    # PICO 右前臂 (臂角约束)
+    '190058': 'pico_left_wrist',  # PICO left wrist → controls left arm
+    '190600': 'pico_right_wrist', # PICO right wrist → controls right arm
+    '190046': 'pico_left_arm',    # PICO left forearm (arm angle constraint)
+    '190023': 'pico_right_arm',   # PICO right forearm (arm angle constraint)
 }
 
 
 def compute_elbow_direction(shoulder: np.ndarray, wrist: np.ndarray,
                             elbow: np.ndarray, side: str) -> np.ndarray:
     """
-    计算肘部相对于肩-腕平面的偏移方向
+    Compute elbow offset direction relative to shoulder-wrist plane
 
     ============================================================================
-    臂角 (Arm Angle) 计算原理
+    Arm Angle Calculation Principle
     ============================================================================
 
-    这是零空间 IK 约束的核心：指定肘部在空间中的期望偏移方向。
+    This is the core of nullspace IK constraint: specifying the desired elbow offset direction in space.
 
-    几何原理：
-                肩膀 (shoulder)
+    Geometric principle:
+                Shoulder
                   ●
                  /|\\
                 / | \\
                /  |  \\
-         肩-肘 /   |   \\ 肩-腕
+         shoulder-elbow /   |   \\ shoulder-wrist
               /    |    \\
              ●─────●─────●
-          肘部   投影点   手腕
+          Elbow   Projection   Wrist
 
             ←────→
-          肘部偏移向量 (direction)
+          Elbow offset vector (direction)
 
-    计算步骤:
-    1. 肩-腕向量: 从肩膀到手腕的直线（手臂主轴）
-    2. 肩-肘向量: 从肩膀到肘部（前臂 tracker 位置）
-    3. 投影: 将肘部投影到肩-腕直线上
-    4. 偏移向量: 实际肘部位置 - 投影点 = 肘部偏离主轴的方向
-    5. 归一化: 得到单位方向向量
+    Computation steps:
+    1. Shoulder-wrist vector: straight line from shoulder to wrist (arm main axis)
+    2. Shoulder-elbow vector: from shoulder to elbow (forearm tracker position)
+    3. Projection: project elbow onto shoulder-wrist line
+    4. Offset vector: actual elbow position - projection point = direction of elbow deviation from main axis
+    5. Normalize: get unit direction vector
 
     ============================================================================
-    沉肘方向说明 (Chest 坐标系)
+    Relaxed elbow direction description (Chest coordinate system)
     ============================================================================
 
-    Chest 坐标系定义:
-      Left Chest:  +Y = -Z_world (向下), +Z = +Y_world (向左)
-      Right Chest: +Y = +Z_world (向上), +Z = -Y_world (向右)
+    Chest coordinate system definition:
+      Left Chest:  +Y = -Z_world (downward), +Z = +Y_world (toward left)
+      Right Chest: +Y = +Z_world (upward), +Z = -Y_world (toward right)
 
-    默认臂角参考平面参数（与 cartesian_controller 一致）:
-    - 左臂: [0, -1, -0.5]  → Y-(反向重力) + Z-(向外侧/右)
-    - 右臂: [0, +1, -0.5]  → Y+(反向重力) + Z-(向外侧/左)
+    Default arm angle reference plane parameters (consistent with cartesian_controller):
+    - left arm: [0, -1, -0.5]  → Y-(anti-gravity) + Z-(toward outer side/right)
+    - right arm: [0, +1, -0.5]  → Y+(anti-gravity) + Z-(toward outer side/left)
 
-    注意：左右臂的差异已在 arm tracker 的初始位置 (robot_init_pos) 中处理，
-    所以这里计算的 direction 直接使用即可。
+    Note: differences between left and right arms are handled in the arm tracker initial position (robot_init_pos),
+    so the direction computed here can be used directly.
 
     Args:
-        shoulder: 肩膀位置 (chest 坐标系原点, [0,0,0])
-        wrist: 手腕位置 (从 PICO wrist tracker 转换)
-        elbow: 肘部位置 (从 PICO arm tracker 转换)
-        side: 'left' 或 'right'
+        shoulder: Shoulder position (chest coordinate system origin, [0,0,0])
+        wrist: Wrist position (converted from PICO wrist tracker)
+        elbow: Elbow position (converted from PICO arm tracker)
+        side: 'left' or 'right'
 
     Returns:
-        direction: 单位方向向量 [x, y, z]
+        direction: Unit direction vector [x, y, z]
     """
-    # 默认臂角参考平面参数 (从统一配置加载)
+    # Default arm angle reference plane parameters (loaded from unified config)
     default_direction = DEFAULT_ZSP_DIRECTION[side]
 
-    # 肩-腕向量
+    # Shoulder-wrist vector
     shoulder_to_wrist = wrist - shoulder
     sw_length = np.linalg.norm(shoulder_to_wrist)
 
     if sw_length < 1e-6:
-        # 手腕太靠近肩膀，使用默认沉肘方向
+        # Wrist too close to shoulder, using default relaxed elbow direction
         return default_direction
 
     sw_unit = shoulder_to_wrist / sw_length
 
-    # 肩-肘向量
+    # Shoulder-elbow vector
     shoulder_to_elbow = elbow - shoulder
 
-    # 肘部在肩-腕连线上的投影长度
+    # Projection length of elbow on shoulder-wrist line
     proj_length = np.dot(shoulder_to_elbow, sw_unit)
 
-    # 投影点
+    # Projection point
     proj_point = shoulder + proj_length * sw_unit
 
-    # 肘部偏移向量
+    # Elbow offset vector
     elbow_offset = elbow - proj_point
     offset_length = np.linalg.norm(elbow_offset)
 
     if offset_length < 1e-6:
-        # 肘部正好在肩-腕连线上，使用默认沉肘方向
+        # Elbow is exactly on shoulder-wrist line, using default relaxed elbow direction
         return default_direction
 
-    # 归一化得到方向向量
+    # Normalize to get direction vector
     direction = elbow_offset / offset_length
 
     return direction
@@ -343,37 +343,37 @@ def compute_elbow_direction(shoulder: np.ndarray, wrist: np.ndarray,
 
 def compute_incremental_pose(current_pose, init_pose, robot_init_pos, robot_init_rot, is_left: bool):
     """
-    计算增量位姿（与 IncrementalController.compute_target_pose 相同算法）
+    Compute incremental pose (same algorithm as IncrementalController.compute_target_pose)
 
-    使用与 step1/step2 一致的 4 步算法，确保旋转变换正确。
+    Uses the same 4-step algorithm as step1/step2, ensuring rotation transforms are correct.
 
     Args:
-        current_pose: [x, y, z, qx, qy, qz, qw] 当前位姿 (PICO 坐标系)
-        init_pose: [x, y, z, qx, qy, qz, qw] 初始位姿 (PICO 坐标系)
-        robot_init_pos: 机器人初始位置 (chest 坐标系)
-        robot_init_rot: 机器人初始姿态 (Rotation 对象，chest 坐标系)
-        is_left: 是否为左臂
+        current_pose: [x, y, z, qx, qy, qz, qw] Current pose (PICO coordinate system)
+        init_pose: [x, y, z, qx, qy, qz, qw] Initial pose (PICO coordinate system)
+        robot_init_pos: Robot initial position (chest coordinate system)
+        robot_init_rot: Robot initial orientation (Rotation object, chest coordinate system)
+        is_left: Whether it is the left arm
 
     Returns:
-        (target_pos, target_quat) 目标位姿 (chest 坐标系)
+        (target_pos, target_quat) Target pose (chest coordinate system)
     """
     side = 'left' if is_left else 'right'
 
-    # 位置增量
+    # Position increment
     delta_pos_pico = np.array(current_pose[:3]) - np.array(init_pose[:3])
     delta_pos_world = get_pico_to_robot() @ delta_pos_pico
 
-    # 转换到 chest 坐标系（使用共享库）
+    # Convert to chest coordinate system (using shared library)
     delta_pos_chest = transform_world_to_chest(delta_pos_world, side)
 
     target_pos = robot_init_pos + delta_pos_chest
 
-    # 姿态增量
+    # Orientation increment
     init_rot = R.from_quat(init_pose[3:7])
     current_rot = R.from_quat(current_pose[3:7])
     delta_rot_pico = current_rot * init_rot.inv()
 
-    # 使用共享库: PICO→World 旋转变换 + 4 步算法
+    # Using shared library: PICO->World rotation transform + 4-step algorithm
     delta_rot_world = transform_pico_rotation_to_world(delta_rot_pico, get_pico_to_robot())
     robot_init_rot_mat = robot_init_rot.as_matrix()
     target_rot_in_chest = apply_world_rotation_to_chest_pose(
@@ -387,121 +387,126 @@ def compute_incremental_pose(current_pose, init_pose, robot_init_pos, robot_init
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Step 5: 使用录制数据增量控制真机器人')
+    parser = argparse.ArgumentParser(description='Step 5: Incremental control of real robot using recorded data')
     parser.add_argument('--file', type=str,
                         default='../record/trackingData_sample_static.txt',
-                        help='录制数据文件路径（相对于 test/ 目录）')
+                        help='Recorded data file path (relative to test/ directory)')
     parser.add_argument('--speed', type=float, default=1.0,
-                        help='回放速度倍率 (0.5=慢速, 1.0=实时, 2.0=快速)')
+                        help='Playback speed multiplier (0.5=slow, 1.0=real-time, 2.0=fast)')
     parser.add_argument('--dry-run', action='store_true',
-                        help='干运行模式（仅打印，不控制机器人）')
+                        help='Dry run mode (print only, do not control robot)')
     parser.add_argument('--left-only', action='store_true',
-                        help='仅控制左臂')
+                        help='Control left arm only')
     parser.add_argument('--right-only', action='store_true',
-                        help='仅控制右臂')
+                        help='Control right arm only')
     parser.add_argument('--start-frame', type=int, default=0,
-                        help='起始帧序号（从0开始）')
+                        help='Start frame index (from 0)')
     parser.add_argument('--end-frame', type=int, default=None,
-                        help='结束帧序号（不指定则播放到结尾）')
+                        help='End frame index (plays to end if not specified)')
     parser.add_argument('--verbose', '-v', action='store_true',
-                        help='显示详细变换日志（PICO增量 → 机器人增量）')
+                        help='Show detailed transform log (PICO increment -> robot increment)')
     args = parser.parse_args()
 
-    # 确定数据文件路径
+    if args.speed <= 0:
+        parser.error("--speed must be greater than 0")
+
+    # Determine data file path
     data_file = Path(args.file)
     if not data_file.is_absolute():
-        # 相对路径，从 pico_input/test 目录查找
+        # Relative path, search from pico_input/test directory
         test_dir = Path(__file__).parent
         data_file = test_dir / args.file
 
     if not data_file.exists():
-        print(f"❌ 错误: 找不到数据文件 {data_file}")
+        print(f"Error: data file not found {data_file}")
         return
 
     print("=" * 70)
-    print("Step 5: 使用录制数据增量控制真机器人")
+    print("Step 5: Incremental control of real robot using recorded data")
     print("=" * 70)
-    print(f"  数据文件: {data_file}")
-    print(f"  回放速度: {args.speed}x")
-    print(f"  干运行模式: {args.dry_run}")
-    print(f"  帧范围: {args.start_frame} - {args.end_frame if args.end_frame else '末尾'}")
-    print(f"  控制模式: ", end="")
+    print(f"  Data file: {data_file}")
+    print(f"  Playback speed: {args.speed}x")
+    print(f"  Dry run mode: {args.dry_run}")
+    print(f"  Frame range: {args.start_frame} - {args.end_frame if args.end_frame else 'end'}")
+    print(f"  Control mode: ", end="")
     if args.left_only:
-        print("仅左臂")
+        print("Left arm only")
     elif args.right_only:
-        print("仅右臂")
+        print("Right arm only")
     else:
-        print("双臂")
+        print("Dual arms")
     print("=" * 70)
 
-    # 创建数据源
-    print("\n[1/4] 加载录制数据...")
+    # Create data source
+    print("\n[1/4] Loading recorded data...")
     data_source = RecordedDataSource(
         str(data_file),
         playback_speed=args.speed,
-        loop=False  # step5 不循环，播放一次
+        loop=False  # step5 does not loop, plays once
     )
 
     if not data_source.initialize():
-        print("❌ 错误: 数据源初始化失败")
+        print("Error: Data source initialization failed")
         return
 
-    print(f"✓ 数据加载成功，共 {len(data_source.data_frames)} 帧")
+    print(f"Data loaded successfully, total {len(data_source.data_frames)} frames")
 
-    # 连接机器人（如果不是干运行）
+    # Connect to robot(if not dry run)
     controller = None
     if not args.dry_run:
-        print("\n[2/4] 连接机器人...")
+        print("\n[2/4] Connect to robot...")
         try:
             controller = CartesianController(robot_ip=ROBOT_IP)
-            print(f"✓ 已连接到机器人 {ROBOT_IP}")
+            print(f"Connected to robot {ROBOT_IP}")
 
-            # 使能机器人（关键步骤！）
-            print("  设置阻抗模式...")
+            # Enable robot (critical step!)
+            print("  Setting impedance mode...")
             controller.set_impedance_mode(mode='joint')
-            print("  ✓ 机器人已使能")
+            print("  Robot enabled")
 
-            # 移动到初始位姿
-            print("  移动到初始位姿...")
+            # Move to initial pose
+            print("  Moving to initial pose...")
             controller.move_to_init(
                 wait=True, timeout=3,
                 init_joints_left=INIT_JOINTS['left'],
                 init_joints_right=INIT_JOINTS['right']
             )
-            print("  ✓ 已到达初始位姿")
+            print("  ✓ Reached initial pose")
 
         except Exception as e:
-            print(f"❌ 连接失败: {e}")
+            print(f"Connection failed: {e}")
+            if controller is not None:
+                controller.disable_and_release()
             return
     else:
-        print("\n[2/4] 跳过机器人连接（干运行模式）")
+        print("\n[2/4] Skipping robot connection (dry run mode)")
 
-    # 初始化：跳过到起始帧并记录初始位姿
-    print("\n[3/4] 初始化（记录初始位姿）...")
+    # Initialize: skip to start frame and record initial poses
+    print("\n[3/4] Initializing (recording initial poses)...")
     time.sleep(0.1)
 
-    # 直接跳到起始帧（直接设置数据源内部状态，绕过时间同步）
+    # Jump directly to start frame (directly set data source internal state, bypassing time sync)
     if args.start_frame > 0:
         if args.start_frame >= len(data_source.data_frames):
-            print(f"❌ 错误: 起始帧 {args.start_frame} 超出数据范围 (共 {len(data_source.data_frames)} 帧)")
+            print(f"Error: start frame {args.start_frame} exceeds data range (total {len(data_source.data_frames)} frames)")
             return
-        print(f"  跳到帧 {args.start_frame}...")
-        # 直接设置起始索引和时间戳基准
+        print(f"  Jumping to frame {args.start_frame}...")
+        # Directly set start index and timestamp baseline
         data_source.current_index = args.start_frame
         data_source.first_timestamp = data_source.data_frames[args.start_frame].get('predictTime', 0)
         data_source.start_time = time.time()
 
     tracker_data_list = data_source.get_tracker_data()
     if not tracker_data_list:
-        print("❌ 错误: 无法获取 tracker 数据")
+        print("Error: unable to get tracker data")
         return
 
-    # 记录初始位姿
+    # Record initial poses
     init_poses = {}
     import re
 
     for tracker in tracker_data_list:
-        # 提取6位序列号
+        # Extract 6-digit serial number
         match = re.search(r'(\d{6})', tracker.serial_number)
         if not match:
             continue
@@ -514,39 +519,39 @@ def main():
             print(f"  {role}: pos={tracker.position}, valid={tracker.is_valid}")
 
     if not init_poses:
-        print("❌ 错误: 未找到有效的 tracker 数据")
+        print("Error: no valid tracker data found")
         return
 
-    print(f"✓ 已记录 {len(init_poses)} 个 tracker 初始位姿")
+    print(f"Recorded {len(init_poses)} trackers initialpose")
 
-    # 主循环：回放并控制
-    print("\n[4/4] 开始回放并控制机器人...")
-    print("  按 Ctrl+C 停止\n")
+    # Main loop: playback and control
+    print("\n[4/4] Starting playback and robot control...")
+    print("  Press Ctrl+C to stop\n")
 
     frame_count = 0
     start_time = time.time()
 
-    # 计算结束帧索引
+    # Compute end frame index
     end_index = args.end_frame if args.end_frame is not None else len(data_source.data_frames) - 1
     end_index = min(end_index, len(data_source.data_frames) - 1)
 
-    # 辅助函数：解析位姿字符串
+    # Helper function: parse pose string
     def parse_pose_string(pose_str):
         values = [float(x.strip()) for x in pose_str.split(',')]
         return np.array(values[:7], dtype=np.float64)
 
     try:
-        # 直接按索引遍历帧，而不是依赖时间同步
+        # Iterate frames by index, not relying on time synchronization
         for frame_idx in range(args.start_frame + 1, end_index + 1):
             frame = data_source.data_frames[frame_idx]
             frame_count += 1
             actual_frame = frame_idx
 
-            # 解析当前帧的 tracker 数据
+            # Parse current frame tracker data
             motion = frame.get('Motion', {})
             joints = motion.get('joints', [])
 
-            # 第一遍：收集所有 tracker 的位姿
+            # First pass: collect all tracker poses
             current_poses = {}  # {role: (pos, quat)}
             for joint in joints:
                 sn = joint.get('sn', '')
@@ -565,15 +570,15 @@ def main():
                     is_left = 'left' in role
                     side = 'left' if is_left else 'right'
 
-                    # 解析当前位姿
+                    # Parse current pose
                     current_pose = parse_pose_string(pose_str)
 
-                    # 计算 PICO 增量（用于 verbose 日志）
+                    # Compute PICO increment (for verbose logging)
                     pico_delta = current_pose[:3] - init_poses[role][:3]
 
-                    # 关键：arm tracker 和 wrist tracker 使用不同的初始位置
+                    # Key: arm tracker and wrist tracker use different initial positions
                     if 'arm' in role and 'wrist' not in role:
-                        # 前臂 tracker: 从配置加载初始位置
+                        # Forearm tracker: load initial position from config
                         robot_init_pos = ARM_INIT_POS[side]
                     else:
                         robot_init_pos = TIANJI_INIT_POS[side]
@@ -587,11 +592,11 @@ def main():
                         robot_init_rot,
                         is_left
                     )
-                    # 计算机器人增量（相对于初始位置）
+                    # Compute robot increment (relative to initial position)
                     robot_delta = target_pos - robot_init_pos
                     current_poses[role] = (target_pos, target_quat, pico_delta, robot_delta)
 
-            # 第二遍：计算 elbow direction 并控制机器人
+            # Second pass: compute elbow direction and control robot
             for side in ['left', 'right']:
                 wrist_role = f'pico_{side}_wrist'
                 arm_role = f'pico_{side}_arm'
@@ -599,7 +604,7 @@ def main():
                 if wrist_role not in current_poses:
                     continue
 
-                # 检查是否需要控制此臂
+                # Check if this arm needs to be controlled
                 is_left = (side == 'left')
                 if args.left_only and not is_left:
                     continue
@@ -609,38 +614,38 @@ def main():
                 wrist_pos, wrist_quat, pico_delta, robot_delta = current_poses[wrist_role]
                 shoulder_pos = np.array([0.0, 0.0, 0.0])
 
-                # 使用配置默认 zsp_para 方向（经 FK→IK 闭环验证）
-                # 注意: 几何方向（compute_elbow_direction）与 IK 的 zsp_para 约定不同
-                # 几何方向的 Y 分量指向重力方向，zsp_para Y 分量需要反重力方向
+                # Using configuration default zsp_para direction (verified through FK->IK closed-loop)
+                # Note: geometric direction (compute_elbow_direction) and IK's zsp_para convention differ
+                # Geometric direction Y component points toward gravity, zsp_para Y component needs anti-gravity direction
                 elbow_direction = DEFAULT_ZSP_DIRECTION[side]
 
-                # 打印信息
+                # Print information
                 if args.verbose:
-                    # 详细模式：显示 PICO 增量 → 机器人增量
-                    # PICO 坐标系: +X=右, +Y=上, +Z=朝向用户(后)
-                    # 注意: PICO +Z 是"朝向用户"方向，即用户手往后缩的方向！
-                    #       用户往前伸手时 PICO Z 是负值！
-                    # Chest 坐标系:
-                    #   Left Chest: X=前, Y=下, Z=左
-                    #   Right Chest: X=前, Y=上, Z=右
+                    # Verbose mode: show PICO increment -> robot increment
+                    # PICO coordinate system: +X=right, +Y=up, +Z=toward user (back)
+                    # Note: PICO +Z is "toward user" direction, i.e. the direction of user's hand moving backward!
+                    #       When user reaches forward, PICO Z is negative!
+                    # Chest coordinate system:
+                    #   Left Chest: X=Forward, Y=Down, Z=Left
+                    #   Right Chest: X=Forward, Y=Up, Z=Right
                     if side == 'left':
-                        y_label = "下+"
-                        z_label = "左+"
+                        y_label = "Down+"
+                        z_label = "Left+"
                     else:
-                        y_label = "上+"
-                        z_label = "右+"
-                    print(f"[帧 {actual_frame:5d}] {wrist_role:15s}:")
-                    print(f"    PICO Δ: X={pico_delta[0]*100:+6.2f}cm(右+), Y={pico_delta[1]*100:+6.2f}cm(上+), Z={pico_delta[2]*100:+6.2f}cm(后+/朝向用户)")
-                    print(f"    Chest Δ: X={robot_delta[0]*100:+6.2f}cm(前+), Y={robot_delta[1]*100:+6.2f}cm({y_label}), Z={robot_delta[2]*100:+6.2f}cm({z_label})")
+                        y_label = "Up+"
+                        z_label = "Right+"
+                    print(f"[frames {actual_frame:5d}] {wrist_role:15s}:")
+                    print(f"    PICO Δ: X={pico_delta[0]*100:+6.2f}cm(Right+), Y={pico_delta[1]*100:+6.2f}cm(Up+), Z={pico_delta[2]*100:+6.2f}cm(Backward+/toward user)")
+                    print(f"    Chest Δ: X={robot_delta[0]*100:+6.2f}cm(Forward+), Y={robot_delta[1]*100:+6.2f}cm({y_label}), Z={robot_delta[2]*100:+6.2f}cm({z_label})")
                 else:
-                    print(f"[帧 {actual_frame:5d}] {wrist_role:15s}: "
+                    print(f"[frames {actual_frame:5d}] {wrist_role:15s}: "
                           f"pos=[{wrist_pos[0]:.3f}, {wrist_pos[1]:.3f}, {wrist_pos[2]:.3f}] "
                           f"elbow_dir=[{elbow_direction[0]:.2f}, {elbow_direction[1]:.2f}, {elbow_direction[2]:.2f}]")
 
-                # 发送给机器人
+                # Send to robot
                 if controller:
                     try:
-                        # 更新 elbow direction (zsp_para)
+                        # Update elbow direction (zsp_para)
                         zsp_para = [
                             elbow_direction[0],
                             elbow_direction[1],
@@ -652,11 +657,11 @@ def main():
                         else:
                             controller.right_zsp_para = zsp_para
 
-                        # 构建位姿矩阵 (位置保持米，move_to_pose_direct 内部会转换)
+                        # Build pose matrix (position in meters, move_to_pose_direct will convert internally)
                         rot_mat = R.from_quat(wrist_quat).as_matrix()
                         pose_mat = np.eye(4)
                         pose_mat[:3, :3] = rot_mat
-                        pose_mat[:3, 3] = wrist_pos  # 米，不是毫米
+                        pose_mat[:3, 3] = wrist_pos  # meters, not millimeters
 
                         if side == 'left':
                             controller.move_to_pose_direct(
@@ -671,29 +676,29 @@ def main():
                                 unit='matrix'
                             )
                     except Exception as e:
-                        print(f"  ⚠️ 控制失败: {e}")
+                        print(f"  ⚠️ Control failed: {e}")
 
-            # 控制回放速度
+            # Control playback speed
             time.sleep(0.01 / args.speed)
 
     except KeyboardInterrupt:
-        print("\n\n✓ 用户中断")
+        print("\n\nUser interrupted")
 
-    # 统计信息
+    # Statistics
     elapsed = time.time() - start_time
     print("\n" + "=" * 70)
-    print(f"回放完成")
-    print(f"  总帧数: {frame_count}")
-    print(f"  耗时: {elapsed:.1f} 秒")
-    print(f"  平均帧率: {frame_count/elapsed:.1f} fps")
+    print(f"Playback complete")
+    print(f"  Total frames: {frame_count}")
+    print(f"  Elapsed: {elapsed:.1f} seconds")
+    print(f"  Average frame rate: {frame_count/elapsed:.1f} fps")
     print("=" * 70)
 
-    # 清理
+    # Cleanup
     data_source.close()
     if controller:
-        print("下电并释放机器人...")
+        print("Disabling and releasing robot...")
         controller.disable_and_release()
-        print("✓ 机器人已安全退出")
+        print("Robot safely exited")
 
 
 if __name__ == '__main__':

@@ -1,21 +1,21 @@
 """
-ROS2 日志桥接工具
+ROS2 Logging Bridge Utility
 
-将 Python stdlib logging 桥接到 ROS2 /rosout，
-使非 Node 类的日志也能被 rqt_console 等标准工具捕获。
+Bridges Python stdlib logging to ROS2 /rosout,
+so that logs from non-Node classes can be captured by standard tools like rqt_console.
 
-使用方法:
-    # 在 Node.__init__ 中调用一次:
+Usage:
+    # Call once in Node.__init__:
     from pico_input.ros2_logging import setup_ros2_logging_bridge
     setup_ros2_logging_bridge(self.get_logger())
 
-    # 之后所有 logging.getLogger() 的输出自动转发到 /rosout
+    # After that, all logging.getLogger() output is automatically forwarded to /rosout
 """
 import logging
 
 
 class ROS2LoggingHandler(logging.Handler):
-    """将 stdlib logging 转发到 ROS2 logger"""
+    """Forward stdlib logging to ROS2 logger"""
 
     def __init__(self, ros_logger):
         super().__init__()
@@ -35,7 +35,7 @@ class ROS2LoggingHandler(logging.Handler):
 
 
 class ROS2LoggerAdapter:
-    """适配器: 让 stdlib logging 接口调用 ROS2 logger (用于依赖注入)"""
+    """Adapter: makes stdlib logging interface call ROS2 logger (for dependency injection)"""
 
     def __init__(self, ros_logger):
         self._logger = ros_logger
@@ -65,16 +65,16 @@ _bridge_installed = False
 
 def setup_ros2_logging_bridge(ros_logger, level: int = logging.INFO):
     """
-    安装 stdlib→ROS2 桥接 (全局，仅首次生效)
+    Install stdlib->ROS2 bridge (global, only effective on first call)
 
-    在 Node.__init__ 中调用一次，之后所有 logging.getLogger()
-    的输出会同时:
-    1. 写入 stderr (默认 StreamHandler)
-    2. 转发到 ROS2 /rosout (ROS2LoggingHandler)
+    Call once in Node.__init__, after which all logging.getLogger()
+    output will simultaneously:
+    1. Write to stderr (default StreamHandler)
+    2. Forward to ROS2 /rosout (ROS2LoggingHandler)
 
     Args:
-        ros_logger: ROS2 node 的 get_logger() 返回值
-        level: 最低转发级别 (默认 INFO)
+        ros_logger: Return value of ROS2 node's get_logger()
+        level: Minimum forwarding level (default INFO)
     """
     global _bridge_installed
     if _bridge_installed:

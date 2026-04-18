@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-统一双目相机节点 - 单进程处理 ROS2 发布 + PICO H.264 串流
+Unified stereo camera node - single process handling ROS2 publishing + PICO H.264 streaming
 
-架构:
+Architecture:
     /dev/stereo_camera → OpenCV (MJPEG 60fps)
       ├── ROS2: split L/R → JPEG → /stereo/{left,right}/compressed (30fps)
       └── PICO: BGR24 → FFmpeg stdin → H.264 stdout → TCP (60fps, on-demand)
           └── XRobo TCP 13579: OPEN_CAMERA → MEDIA_DECODER_READY → streaming
 
-消除 v4l2loopback 依赖。单进程内完成所有相机输出。
+Eliminates v4l2loopback dependency. All camera outputs handled within a single process.
 
-作者: Liang ZHU
+Author: Liang ZHU
 """
 
 import cv2
@@ -40,15 +40,15 @@ class StreamState(Enum):
 
 class UnifiedStereoNode:
     """
-    统一双目相机节点
+    Unified stereo camera node
 
-    单进程处理:
-    1. OpenCV 采集 (MJPEG, camera native fps)
-    2. ROS2 JPEG 发布 (/stereo/{left,right}/compressed)
-    3. XRobo 协议服务器 (TCP 13579, PICO 连接管理)
-    4. H.264 编码发送 (FFmpeg rawvideo→H.264, TCP → PICO, on-demand)
+    Single process handling:
+    1. OpenCV capture (MJPEG, camera native fps)
+    2. ROS2 JPEG publishing (/stereo/{left,right}/compressed)
+    3. XRobo protocol server (TCP 13579, PICO connection management)
+    4. H.264 encoding and sending (FFmpeg rawvideo→H.264, TCP → PICO, on-demand)
 
-    线程模型:
+    Thread model:
     - capture_thread: OpenCV read → shared frame buffer (Condition notify)
     - ros2_thread: wait frame → split → JPEG encode → publish (rate limited)
     - tcp_accept (main): listen 13579, handle PICO protocol
@@ -97,7 +97,7 @@ class UnifiedStereoNode:
         self._generation: int = 0
         self._pending_params: Optional[dict] = None
         self._pending_client: Optional[socket.socket] = None
-        self._command_client: Optional[socket.socket] = None  # 推流期间的命令通道
+        self._command_client: Optional[socket.socket] = None  # Command channel during streaming
 
         # ADB
         self._adb_connected = False
@@ -286,10 +286,10 @@ class UnifiedStereoNode:
     # ==================== ADB ====================
 
     def _check_adb(self):
-        """检测 PICO 是否通过 USB 连接 (决定视频数据走 ADB forward 还是直连 IP)
+        """Detect whether PICO is connected via USB (determines if video data goes through ADB forward or direct IP)
 
-        ADB reverse 端口由 docker/scripts/adb_watchdog.sh 统一管理,
-        此处只做连接检测, 不设置 reverse 端口。
+        ADB reverse ports are managed by docker/scripts/adb_watchdog.sh,
+        this only performs connection detection, does not set up reverse ports.
         """
         try:
             result = subprocess.run(['adb', 'devices'],
@@ -305,10 +305,10 @@ class UnifiedStereoNode:
             self._adb_connected = False
 
     def _setup_adb_forward(self, port: int):
-        """设置 ADB forward (PC→PICO) 用于 H.264 视频推流
+        """Set up ADB forward (PC→PICO) for H.264 video streaming
 
-        与 watchdog 管理的 reverse 端口不同, forward 是每次视频连接动态创建的,
-        端口号由 PICO MEDIA_DECODER_READY 指定。
+        Unlike reverse ports managed by watchdog, forward is dynamically created for each video connection,
+        port number specified by PICO MEDIA_DECODER_READY.
         """
         try:
             result = subprocess.run(['adb', 'forward', f'tcp:{port}', f'tcp:{port}'],
@@ -359,9 +359,9 @@ class UnifiedStereoNode:
     def _handle_client(self, client: socket.socket, client_id: str):
         """Handle a PICO client connection (protocol parsing)
 
-        命令通道生命周期:
-        - 协商阶段: 5s timeout (快速检测死连接)
-        - 推流阶段: 阻塞等待 (推流结束时由外部 shutdown 唤醒)
+        Command channel lifecycle:
+        - Negotiation phase: 5s timeout (quick dead connection detection)
+        - Streaming phase: blocking wait (woken by external shutdown when streaming ends)
         """
         buffer = b''
         try:
@@ -384,7 +384,7 @@ class UnifiedStereoNode:
                             self._handle_open_camera(value, client)
                         elif func == 'MediaDecoderReady':
                             self._handle_media_decoder_ready(value, client)
-                            # 推流开始: 切换阻塞模式, 等待 CLOSE_CAMERA 或外部 shutdown
+                            # Streaming started: switch to blocking mode, wait for CLOSE_CAMERA or external shutdown
                             client.settimeout(None)
                             with self._stream_lock:
                                 self._command_client = client
@@ -496,8 +496,8 @@ class UnifiedStereoNode:
             feed_t.start()
 
             # 3. Connect TCP to PICO
-            #    connect() 返回即表示 PICO 已 accept (WiFi 直连 / ADB 端到端代理)
-            #    无需额外 ACK 握手，立即启动 send 线程
+            #    connect() return means PICO has accepted (WiFi direct / ADB end-to-end proxy)
+            #    No additional ACK handshake needed, start send thread immediately
             tcp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             tcp_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             tcp_sock.settimeout(5.0)
@@ -668,7 +668,7 @@ class UnifiedStereoNode:
                     self._ffmpeg_process = None
                     self._pico_socket = None
                     self._stream_state = StreamState.IDLE
-                    # 唤醒命令通道 handler (阻塞在 recv 上)
+                    # Wake up command channel handler (blocked on recv)
                     self._shutdown_command_client()
                 else:
                     logger.info(f"New connection active (gen={self._generation}), skip cleanup")
@@ -702,7 +702,7 @@ class UnifiedStereoNode:
         self._shutdown_command_client()
 
     def _shutdown_command_client(self):
-        """唤醒阻塞在 recv 上的命令通道 handler (caller must hold _stream_lock)"""
+        """Wake up command channel handler blocked on recv (caller must hold _stream_lock)"""
         if self._command_client:
             try:
                 self._command_client.shutdown(socket.SHUT_RDWR)

@@ -1,13 +1,13 @@
 """
-tianji_output 内部模块 - 不建议直接导入
+tianji_output internal module - not recommended for direct import
 
-此目录包含底层实现，供高级控制器使用：
-- fx_robot: 机器人底层通信接口
-- fx_kine: 运动学解算接口
-- structure_data: C 接口数据结构
-- robot_structures: 运动学相关结构体
+This directory contains low-level implementations for use by high-level controllers:
+- fx_robot: Robot low-level communication interface
+- fx_kine: Kinematics solver interface
+- structure_data: C interface data structures
+- robot_structures: Kinematics-related structures
 
-推荐使用顶层接口:
+Recommended to use top-level interfaces:
     from tianji_output import CartesianController, JointController
 """
 

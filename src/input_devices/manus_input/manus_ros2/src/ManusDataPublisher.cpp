@@ -26,7 +26,7 @@ ManusDataPublisher::ManusDataPublisher() : Node("manus_data_publisher")
     m_PublishCountMap.clear();
 
     //Timer to publish the data 
-    m_PublishTimer = create_wall_timer(std::chrono::microseconds(8333), [this] { PublishCallback(); }); // 120Hz (匹配 Manus 手套硬件刷新率, 1000000/120≈8333μs)
+    m_PublishTimer = create_wall_timer(std::chrono::microseconds(8333), [this] { PublishCallback(); }); // 120Hz (matches Manus glove hardware refresh rate, 1000000/120≈8333μs)
 
     // initialize client
     ClientLog::print("Starting MANUS Data publisher!");
@@ -242,7 +242,7 @@ void ManusDataPublisher::PublishCallback()
 
     for (size_t i = 0; i < m_Landscape->gloveDevices.gloveCount; i++)
     {
-        // 自动加载校准文件（每只手只加载一次）
+        // Auto-load calibration file (once per hand)
         uint32_t t_GloveId = m_Landscape->gloveDevices.gloves[i].id;
         Side t_Side = m_Landscape->gloveDevices.gloves[i].side;
 
@@ -626,10 +626,10 @@ Side ManusDataPublisher::ErgonomicsDataTypeToSide(ErgonomicsDataType p_ErgoDataT
             return Side::Side_Invalid;
     }
 }
-/// @brief 自动加载校准文件
+/// @brief Auto-load calibration file
 bool ManusDataPublisher::LoadCalibrationFile(uint32_t p_GloveId, Side p_Side)
 {
-    // 从 ROS2 包目录获取校准文件路径
+    // Get calibration file path from ROS2 package directory
     std::string t_PackageShareDir;
     try {
         t_PackageShareDir = ament_index_cpp::get_package_share_directory("manus_ros2");
@@ -638,32 +638,45 @@ bool ManusDataPublisher::LoadCalibrationFile(uint32_t p_GloveId, Side p_Side)
         return false;
     }
 
-    // 根据左右手加载不同的标定文件
+    // Load different calibration files for left/right hand
     std::string t_CalibrationPath;
     if (p_Side == Side_Left) {
         t_CalibrationPath = t_PackageShareDir + "/calibration/LeftMetaglovePro.mcal";
-    } else {
+    } else if (p_Side == Side_Right) {
         t_CalibrationPath = t_PackageShareDir + "/calibration/RightMetaglovePro.mcal";
+    } else {
+        ClientLog::error("Invalid Side value for calibration loading: {}", static_cast<int>(p_Side));
+        return false;
     }
 
-    // 检查文件是否存在
+    // Check if file exists
     std::ifstream t_File(t_CalibrationPath, std::ios::binary);
     if (!t_File) {
         ClientLog::warn("Calibration file not found: {}", t_CalibrationPath);
         return false;
     }
 
-    // 获取文件大小
+    // Get file size (guard against tellg() failure which returns -1)
     t_File.seekg(0, std::ios::end);
-    int t_FileLength = static_cast<int>(t_File.tellg());
+    std::streampos t_FilePos = t_File.tellg();
+    if (t_FilePos <= 0) {
+        ClientLog::error("Failed to determine size of calibration file (or file empty): {}", t_CalibrationPath);
+        return false;
+    }
+    int t_FileLength = static_cast<int>(t_FilePos);
     t_File.seekg(0, std::ios::beg);
 
-    // 读取校准数据
+    // Read calibration data
     std::vector<unsigned char> t_CalibrationData(t_FileLength);
     t_File.read(reinterpret_cast<char*>(t_CalibrationData.data()), t_FileLength);
+    if (!t_File || t_File.gcount() != t_FileLength) {
+        ClientLog::error("Failed to read calibration file: {} (expected {} bytes, got {})",
+            t_CalibrationPath, t_FileLength, static_cast<int>(t_File.gcount()));
+        return false;
+    }
     t_File.close();
 
-    // 应用校准数据
+    // Apply calibration data
     SetGloveCalibrationReturnCode t_Result;
     CoreSdk_SetGloveCalibration(p_GloveId, t_CalibrationData.data(), t_FileLength, &t_Result);
 

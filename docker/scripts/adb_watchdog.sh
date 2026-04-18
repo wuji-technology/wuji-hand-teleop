@@ -1,20 +1,20 @@
 #!/bin/bash
 # =============================================================================
-# ADB Reverse 端口监控
+# ADB Reverse Port Monitor
 # =============================================================================
-# PICO USB 连接的 ADB reverse 是 session 级别的, 断连后丢失。
-# 此脚本以后台进程运行, 每 5 秒检测 PICO USB 连接状态:
-#   - 连接时: 自动建立 reverse 端口映射
-#   - 断开时: 静默等待重连
+# PICO USB ADB reverse is session-level, lost after disconnection.
+# This script runs as a background process, checking PICO USB connection status every 5 seconds:
+#   - Connected: automatically establish reverse port mapping
+#   - Disconnected: silently wait for reconnection
 #
-# 端口:
-#   63901 → PC-Service 控制通道 (PICO Connect 按钮)
-#   13579 → XRoboCompatServer 相机命令通道
+# Ports:
+#   63901 → PC-Service control channel (PICO Connect button)
+#   13579 → XRoboCompatServer camera command channel
 #
-# HTC/WiFi 模式下无 USB 设备, 空转无副作用。
+# No USB device in HTC/WiFi mode, idle with no side effects.
 # =============================================================================
 
-# 忽略 SIGINT/SIGTERM — 不随 ros2 launch 的 Ctrl+C 退出
+# Ignore SIGINT/SIGTERM — do not exit with ros2 launch Ctrl+C
 trap '' INT TERM
 
 PORTS="63901 13579"
@@ -23,7 +23,7 @@ LAST_STATE=""
 
 while true; do
     if adb devices 2>/dev/null | grep -q "device$"; then
-        # 每次循环都确认 reverse 端口存在 (可能被 PICO 断连清除)
+        # Check reverse ports exist on every loop (may be cleared by PICO disconnection)
         MISSING=false
         for PORT in $PORTS; do
             if ! adb reverse --list 2>/dev/null | grep -q "tcp:$PORT"; then

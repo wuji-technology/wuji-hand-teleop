@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Wuji 灵巧手硬件接口封装 / Wuji Hand Hardware Interface
+Wuji Dexterous Hand Hardware Interface Wrapper
 
-通过 wujihandros2 驱动 (C++ wujihandcpp SDK) 进行 ROS2 通信
+Communicates via wujihandros2 driver (C++ wujihandcpp SDK) over ROS2
 """
 import threading
 from typing import Optional
 import numpy as np
 
-# ROS2 依赖
+# ROS2 dependencies
 try:
     from rclpy.node import Node
     from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy
@@ -20,7 +20,7 @@ except ImportError:
 
 
 def get_sensor_data_qos() -> 'QoSProfile':
-    """获取传感器数据 QoS 配置 (与 wujihandros2 驱动一致)"""
+    """Get sensor data QoS config (consistent with wujihandros2 driver)"""
     return QoSProfile(
         reliability=ReliabilityPolicy.BEST_EFFORT,
         history=HistoryPolicy.KEEP_LAST,
@@ -30,16 +30,16 @@ def get_sensor_data_qos() -> 'QoSProfile':
 
 class WujiHandROS2:
     """
-    Wuji 灵巧手 ROS2 接口 (通过 wujihandros2 驱动)
+    Wuji Dexterous Hand ROS2 Interface (via wujihandros2 driver)
 
-    通过 ROS2 Topics 与 wujihandros2 C++ 驱动通信：
-    - 发布: /{hand_name}/joint_commands
-    - 订阅: /{hand_name}/joint_states
+    Communicates with wujihandros2 C++ driver via ROS2 Topics:
+    - Publishes: /{hand_name}/joint_commands
+    - Subscribes: /{hand_name}/joint_states
 
-    wujihandros2 使用 C++ wujihandcpp SDK，支持 1000Hz 控制频率
+    wujihandros2 uses C++ wujihandcpp SDK, supports 1000Hz control frequency
     """
 
-    NUM_JOINTS = 20  # 5 手指 × 4 关节
+    NUM_JOINTS = 20  # 5 fingers x 4 joints
 
     def __init__(
         self,
@@ -49,38 +49,38 @@ class WujiHandROS2:
         logger=None
     ):
         """
-        初始化 ROS2 接口
+        Initialize ROS2 interface
 
         Args:
-            hand_name: wujihandros2 驱动的命名空间 (如 "left_hand", "right_hand")
-            side: 手的位置 "left" 或 "right" (用于日志)
-            node: ROS2 节点实例
-            logger: 外部 logger (可选)
+            hand_name: wujihandros2 driver namespace (e.g. "left_hand", "right_hand")
+            side: Hand side "left" or "right" (for logging)
+            node: ROS2 node instance
+            logger: External logger (optional)
         """
         if not ROS2_AVAILABLE:
-            raise ImportError("ROS2 依赖未安装，无法使用 WujiHandROS2")
+            raise ImportError("ROS2 dependencies not installed, cannot use WujiHandROS2")
 
         self.hand_name = hand_name
         self.side = side
         self.node = node
         self.logger = logger or node.get_logger()
 
-        # 状态缓存
+        # State cache
         self._latest_positions: Optional[np.ndarray] = None
         self._connected = False
         self._lock = threading.Lock()
 
-        # QoS 配置
+        # QoS config
         qos = get_sensor_data_qos()
 
-        # 创建发布者: 发送关节命令到 wujihandros2 驱动
+        # Create publisher: send joint commands to wujihandros2 driver
         self._cmd_pub = node.create_publisher(
             JointState,
             f"/{hand_name}/joint_commands",
             qos
         )
 
-        # 创建订阅者: 接收 wujihandros2 驱动的关节状态
+        # Create subscriber: receive joint states from wujihandros2 driver
         self._state_sub = node.create_subscription(
             JointState,
             f"/{hand_name}/joint_states",
@@ -89,47 +89,47 @@ class WujiHandROS2:
         )
 
         self.logger.info(
-            f"WujiHandROS2 已初始化: {side} 手 -> /{hand_name}"
+            f"WujiHandROS2 initialized: {side} hand -> /{hand_name}"
         )
 
     def _state_callback(self, msg: 'JointState') -> None:
-        """处理来自 wujihandros2 驱动的状态消息"""
+        """Process state messages from wujihandros2 driver"""
         with self._lock:
             if msg.position and len(msg.position) == self.NUM_JOINTS:
                 self._latest_positions = np.array(msg.position, dtype=np.float32)
                 if not self._connected:
                     self._connected = True
-                    self.logger.info(f"{self.side.title()} 手已连接 (通过 wujihandros2)")
+                    self.logger.info(f"{self.side.title()} hand connected (via wujihandros2)")
 
     def connect(self) -> bool:
         """
-        连接检查 (ROS2 模式下始终返回 True，实际连接由驱动节点管理)
+        Connection check (in ROS2 mode always returns True, actual connection managed by driver node)
 
         Returns:
             bool: True
         """
-        self.logger.info(f"{self.side.title()} 手等待 wujihandros2 驱动连接...")
+        self.logger.info(f"{self.side.title()} hand waiting for wujihandros2 driver connection...")
         return True
 
     def is_connected(self) -> bool:
         """
-        检查是否已收到驱动状态 (表示驱动已连接硬件)
+        Check whether driver state has been received (indicates driver has connected to hardware)
 
         Returns:
-            bool: 是否收到过状态消息
+            bool: Whether a state message has been received
         """
         with self._lock:
             return self._connected
 
     def set_joint_positions(self, positions: np.ndarray) -> bool:
         """
-        设置关节角度 (发布到 wujihandros2 驱动)
+        Set joint angles (publish to wujihandros2 driver)
 
         Args:
-            positions: 关节角度数组，形状为 (20,) 或 (5, 4)
+            positions: Joint angle array, shape (20,) or (5, 4)
 
         Returns:
-            bool: 发布是否成功
+            bool: Whether publish succeeded
         """
         try:
             positions = np.asarray(positions, dtype=np.float32)
@@ -137,12 +137,12 @@ class WujiHandROS2:
                 positions = positions.flatten()
             elif positions.shape != (self.NUM_JOINTS,):
                 self.logger.error(
-                    f"无效的关节角度形状: {positions.shape}，期望 (20,) 或 (5, 4)"
+                    f"Invalid joint angle shape: {positions.shape}, expected (20,) or (5, 4)"
                 )
                 return False
 
-            # 创建 JointState 消息 (仅使用 position，不设置 name)
-            # wujihandros2 驱动支持 position-only 模式，按索引顺序解析
+            # Create JointState message (position only, no name set)
+            # wujihandros2 driver supports position-only mode, parsed by index order
             msg = JointState()
             msg.header.stamp = self.node.get_clock().now().to_msg()
             msg.position = positions.tolist()
@@ -151,15 +151,15 @@ class WujiHandROS2:
             return True
 
         except Exception as e:
-            self.logger.error(f"发布关节命令失败: {e}")
+            self.logger.error(f"Failed to publish joint command: {e}")
             return False
 
     def get_joint_positions(self) -> Optional[np.ndarray]:
         """
-        获取当前关节角度 (从订阅缓存读取)
+        Get current joint angles (read from subscription cache)
 
         Returns:
-            np.ndarray: 关节角度数组 (20,)，未连接时返回 None
+            np.ndarray: Joint angle array (20,), returns None if not connected
         """
         with self._lock:
             if self._latest_positions is not None:
@@ -168,16 +168,16 @@ class WujiHandROS2:
 
     def disable(self) -> None:
         """
-        下使能灵巧手
+        Disable the dexterous hand
 
-        注意: wujihandros2 驱动会在节点关闭时自动下使能
+        Note: wujihandros2 driver automatically disables on node shutdown
         """
-        self.logger.info(f"{self.side.title()} 手将由 wujihandros2 驱动管理使能状态")
+        self.logger.info(f"{self.side.title()} hand enable state managed by wujihandros2 driver")
 
     def release(self) -> None:
-        """释放资源"""
+        """Release resources"""
         self.disable()
         with self._lock:
             self._connected = False
             self._latest_positions = None
-        self.logger.info(f"{self.side.title()} 手 ROS2 接口已释放")
+        self.logger.info(f"{self.side.title()} hand ROS2 interface released")

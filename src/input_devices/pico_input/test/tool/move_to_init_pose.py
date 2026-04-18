@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-移动机器人到初始位姿（使用共享模块和生命周期管理）
-对应 pico_input.yaml 中的 robot_*_init 配置
+Move robot to initial pose (using shared modules and lifecycle management)
+Corresponds to robot_*_init configuration in pico_input.yaml
 """
 
 import sys
@@ -9,7 +9,7 @@ import numpy as np
 import time
 from pathlib import Path
 
-# 添加路径（使用相对路径）
+# Add paths (using relative paths)
 _tool_dir = Path(__file__).resolve().parent
 _test_dir = str(_tool_dir.parent)
 _src_dir = _tool_dir.parents[3]  # tool → test → pico_input → input_devices → src
@@ -27,49 +27,49 @@ def main():
 
     try:
         print("=" * 70)
-        print("移动机器人到初始位姿（PICO遥操零位）")
+        print("Move robot to initial pose (PICO teleoperation zero position)")
         print("=" * 70)
 
-        print("\n初始关节角:")
-        print(f"  左臂: {INIT_JOINTS['left']}")
-        print(f"  右臂: {INIT_JOINTS['right']}")
+        print("\nInitial joint angles:")
+        print(f"  left arm: {INIT_JOINTS['left']}")
+        print(f"  right arm: {INIT_JOINTS['right']}")
 
-        # 连接机器人
-        print("\n正在连接机器人...")
+        # Connect to robot
+        print("\nConnecting to robot...")
         controller = CartesianController(robot_ip=ROBOT_IP)
-        print("✓ 已连接到机器人")
+        print("Connected to robot")
 
-        # 使能机器人（使用统一的生命周期管理）
+        # Enable robot (using unified lifecycle management)
         enable_robot(controller.robot, state=3, vel_ratio=60, acc_ratio=60)
 
-        # 计算FK验证目标位姿
-        print("\n计算FK验证目标位姿...")
+        # Compute FK to verify target pose
+        print("\nComputing FK to verify target pose...")
         left_fk = controller.kine_left.fk(0, INIT_JOINTS['left'])
         right_fk = controller.kine_right.fk(1, INIT_JOINTS['right'])
 
         left_pos = np.array([left_fk[0][3], left_fk[1][3], left_fk[2][3]]) / 1000.0
         right_pos = np.array([right_fk[0][3], right_fk[1][3], right_fk[2][3]]) / 1000.0
 
-        print(f"\n目标位姿 (FK计算):")
-        print(f"  左腕位置: [{left_pos[0]:.4f}, {left_pos[1]:.4f}, {left_pos[2]:.4f}]")
-        print(f"  右腕位置: [{right_pos[0]:.4f}, {right_pos[1]:.4f}, {right_pos[2]:.4f}]")
+        print("\nTarget pose (FK computed):")
+        print(f"  Left wrist position: [{left_pos[0]:.4f}, {left_pos[1]:.4f}, {left_pos[2]:.4f}]")
+        print(f"  Right wrist position: [{right_pos[0]:.4f}, {right_pos[1]:.4f}, {right_pos[2]:.4f}]")
 
-        # 获取当前关节角
-        print("\n读取当前关节角...")
+        # Get current joint angles
+        print("\nReading current joint angles...")
         current_joints = controller.get_current_joints()
         current_left = np.array(current_joints[0])
         current_right = np.array(current_joints[1])
 
-        print(f"  当前左臂: {current_left}")
-        print(f"  当前右臂: {current_right}")
+        print(f"  Current left arm: {current_left}")
+        print(f"  Current right arm: {current_right}")
 
-        # 移动到初始位姿
-        print("\n开始移动...")
-        print("  ⚠️  请确保机器人周围无障碍物!")
-        print("  ⚠️  机器人将在5秒内平滑移动到初始位姿")
-        input("  按 Enter 继续...")
+        # Move to initial pose
+        print("\nStarting motion...")
+        print("  ⚠️  Please ensure no obstacles around the robot!")
+        print("  ⚠️  Robot will smoothly move to initial pose within 5 seconds")
+        input("  Press Enter to continue...")
 
-        # 平滑插值移动 (5秒，100Hz)
+        # Smooth interpolation movement (5 seconds, 100Hz)
         duration = 5.0
         rate = 100  # Hz
         num_steps = int(duration * rate)
@@ -78,38 +78,38 @@ def main():
         target_left_final = np.array(INIT_JOINTS['left'])
         target_right_final = np.array(INIT_JOINTS['right'])
 
-        print(f"\n移动中... ({duration}秒)")
+        print(f"\nMoving... ({duration} seconds)")
         for i in range(num_steps + 1):
             alpha = i / num_steps  # 0 → 1
 
-            # 线性插值
+            # Linear interpolation
             target_left = current_left + alpha * (target_left_final - current_left)
             target_right = current_right + alpha * (target_right_final - current_right)
 
-            # 发送关节指令（使用统一接口）
+            # Send joint commands (using unified interface)
             send_joint_command(controller.robot, target_left.tolist(), target_right.tolist())
 
-            # 进度显示
+            # Progress display
             if i % 50 == 0:
                 progress = int(100 * alpha)
-                print(f"  进度: {progress}%")
+                print(f"  Progress: {progress}%")
 
             time.sleep(dt)
 
-        print("\n✓ 已到达初始位姿!")
-        print("\n机器人现在处于PICO遥操的零位姿态 (末端坐标轴在World中的方向):")
-        print("  - 左手腕: X→右(-Y), Y→下(-Z), Z→前(+X)")
-        print("  - 右手腕: X→左(+Y), Y→上(+Z), Z→前(+X)")
-        print("\n可以开始遥操测试了!")
+        print("\n✓ Reached initial pose!")
+        print("\nRobot is now at PICO teleoperation zero pose (end-effector axis directions in World):")
+        print("  - Leftwrist: X→Right(-Y), Y→Down(-Z), Z→Forward(+X)")
+        print("  - Rightwrist: X→Left(+Y), Y→Up(+Z), Z→Forward(+X)")
+        print("\nReady for teleoperation testing!")
 
     except KeyboardInterrupt:
-        print("\n\n⚠️  用户中断")
+        print("\n\n⚠️  User interrupted")
     except Exception as e:
-        print(f"\n❌ 错误: {e}")
+        print(f"\nError: {e}")
         import traceback
         traceback.print_exc()
     finally:
-        # 确保下电（重要！）
+        # Ensure power-off (important!)
         if controller is not None:
             disable_robot(controller.robot)
 

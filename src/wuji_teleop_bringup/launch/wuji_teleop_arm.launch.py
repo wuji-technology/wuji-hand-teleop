@@ -1,13 +1,12 @@
 """
-Wuji Arm-Only Teleoperation Launch File / Wuji 仅机械臂遥操作启动文件
+Wuji Arm-Only Teleoperation Launch File
 
 Launches arm teleoperation components with configurable input device.
-启动机械臂遥操作组件，支持配置不同的输入设备。
 
-Supported input devices / 支持的输入设备:
+Supported input devices:
   - tracker: HTC Vive Trackers
 
-Usage / 使用方式:
+Usage:
     # Using HTC Vive Trackers
     ros2 launch wuji_teleop_bringup wuji_teleop_arm.launch.py arm_input:=tracker
 

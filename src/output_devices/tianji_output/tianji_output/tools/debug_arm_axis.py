@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""调试脚本：查看大臂 Y 轴在 chest 坐标系下的投影"""
+"""Debug script: view upper arm Y-axis projection in chest coordinate system"""
 
 import rclpy
 from rclpy.node import Node
@@ -16,20 +16,20 @@ class DebugArmAxisNode(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # IK 参数（仅用于显示）
+        # IK parameters (for display only)
         self.right_zsp_para = [0, 0, -1, 0, 0, 0]
 
-        # 每 3 秒打印一次
+        # Print every 3 seconds
         self.timer = self.create_timer(3.0, self.print_debug_info)
 
         self.get_logger().info("Debug node started. Waiting for TF...")
 
     def print_debug_info(self):
-        # 查询 right_chest -> right_arm (大臂方向)
+        # Query right_chest -> right_arm (upper arm direction)
         right_arm_transform = self._lookup_transform("right_chest", "right_arm")
         if right_arm_transform is not None:
             y_axis = right_arm_transform[:3, 1]
-            # 转换为 Python float，避免 numpy 类型问题
+            # Convert to Python float to avoid numpy type issues
             self.right_zsp_para = [float(y_axis[0]), float(y_axis[1]), float(y_axis[2]), 0.0, 0.0, 0.0]
             self.get_logger().info(
                 f"Right arm Y-axis in right_chest: [{y_axis[0]:.3f}, {y_axis[1]:.3f}, {y_axis[2]:.3f}]"
@@ -40,11 +40,11 @@ class DebugArmAxisNode(Node):
         else:
             self.get_logger().warn("right_chest -> right_arm TF not available")
 
-        # 查询 right_chest -> tianji_right (末端位姿)
+        # Query right_chest -> tianji_right (end-effector pose)
         tianji_transform = self._lookup_transform("right_chest", "tianji_right")
         if tianji_transform is not None:
             pose = self._matrix_to_pose_xyzrpy(tianji_transform)
-            # 转换为 Python float 列表
+            # Convert to Python float list
             pose_mm = [float(pose[0]) * 1000, float(pose[1]) * 1000, float(pose[2]) * 1000,
                        float(pose[3]), float(pose[4]), float(pose[5])]
 

@@ -1,52 +1,52 @@
 #!/bin/bash
 # ============================================================================
-# 一键启动 rqt 相机监控
+# One-Click Launch rqt Camera Monitor
 # ============================================================================
 #
-# 功能说明:
-#   在一个 rqt 窗口中自动加载 3 个相机视图
-#   - 立体相机左眼
-#   - 左腕相机
-#   - 右腕相机
+# Description:
+#   Automatically loads 3 camera views in a single rqt window
+#   - Stereo camera left eye
+#   - Left wrist camera
+#   - Right wrist camera
 #
-# 使用方法:
+# Usage:
 #   ./start_rqt_camera.sh
 #
-# 启动后:
-#   - 会自动显示 3 个相机画面
-#   - 可以拖拽调整布局
-#   - 按 Ctrl+C 或关闭窗口退出
+# After launch:
+#   - Three camera feeds will be displayed automatically
+#   - You can drag to adjust the layout
+#   - Press Ctrl+C or close the window to exit
 #
 # ============================================================================
 
-# 获取脚本所在目录
+# Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# 从脚本位置推断工作空间路径 (向上3层: wuji_teleop_monitor -> src -> wuji-teleop-ros2-private -> ros2_ws)
+# Infer workspace path from script location (3 levels up: wuji_teleop_monitor -> src -> wuji-hand-teleop -> ros2_ws)
 WS_DIR="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 
-# Source ROS 2 基础环境
+# Source ROS 2 base environment
 source /opt/ros/humble/setup.bash
 
-# Source 工作空间 (如果存在)
+# Source workspace (if it exists)
 if [ -f "${WS_DIR}/install/setup.bash" ]; then
     source "${WS_DIR}/install/setup.bash"
-    echo "已加载工作空间: ${WS_DIR}"
+    echo "Workspace loaded: ${WS_DIR}"
 else
-    echo "警告: 未找到工作空间 ${WS_DIR}/install/setup.bash"
+    echo "Warning: Workspace not found at ${WS_DIR}/install/setup.bash"
 fi
 
-echo "启动相机监控..."
+echo "Starting camera monitor..."
 echo ""
-echo "相机话题:"
-echo "  - /stereo/left/compressed (立体相机左眼)"
-echo "  - /cam_left_wrist/color/image_rect_raw/compressed (左腕)"
-echo "  - /cam_right_wrist/color/image_rect_raw/compressed (右腕)"
+echo "Camera topics:"
+echo "  - /stereo/left/compressed (stereo camera left eye)"
+echo "  - /cam_left_wrist/color/image_rect_raw/compressed (left wrist)"
+echo "  - /cam_right_wrist/color/image_rect_raw/compressed (right wrist)"
 echo ""
-echo "布局: 立体相机在上，左右腕相机在下"
-echo "按 'q' 或 ESC 键退出"
+echo "Layout: stereo camera on top, left/right wrist cameras on bottom"
+echo "Press 'q' or ESC to exit"
 echo ""
 
-# 启动 Python 相机查看器
+# Launch Python camera viewer
 python3 "${SCRIPT_DIR}/camera_viewer.py"
 

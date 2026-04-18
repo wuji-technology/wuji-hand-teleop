@@ -1,19 +1,19 @@
 # Chest Mount TF Configuration
-# TF 结构: chest -> {side}_chest_base (shared + rotation) -> {side}_chest (local)
+# TF structure: chest -> {side}_chest_base (shared + rotation) -> {side}_chest (local)
 
 chest_mount:
-  # 共享平移 (chest 坐标系)
+  # Shared translation (chest coordinate frame)
   shared:
     x: 0.0
     y: -0.2
     z: 0.12
 
   left:
-    # 旋转 (radians)
+    # Rotation (radians)
     roll: 1.5708
     pitch: 0.0
     yaw: -1.5708
-    # 局部平移 (left_chest_base 坐标系)
+    # Local translation (left_chest_base coordinate frame)
     local_x: 0.0
     local_y: 0.0
     local_z: 0.037

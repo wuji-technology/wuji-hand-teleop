@@ -1,70 +1,72 @@
 #!/usr/bin/env python3
 """
-坐标转换工具函数（权威共享库）
+Coordinate Transform Utility Functions (Authoritative Shared Library)
 
-所有坐标/旋转变换函数的唯一实现。
-pico_input_node、step1-6 测试脚本统一从此处导入。
+Single authoritative implementation of all coordinate/rotation transform functions.
+pico_input_node, step1-6 test scripts all import from here.
 
-配置来源: tianji_world_output/config/tianji_robot.yaml (Single Source of Truth)
-
-=============================================================================
-旋转正方向约定（ROS REP 103 右手定则）
-=============================================================================
-
-  判断方法: 右手大拇指指向轴的正方向，四指弯曲方向 = 正旋转方向
-  等价描述: 从轴的正端向原点看，逆时针方向 = 正方向
-
-  Robot World 坐标系 (X=前, Y=左, Z=上):
-
-    绕 +X 轴正转 (Roll):  Y→Z, 即 左侧→上方 → 手腕顶部向右倾 (Roll right)
-    绕 +Y 轴正转 (Pitch): Z→X, 即 上方→前方 → 手指尖端向下压 (Pitch down)
-    绕 +Z 轴正转 (Yaw):   X→Y, 即 前方→左方 → 手指尖端向左偏 (Yaw left)
-
-  记忆口诀: "正Roll右倾, 正Pitch低头, 正Yaw向左"
-
-  数学验证 (标准旋转矩阵):
-    Rx(θ)@[0,0,1] = [0, -sinθ, cosθ]  → 上方向右倾   → Roll right  ✓
-    Ry(θ)@[1,0,0] = [cosθ, 0, -sinθ]  → 前方向下压   → Pitch down  ✓
-    Rz(θ)@[1,0,0] = [cosθ, sinθ, 0]   → 前方向左偏   → Yaw left    ✓
+Config source: tianji_world_output/config/tianji_robot.yaml (Single Source of Truth)
 
 =============================================================================
-坐标系定义
+Positive Rotation Direction Convention (ROS REP 103 Right-Hand Rule)
 =============================================================================
 
-  World (ROS REP 103): X=前, Y=左, Z=上
-  Left Chest:  X=前, Y=下, Z=左  (World 绕 X 轴 +90°)
-  Right Chest: X=前, Y=上, Z=右  (World 绕 X 轴 -90°)
+  How to determine: Point right thumb along the positive axis direction,
+  fingers curl in the positive rotation direction.
+  Equivalent: Looking from the positive end of the axis toward the origin,
+  counterclockwise = positive direction.
 
-  向量变换:
-    Left:  world [x, y, z] → chest [x, -z, y]
-    Right: world [x, y, z] → chest [x, z, -y]
+  Robot World coordinate frame (X=forward, Y=left, Z=up):
+
+    Positive rotation around +X (Roll):  Y->Z, i.e. left->up -> top of wrist tilts right (Roll right)
+    Positive rotation around +Y (Pitch): Z->X, i.e. up->forward -> fingertips press down (Pitch down)
+    Positive rotation around +Z (Yaw):   X->Y, i.e. forward->left -> fingertips point left (Yaw left)
+
+  Mnemonic: "Positive Roll tilts right, positive Pitch looks down, positive Yaw turns left"
+
+  Mathematical verification (standard rotation matrices):
+    Rx(t)@[0,0,1] = [0, -sin(t), cos(t)]  -> up direction tilts right -> Roll right
+    Ry(t)@[1,0,0] = [cos(t), 0, -sin(t)]  -> forward direction presses down -> Pitch down
+    Rz(t)@[1,0,0] = [cos(t), sin(t), 0]   -> forward direction points left -> Yaw left
 
 =============================================================================
-函数索引
+Coordinate Frame Definitions
 =============================================================================
 
-  位置变换:
-    transform_world_to_chest()   - World→Chest 向量变换
-    transform_chest_to_world()   - Chest→World 向量变换
+  World (ROS REP 103): X=forward, Y=left, Z=up
+  Left Chest:  X=forward, Y=down, Z=left  (World rotated +90 deg around X axis)
+  Right Chest: X=forward, Y=up, Z=right  (World rotated -90 deg around X axis)
 
-  旋转变换:
-    get_world_to_chest_rotation()  - World→Chest 旋转矩阵
-    get_chest_to_world_rotation()  - Chest→World 旋转矩阵
-    apply_world_rotation_to_chest_pose()  - 在 World 中旋转，返回 Chest 姿态
-    transform_pico_rotation_to_world()    - PICO→World 旋转变换（轴角法）
+  Vector transform:
+    Left:  world [x, y, z] -> chest [x, -z, y]
+    Right: world [x, y, z] -> chest [x, z, -y]
 
-  TF 发布:
-    get_tf_quaternion()  - 获取 TF 发布用四元数
+=============================================================================
+Function Index
+=============================================================================
 
-  方向查询:
-    get_direction_vector_world()  - 获取运动方向向量
-    get_rotation_axis_world()     - 获取旋转轴向量
+  Position transforms:
+    transform_world_to_chest()   - World->Chest vector transform
+    transform_chest_to_world()   - Chest->World vector transform
 
-  配置查询:
-    get_pico_to_robot()  - 获取 PICO→Robot 3x3 变换矩阵
+  Rotation transforms:
+    get_world_to_chest_rotation()  - World->Chest rotation matrix
+    get_chest_to_world_rotation()  - Chest->World rotation matrix
+    apply_world_rotation_to_chest_pose()  - Rotate in World, return Chest orientation
+    transform_pico_rotation_to_world()    - PICO->World rotation transform (axis-angle method)
 
-  臂角控制:
-    elbow_direction_from_angles()  - 从角度生成 zsp_para 方向向量
+  TF publishing:
+    get_tf_quaternion()  - Get quaternion for TF publishing
+
+  Direction queries:
+    get_direction_vector_world()  - Get motion direction vector
+    get_rotation_axis_world()     - Get rotation axis vector
+
+  Config queries:
+    get_pico_to_robot()  - Get PICO->Robot 3x3 transform matrix
+
+  Arm angle control:
+    elbow_direction_from_angles()  - Generate zsp_para direction vector from angles
 
 =============================================================================
 """
@@ -76,39 +78,39 @@ from .config_loader import get_config as _get_config
 
 
 # =============================================================================
-# 内部辅助: 延迟加载配置
+# Internal helper: lazy-load config
 # =============================================================================
 
 def _config():
-    """延迟加载配置单例"""
+    """Lazy-load config singleton"""
     return _get_config(use_ros=False)
 
 
 # =============================================================================
-# 位置变换
+# Position transforms
 # =============================================================================
 
 def transform_world_to_chest(vector_world, side):
-    """将 world 坐标系的向量转换到 chest (world_left/world_right) 坐标系
+    """Transform a vector from world coordinate frame to chest (world_left/world_right) coordinate frame
 
     Args:
-        vector_world: world 坐标系中的向量 (位置/方向)
-        side: 'left' 或 'right'
+        vector_world: Vector in world coordinate frame (position/direction)
+        side: 'left' or 'right'
 
     Returns:
-        np.array: chest 坐标系中的向量
+        np.array: Vector in chest coordinate frame
 
     Note:
-        使用高效的轴映射实现（等价于旋转矩阵变换）
+        Uses efficient axis mapping (equivalent to rotation matrix transform)
 
-        坐标系定义 (from tianji_robot.yaml):
-          World: X=前, Y=左, Z=上
-          Left Chest:  X=前, Y=下, Z=左 (绕 World X 轴旋转 +90°)
-          Right Chest: X=前, Y=上, Z=右 (绕 World X 轴旋转 -90°)
+        Coordinate frame definitions (from tianji_robot.yaml):
+          World: X=forward, Y=left, Z=up
+          Left Chest:  X=forward, Y=down, Z=left (rotated +90 deg around World X axis)
+          Right Chest: X=forward, Y=up, Z=right (rotated -90 deg around World X axis)
 
-        向量变换映射（通过 R_world_to_chest = R_chest_to_world^T 推导）：
-          左臂: world [x, y, z] → chest [x, -z, y]
-          右臂: world [x, y, z] → chest [x, z, -y]
+        Vector transform mapping (derived via R_world_to_chest = R_chest_to_world^T):
+          Left:  world [x, y, z] -> chest [x, -z, y]
+          Right: world [x, y, z] -> chest [x, z, -y]
     """
     x, y, z = vector_world[0], vector_world[1], vector_world[2]
 
@@ -119,37 +121,37 @@ def transform_world_to_chest(vector_world, side):
 
 
 def transform_chest_to_world(vector_chest, side):
-    """将 chest 坐标系的向量转换到 world 坐标系（逆变换）
+    """Transform a vector from chest coordinate frame to world coordinate frame (inverse transform)
 
     Args:
-        vector_chest: chest 坐标系中的向量
-        side: 'left' 或 'right'
+        vector_chest: Vector in chest coordinate frame
+        side: 'left' or 'right'
 
     Returns:
-        np.array: world 坐标系中的向量
+        np.array: Vector in world coordinate frame
     """
     x, y, z = vector_chest[0], vector_chest[1], vector_chest[2]
 
     if side == 'left':
-        # 逆映射: [x, z, -y]
+        # Inverse mapping: [x, z, -y]
         return np.array([x, z, -y])
     else:
-        # 逆映射: [x, -z, y]
+        # Inverse mapping: [x, -z, y]
         return np.array([x, -z, y])
 
 
 # =============================================================================
-# 方向查询
+# Direction queries
 # =============================================================================
 
 def get_direction_vector_world(mode):
-    """在 world 坐标系获取运动方向向量
+    """Get motion direction vector in world coordinate frame
 
     Args:
-        mode: 运动模式字符串
+        mode: Motion mode string
 
     Returns:
-        np.array: world 坐标系中的单位方向向量
+        np.array: Unit direction vector in world coordinate frame
     """
     directions = {
         'forward': np.array([1.0, 0.0, 0.0]),   # world +X
@@ -163,144 +165,145 @@ def get_direction_vector_world(mode):
 
 
 def get_rotation_axis_world(mode):
-    """在 world 坐标系获取旋转轴向量
+    """Get rotation axis vector in world coordinate frame
 
     Args:
-        mode: 旋转模式字符串
+        mode: Rotation mode string
 
     Returns:
-        np.array: world 坐标系中的单位旋转轴向量
+        np.array: Unit rotation axis vector in world coordinate frame
     """
     axes = {
-        'rotate_x': np.array([1.0, 0.0, 0.0]),  # X轴（前后）
-        'rotate_y': np.array([0.0, 1.0, 0.0]),  # Y轴（左右）
-        'rotate_z': np.array([0.0, 0.0, 1.0]),  # Z轴（上下）
+        'rotate_x': np.array([1.0, 0.0, 0.0]),  # X axis (forward/back)
+        'rotate_y': np.array([0.0, 1.0, 0.0]),  # Y axis (left/right)
+        'rotate_z': np.array([0.0, 0.0, 1.0]),  # Z axis (up/down)
     }
     return axes.get(mode, np.array([0.0, 0.0, 0.0]))
 
 
 # =============================================================================
-# 旋转矩阵
+# Rotation matrices
 # =============================================================================
 
 def get_world_to_chest_rotation(side):
-    """获取 world → chest 的旋转矩阵
+    """Get world -> chest rotation matrix
 
-    用于将 world 坐标系中的向量/姿态转换到 chest 坐标系：
+    Used to transform vectors/orientations from world coordinate frame to chest coordinate frame:
       v_chest = R_world_to_chest @ v_world
       R_chest = R_world_to_chest @ R_world @ R_world_to_chest.T
 
     Args:
-        side: 'left' 或 'right'
+        side: 'left' or 'right'
 
     Returns:
-        np.ndarray: 3x3 旋转矩阵
+        np.ndarray: 3x3 rotation matrix
 
     Note:
-        配置文件中的四元数直接表示 world→chest 变换。
-        Left: +90° around X, Right: -90° around X
+        The quaternion in the config file directly represents the world->chest transform.
+        Left: +90 deg around X, Right: -90 deg around X
     """
     return _config().get_world_to_chest_rotation(side)
 
 
 def get_chest_to_world_rotation(side):
-    """获取 chest → world 的旋转矩阵
+    """Get chest -> world rotation matrix
 
-    用于将 chest 坐标系中的向量/姿态转换到 world 坐标系：
+    Used to transform vectors/orientations from chest coordinate frame to world coordinate frame:
       v_world = R_chest_to_world @ v_chest
       R_world = R_chest_to_world @ R_chest @ R_chest_to_world.T
 
     Args:
-        side: 'left' 或 'right'
+        side: 'left' or 'right'
 
     Returns:
-        np.ndarray: 3x3 旋转矩阵（world_to_chest 的转置/逆）
+        np.ndarray: 3x3 rotation matrix (transpose/inverse of world_to_chest)
 
     Note:
-        这是 get_world_to_chest_rotation 的逆变换。
-        Left: -90° around X, Right: +90° around X
+        This is the inverse transform of get_world_to_chest_rotation.
+        Left: -90 deg around X, Right: +90 deg around X
     """
     return get_world_to_chest_rotation(side).T
 
 
 def get_tf_quaternion(side):
-    """获取用于 TF 发布的四元数 (chest→world 方向)
+    """Get quaternion for TF publishing (chest->world direction)
 
-    TF 变换描述子坐标系在父坐标系中的姿态。
-    对于 world → world_left/world_right，需要 chest→world 方向的旋转，
-    即 world_to_chest 的逆。
+    TF transforms describe a child frame's orientation in the parent frame.
+    For world -> world_left/world_right, we need the chest->world rotation,
+    which is the inverse of world_to_chest.
 
     Args:
-        side: 'left' 或 'right'
+        side: 'left' or 'right'
 
     Returns:
-        np.ndarray: 四元数 [qx, qy, qz, qw]
+        np.ndarray: Quaternion [qx, qy, qz, qw]
     """
     quat = _config().world_to_chest_quat[side]
 
-    # 返回共轭四元数（即逆旋转）
-    # 对于单位四元数，逆 = 共轭 = [-qx, -qy, -qz, qw]
+    # Return conjugate quaternion (i.e. inverse rotation)
+    # For unit quaternions, inverse = conjugate = [-qx, -qy, -qz, qw]
     return np.array([-quat[0], -quat[1], -quat[2], quat[3]])
 
 
 # =============================================================================
-# 配置查询
+# Config queries
 # =============================================================================
 
 def get_pico_to_robot():
-    """获取 PICO→Robot 3x3 变换矩阵（从配置加载）
+    """Get PICO->Robot 3x3 transform matrix (loaded from config)
 
-    返回:
-        np.ndarray: 3x3 矩阵 (det=+1, 两个轴取反相互抵消)
+    Returns:
+        np.ndarray: 3x3 matrix (det=+1, two axis negations cancel out)
 
-    默认值:
-        [[0, 0, -1],    # Robot X = -PICO Z (前方)
-         [-1, 0, 0],    # Robot Y = -PICO X (左方)
-         [0, 1, 0]]     # Robot Z = +PICO Y (上方)
+    Default:
+        [[0, 0, -1],    # Robot X = -PICO Z (forward)
+         [-1, 0, 0],    # Robot Y = -PICO X (left)
+         [0, 1, 0]]     # Robot Z = +PICO Y (up)
 
-    物理意义:
-        用户面朝机器人前方时:
-          往前伸手 → PICO -Z → Robot +X (前方)
-          往右伸手 → PICO +X → Robot -Y (右方)
-          往上抬手 → PICO +Y → Robot +Z (上方)
+    Physical meaning:
+        When the user faces the robot's forward direction:
+          Reach forward -> PICO -Z -> Robot +X (forward)
+          Reach right   -> PICO +X -> Robot -Y (right)
+          Reach up      -> PICO +Y -> Robot +Z (up)
     """
     return _config().pico_to_robot
 
 
 # =============================================================================
-# 姿态旋转变换
+# Orientation rotation transforms
 # =============================================================================
 
 def apply_world_rotation_to_chest_pose(base_rot_chest, R_delta_world, side):
-    """在 World 坐标系中应用旋转增量，返回 Chest 坐标系的目标姿态
+    """Apply rotation delta in World coordinate frame, return target orientation in Chest coordinate frame
 
-    这是遥操作中最核心的姿态变换算法（4步法）。
-    保证在 World 坐标系中做旋转（物理意义直观），再转回 Chest 坐标系（IK 需要）。
+    This is the core orientation transform algorithm in teleoperation (4-step method).
+    Ensures rotation is performed in World coordinate frame (physically intuitive),
+    then converted back to Chest coordinate frame (required by IK).
 
-    算法步骤:
-      1. Chest→World: 将基准姿态转到 World 坐标系
-      2. 左乘增量:    在 World 坐标系中左乘旋转增量（外旋 = 绕世界轴旋转）
-      3. World→Chest: 将目标姿态转回 Chest 坐标系
+    Algorithm steps:
+      1. Chest->World: Convert base orientation to World coordinate frame
+      2. Left-multiply delta: Left-multiply rotation delta in World (extrinsic = rotate around world axes)
+      3. World->Chest: Convert target orientation back to Chest coordinate frame
 
-    数学公式:
+    Mathematical formula:
       target_chest = R_w2c @ R_delta @ R_c2w @ base_chest
 
-    旋转正方向 (右手定则):
-      绕 +X: Roll right (顶部向右倾)
-      绕 +Y: Pitch down (手指向下压)
-      绕 +Z: Yaw left (手指向左偏)
+    Positive rotation directions (right-hand rule):
+      Around +X: Roll right (top tilts right)
+      Around +Y: Pitch down (fingers press down)
+      Around +Z: Yaw left (fingers point left)
 
     Args:
-        base_rot_chest: 基准姿态（Chest 坐标系，3x3 旋转矩阵）
-        R_delta_world: 增量旋转（World 坐标系，scipy Rotation 对象）
-        side: 'left' 或 'right'
+        base_rot_chest: Base orientation (Chest coordinate frame, 3x3 rotation matrix)
+        R_delta_world: Delta rotation (World coordinate frame, scipy Rotation object)
+        side: 'left' or 'right'
 
     Returns:
-        np.ndarray: 目标姿态（Chest 坐标系，3x3 旋转矩阵）
+        np.ndarray: Target orientation (Chest coordinate frame, 3x3 rotation matrix)
 
     Example:
         >>> from scipy.spatial.transform import Rotation as R
-        >>> # 绕 World +Y 轴旋转 30°（手指向下压 30°）
+        >>> # Rotate 30 deg around World +Y axis (fingers press down 30 deg)
         >>> R_delta = R.from_rotvec([0, np.radians(30), 0])
         >>> target = apply_world_rotation_to_chest_pose(init_rot, R_delta, 'left')
     """
@@ -315,22 +318,22 @@ def apply_world_rotation_to_chest_pose(base_rot_chest, R_delta_world, side):
 
 
 def transform_pico_rotation_to_world(delta_rot_pico, pico_to_robot):
-    """将 PICO 坐标系的旋转增量转换到 Robot World 坐标系（轴角法）
+    """Transform rotation delta from PICO coordinate frame to Robot World coordinate frame (axis-angle method)
 
-    pico_to_robot 矩阵是坐标轴映射正交矩阵（行列式 = +1，两个轴取反相互抵消）。
-    使用轴角法变换旋转：只变换旋转轴方向，保持旋转角度不变。
+    pico_to_robot matrix is an orthogonal axis-mapping matrix (determinant = +1, two axis negations cancel out).
+    Uses axis-angle method to transform rotation: only the rotation axis direction is transformed, angle is preserved.
 
-    PICO→Robot 旋转效果:
-      PICO 绕 +X → Robot 绕 -Y → Pitch up (手指向上翘)
-      PICO 绕 +Y → Robot 绕 +Z → Yaw left (手指向左偏)
-      PICO 绕 +Z → Robot 绕 -X → Roll left (手腕向左翻滚)
+    PICO->Robot rotation effects:
+      PICO around +X -> Robot around -Y -> Pitch up (fingers tilt up)
+      PICO around +Y -> Robot around +Z -> Yaw left (fingers point left)
+      PICO around +Z -> Robot around -X -> Roll left (wrist rolls left)
 
     Args:
-        delta_rot_pico: PICO 坐标系中的旋转增量（scipy Rotation 对象）
-        pico_to_robot: 3x3 变换矩阵（det=+1，从 tianji_robot.yaml 加载）
+        delta_rot_pico: Rotation delta in PICO coordinate frame (scipy Rotation object)
+        pico_to_robot: 3x3 transform matrix (det=+1, loaded from tianji_robot.yaml)
 
     Returns:
-        scipy.spatial.transform.Rotation: World 坐标系中的旋转增量
+        scipy.spatial.transform.Rotation: Rotation delta in World coordinate frame
     """
     rotvec = delta_rot_pico.as_rotvec()
     angle = np.linalg.norm(rotvec)
@@ -345,59 +348,60 @@ def transform_pico_rotation_to_world(delta_rot_pico, pico_to_robot):
 
 
 # =============================================================================
-# 臂角控制
+# Arm angle control
 # =============================================================================
 
 def elbow_direction_from_angles(pitch_deg, yaw_deg, side):
-    """从俯仰角和外展角生成 IK 的 zsp_para 方向向量（Chest 坐标系）
+    """Generate IK zsp_para direction vector from pitch and yaw angles (Chest coordinate frame)
 
-    用于生成不同臂角姿态的 zsp_para。结果遵循 IK 求解器的约定：
-    Y 分量方向与 Chest 坐标系中的重力方向**相反**。
+    Used to generate zsp_para for different arm angle postures. The result follows
+    IK solver conventions: Y component direction is **opposite** to the gravity
+    direction in the Chest coordinate frame.
 
-    重要: zsp_para 不是肘部几何方向！
-      - 几何 elbow direction 的 Y 指向重力（肘部物理位置方向）
-      - zsp_para 的 Y 指向反重力（IK 参考平面法向量约定）
-      - 详见 diagnose_zsp_para.py 的 FK→IK 闭环验证
+    Important: zsp_para is NOT the geometric elbow direction!
+      - Geometric elbow direction Y points toward gravity (physical elbow position direction)
+      - zsp_para Y points against gravity (IK reference plane normal convention)
+      - See diagnose_zsp_para.py for FK->IK closed-loop verification
 
-    角度定义:
-      pitch: 0°=不前后偏, 正=肘部向前, 负=肘部向后
-      yaw:   0°=纯反重力, 45°=默认沉肘, 90°=纯向外侧
+    Angle definitions:
+      pitch: 0=no forward/backward offset, positive=elbow forward, negative=elbow backward
+      yaw:   0=pure anti-gravity, 45=default elbow-down, 90=pure outward
 
-    默认沉肘 (pitch=0, yaw=45):
-      左臂: [0, -0.707, -0.707]  (Y-=反重力方向, Z-=外侧)
-      右臂: [0, +0.707, -0.707]  (Y+=反重力方向, Z-=外侧)
+    Default elbow-down (pitch=0, yaw=45):
+      Left arm:  [0, -0.707, -0.707]  (Y-=anti-gravity direction, Z-=outward)
+      Right arm: [0, +0.707, -0.707]  (Y+=anti-gravity direction, Z-=outward)
 
     Args:
-        pitch_deg: 俯仰角（度）
-        yaw_deg: 外展角（度）
-        side: 'left' 或 'right'
+        pitch_deg: Pitch angle (degrees)
+        yaw_deg: Yaw/abduction angle (degrees)
+        side: 'left' or 'right'
 
     Returns:
-        np.ndarray: 归一化的 3D 方向向量 [x, y, z]（Chest 坐标系）
+        np.ndarray: Normalized 3D direction vector [x, y, z] (Chest coordinate frame)
 
     Example:
-        >>> # 默认沉肘
+        >>> # Default elbow-down
         >>> d = elbow_direction_from_angles(0, 45, 'left')
-        >>> # d ≈ [0, -0.707, -0.707]
+        >>> # d ~ [0, -0.707, -0.707]
         >>> zsp_para = [d[0], d[1], d[2], 0, 0, 0]
     """
     pitch = np.radians(pitch_deg)
     yaw = np.radians(yaw_deg)
 
-    # X 分量: 前后偏移
+    # X component: forward/backward offset
     x = np.sin(pitch)
 
-    # 反重力分量（根据 pitch 调整）
+    # Anti-gravity component (adjusted by pitch)
     anti_gravity = np.cos(pitch) * np.cos(yaw)
-    # 向外侧分量（根据 pitch 调整）
+    # Outward component (adjusted by pitch)
     outward = np.cos(pitch) * np.sin(yaw)
 
     if side == 'left':
-        # Left Chest: Y-=反重力方向, -Z=外侧(向右)
+        # Left Chest: Y-=anti-gravity direction, -Z=outward (rightward)
         y = -anti_gravity
         z = -outward
     else:
-        # Right Chest: Y+=反重力方向, -Z=外侧(向左)
+        # Right Chest: Y+=anti-gravity direction, -Z=outward (leftward)
         y = anti_gravity
         z = -outward
 

@@ -18,7 +18,7 @@ setup(
     zip_safe=True,
     maintainer='Wuji Robotics',
     maintainer_email='dev@wuji.com',
-    description='统一控制器节点 - 支持模式切换的状态机',
+    description='Unified controller node - state machine with mode switching support',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

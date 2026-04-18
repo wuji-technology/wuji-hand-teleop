@@ -1,0 +1,21 @@
+# =============================================================================
+# Manus Glove USB Dongle udev Rule
+# =============================================================================
+# Grants non-root users access to Manus USB dongles, eliminating the need
+# for sudo when running manus_data_publisher.
+#
+# Covers all Manus products by matching vendor ID 3325:
+#   - Quantum Metaglove dongle (3325:00ca)
+#   - Pro dongle (3325:0049)
+#   - Future Manus products
+#
+# Install:
+#   sudo cp 99-manus-libusb.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Verify:
+#   lsusb -d 3325:       (should list Manus dongle)
+#   ls -l /dev/bus/usb/   (device should show 0666 permissions after replug)
+# =============================================================================
+
+SUBSYSTEM=="usb", ATTR{idVendor}=="3325", MODE="0666"

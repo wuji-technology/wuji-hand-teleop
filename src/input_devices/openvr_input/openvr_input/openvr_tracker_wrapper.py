@@ -209,7 +209,7 @@ class OpenVRTrackerWrapper:
                 elif role == 'left_wrist':
                     corrected_pose = raw_pose @ self._LEFT_WRIST_CORRECTION
                 elif role in ('left_arm', 'right_arm'):
-                    # 大臂 tracker 不做坐标修正，只用于方向向量投影
+                    # Upper arm tracker: no coordinate correction, only used for direction vector projection
                     corrected_pose = raw_pose
                 else:
                     corrected_pose = raw_pose

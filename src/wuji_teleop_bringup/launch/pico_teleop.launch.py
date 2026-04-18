@@ -1,51 +1,51 @@
 """
-PICO 遥操作统一 Launch / PICO Teleoperation Unified Launch
+PICO Teleoperation Unified Launch
 
-  - PICO 方案使用 tianji_world_output (世界坐标系 IK), SteamVR 方案使用 tianji_output (胸部坐标系 IK)
-  - 手部输出从 wujihand_ik 迁移到 controller/wujihand_controller (2026-02-28)
+  - PICO scheme uses tianji_world_output (world coordinate IK), SteamVR scheme uses tianji_output (chest coordinate IK)
+  - Hand output migrated from wujihand_ik to controller/wujihand_controller (2026-02-28)
 
-合并了原来的 pico_teleop.launch.py 和 pico_preview.launch.py。
-通过 enable_robot / enable_camera / enable_hand 参数控制启动哪些模块。
+Merges the original pico_teleop.launch.py and pico_preview.launch.py.
+Controls which modules to launch via enable_robot / enable_camera / enable_hand parameters.
 
-==================== 架构: 固定世界坐标系 ====================
+==================== Architecture: Fixed World Coordinate Frame ====================
 
-核心设计:
-  - world = 机器人基座 (固定不动)
-  - 用户站在机器人前面，初始化时对齐坐标系
-  - 所有 tracker 直接发布在 world 坐标系下
+Core design:
+  - world = robot base (fixed)
+  - User stands in front of robot, coordinate frames aligned at initialization
+  - All trackers publish directly in world coordinate frame
 
-坐标变换 (统一共享库):
-  - 权威实现: tianji_world_output.transform_utils
-  - 配置来源: tianji_robot.yaml (Single Source of Truth)
+Coordinate transforms (unified shared library):
+  - Authoritative implementation: tianji_world_output.transform_utils
+  - Config source: tianji_robot.yaml (Single Source of Truth)
 
-==================== 数据流架构 ====================
+==================== Data Flow Architecture ====================
 
-    PICO SDK --> pico_input_node (坐标变换) --> /left_arm_target_pose
-                                            --> /right_arm_target_pose
-                                            --> /left_arm_elbow_direction
-                                            --> /right_arm_elbow_direction
-                                            --> TF (world 下)
-                                                   |
-    tianji_world_output_node: 订阅 target_pose --> IK --> 天机臂
+    PICO SDK --> pico_input_node (coordinate transform) --> /left_arm_target_pose
+                                                        --> /right_arm_target_pose
+                                                        --> /left_arm_elbow_direction
+                                                        --> /right_arm_elbow_direction
+                                                        --> TF (in world frame)
+                                                               |
+    tianji_world_output_node: subscribe target_pose --> IK --> Tianji arms
 
-    MANUS --> /hand_input --> wujihand_retargeting --> 舞肌手
+    MANUS --> /hand_input --> wujihand_retargeting --> Wuji hands
 
-    unified_stereo: /dev/stereo_camera → OpenCV (MJPEG)
-      ├── ROS2: /stereo/{left,right}/compressed (30fps JPEG)
-      └── PICO: H.264 60fps via XRobo TCP (on-demand)
+    unified_stereo: /dev/stereo_camera -> OpenCV (MJPEG)
+      +-- ROS2: /stereo/{left,right}/compressed (30fps JPEG)
+      +-- PICO: H.264 60fps via XRobo TCP (on-demand)
 
-    RealSense D405 (腕部) → ROS2 compressed topics (30fps)
+    RealSense D405 (wrist) -> ROS2 compressed topics (30fps)
 
-==================== 使用方法 ====================
+==================== Usage ====================
 
-    # 真机模式 (默认: 启动所有模块)
+    # Real robot mode (default: launch all modules)
     ros2 launch wuji_teleop_bringup pico_teleop.launch.py
 
-    # 预检模式 (仅输入 + 可视化，不控制机器人)
+    # Preview mode (input + visualization only, no robot control)
     ros2 launch wuji_teleop_bringup pico_teleop.launch.py \\
       enable_robot:=false enable_camera:=false enable_hand:=false enable_rviz:=true
 
-    # 手动重新初始化
+    # Manual re-initialization
     ros2 service call /pico_input/init std_srvs/srv/Trigger
     ros2 service call /pico_input/reset std_srvs/srv/Trigger """
 
@@ -72,7 +72,7 @@ def _get_config(package: str, config_file: str) -> str:
 
 
 def generate_launch_description() -> LaunchDescription:
-    # ==================== 模块开关 ====================
+    # ==================== Module Switches ====================
     enable_robot_arg = DeclareLaunchArgument(
         "enable_robot", default_value="true",
         description="Enable tianji arm output. Set false for preview mode."
@@ -93,7 +93,7 @@ def generate_launch_description() -> LaunchDescription:
         "hand_config", default_value=_get_config("wujihand_output", "wujihand_ik.yaml")
     )
 
-    # ==================== 灵巧手驱动参数 ====================
+    # ==================== Dexterous Hand Driver Parameters ====================
     left_serial_arg = DeclareLaunchArgument(
         "left_serial", default_value=LEFT_HAND_SERIAL,
         description="Left hand serial number",
@@ -111,7 +111,7 @@ def generate_launch_description() -> LaunchDescription:
         description="Right hand wujihandros2 namespace",
     )
 
-    # ==================== 读取参数 ====================
+    # ==================== Read Parameters ====================
     enable_robot = LaunchConfiguration("enable_robot")
     enable_camera = LaunchConfiguration("enable_camera")
     enable_hand = LaunchConfiguration("enable_hand")
@@ -126,7 +126,7 @@ def generate_launch_description() -> LaunchDescription:
         LaunchConfiguration("right_serial"), value_type=str
     )
 
-    # ==================== 启动提示 ====================
+    # ==================== Startup Banner ====================
     startup_banner = LogInfo(
         msg="""
 ========================================================================
@@ -145,11 +145,11 @@ def generate_launch_description() -> LaunchDescription:
 """
     )
 
-    # ==================== CAMERAS (统一入口: camera_launch.py) ====================
-    # camera_launch.py 统一管理所有相机:
-    #   - 头部双目: unified_stereo (ROS2 30fps + PICO H.264 60fps on-demand)
-    #   - 左右腕部: RealSense D405 (ROS2 30fps)
-    # 配置: camera_config.yaml (设备路径、序列号、分辨率等)
+    # ==================== CAMERAS (unified entry: camera_launch.py) ====================
+    # camera_launch.py manages all cameras:
+    #   - Head stereo: unified_stereo (ROS2 30fps + PICO H.264 60fps on-demand)
+    #   - Left/right wrist: RealSense D405 (ROS2 30fps)
+    # Config: camera_config.yaml (device paths, serial numbers, resolution, etc.)
     cameras = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
@@ -163,7 +163,7 @@ def generate_launch_description() -> LaunchDescription:
         condition=IfCondition(enable_camera),
     )
 
-    # ==================== PICO INPUT (始终启动) ====================
+    # ==================== PICO INPUT (always on) ====================
     pico_input_node = Node(
         package="pico_input",
         executable="pico_input_node",
@@ -188,7 +188,6 @@ def generate_launch_description() -> LaunchDescription:
         name="manus_data_publisher",
         output="screen",
         emulate_tty=True,
-        prefix="sudo -E",
         condition=IfCondition(enable_hand),
     )
     manus_input = Node(

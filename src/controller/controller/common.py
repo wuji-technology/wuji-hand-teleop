@@ -1,11 +1,11 @@
 """
-公共工具模块 - 控制器节点共享的工具类和函数
+Common utility module - shared utility classes and functions for controller nodes
 
-包含：
-- ControlMode: 控制模式枚举
-- ROS2LoggerAdapter: ROS2 日志适配器
-- 默认 QoS 配置
-- 配置加载工具
+Contains:
+- ControlMode: Control mode enumeration
+- ROS2LoggerAdapter: ROS2 logger adapter
+- Default QoS configuration
+- Configuration loading utilities
 """
 from __future__ import annotations
 
@@ -18,20 +18,20 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 
 class ControlMode(Enum):
-    """控制模式枚举
+    """Control mode enumeration
 
-    - TELEOP: 遥操作模式（使用运动学解算）
-    - INFERENCE: 推理模式（直接关节控制）
+    - TELEOP: Teleoperation mode (uses kinematic solving)
+    - INFERENCE: Inference mode (direct joint control)
     """
     TELEOP = "teleop"
     INFERENCE = "inference"
 
 
 class ROS2LoggerAdapter:
-    """ROS2 日志适配器
+    """ROS2 logger adapter
 
-    将 ROS2 logger 适配为标准 logging 接口，
-    供底层控制器库使用。
+    Adapts ROS2 logger to standard logging interface,
+    for use by underlying controller libraries.
     """
 
     def __init__(self, ros_logger):
@@ -51,7 +51,7 @@ class ROS2LoggerAdapter:
 
 
 def get_default_qos() -> QoSProfile:
-    """获取默认 QoS 配置（用于实时控制）"""
+    """Get default QoS configuration (for real-time control)"""
     return QoSProfile(
         reliability=QoSReliabilityPolicy.BEST_EFFORT,
         history=QoSHistoryPolicy.KEEP_LAST,
@@ -60,34 +60,34 @@ def get_default_qos() -> QoSProfile:
 
 
 def load_yaml_config(config_path: str | Path) -> Dict[str, Any]:
-    """加载 YAML 配置文件
+    """Load YAML configuration file
 
     Args:
-        config_path: 配置文件路径
+        config_path: Configuration file path
 
     Returns:
-        配置字典
+        Configuration dictionary
 
     Raises:
-        FileNotFoundError: 配置文件不存在
+        FileNotFoundError: Configuration file does not exist
     """
     path = Path(config_path).expanduser().resolve()
     if not path.exists():
-        raise FileNotFoundError(f"配置文件不存在: {path}")
+        raise FileNotFoundError(f"Config file not found: {path}")
 
     with path.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f) or {}
 
 
 def get_package_config_path(package_name: str, config_filename: str) -> Optional[Path]:
-    """获取 ROS2 包内的配置文件路径
+    """Get configuration file path within a ROS2 package
 
     Args:
-        package_name: ROS2 包名
-        config_filename: 配置文件名（在 config 目录下）
+        package_name: ROS2 package name
+        config_filename: Configuration filename (under config directory)
 
     Returns:
-        配置文件路径，若包不存在则返回 None
+        Configuration file path, returns None if package does not exist
     """
     try:
         from ament_index_python.packages import get_package_share_directory

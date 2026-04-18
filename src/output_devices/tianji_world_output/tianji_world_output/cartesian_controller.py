@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-笛卡尔位姿控制器 - 封装类 / Cartesian Pose Controller
-简化使用末端位姿控制机器人的流程
+Cartesian Pose Controller - Wrapper Class
+Simplifies robot end-effector pose control workflow
 """
 from .fx_robot import Marvin_Robot
 from .fx_kine import Marvin_Kine
@@ -13,41 +13,41 @@ from ament_index_python.packages import get_package_share_directory
 
 
 class CartesianController:
-    """笛卡尔空间控制器 / Cartesian Space Controller"""
+    """Cartesian Space Controller"""
 
     def __init__(self, robot_ip='192.168.1.190', config_path=None, logger=None):
         """
-        初始化笛卡尔控制器（同时初始化左右两臂）
+        Initialize Cartesian controller (initializes both left and right arms)
 
         Args:
-            robot_ip: 机器人IP地址
-            config_path: 运动学配置文件路径
-                - None: 使用默认的 'ccs_m6.MvKDCfg'（从ROS2包中自动查找）
-                - 相对路径: 从ROS2包的config目录中查找
-                - 绝对路径: 直接使用该路径
-            logger: 外部传入的 logger（可选，用于集成 ROS2 日志系统）
+            robot_ip: Robot IP address
+            config_path: Kinematics config file path
+                - None: Use default 'ccs_m6.MvKDCfg' (auto-located from ROS2 package)
+                - Relative path: Located from the ROS2 package config directory
+                - Absolute path: Used directly
+            logger: External logger (optional, for ROS2 logging integration)
         """
-        # 日志：优先使用外部传入的 logger
+        # Logger: prefer externally provided logger
         if logger is not None:
             self.logger = logger
         else:
             self.logger = logging.getLogger(__name__)
 
-        # 解析配置文件路径
+        # Resolve config file path
         if config_path is None:
             config_filename = 'ccs_m6.MvKDCfg'
 
             package_share = get_package_share_directory('tianji_world_output')
             config_path = os.path.join(package_share, 'config', config_filename)
-        # 检查文件是否存在
+        # Check if file exists
         if not os.path.exists(config_path):
-            raise FileNotFoundError(f"配置文件不存在: {config_path}")
+            raise FileNotFoundError(f"Config file not found: {config_path}")
 
 
-        self.logger.debug("加载配置文件: %s", config_path)
+        self.logger.debug("Loading config file: %s", config_path)
 
-        # 初始化左臂运动学
-        self.logger.debug("[A臂] 初始化运动学SDK...")
+        # Initialize left arm kinematics
+        self.logger.debug("[Arm A] Initializing kinematics SDK...")
         self.kine_left = Marvin_Kine()
         config_result = self.kine_left.load_config(config_path=config_path)
         time.sleep(0.3)
@@ -59,8 +59,8 @@ class CartesianController:
             j67=config_result['BD'][0]
         )
 
-        # 初始化右臂运动学
-        self.logger.debug("[B臂] 初始化运动学SDK...")
+        # Initialize right arm kinematics
+        self.logger.debug("[Arm B] Initializing kinematics SDK...")
         self.kine_right = Marvin_Kine()
         config_result = self.kine_right.load_config(config_path=config_path)
         time.sleep(0.3)
@@ -72,13 +72,13 @@ class CartesianController:
             j67=config_result['BD'][1]
         )
 
-        # 初始化机器人连接
-        self.logger.debug("初始化机器人控制...")
+        # Initialize robot connection
+        self.logger.debug("Initializing robot control...")
         self.robot = Marvin_Robot()
 
         init = self.robot.connect(robot_ip)
         if init == 0:
-            raise ConnectionError("连接失败：端口占用!")
+            raise ConnectionError("Connection failed: port occupied!")
 
         time.sleep(0.5)
         self.robot.clear_set()
@@ -88,9 +88,9 @@ class CartesianController:
         time.sleep(0.5)
 
         if not self._verify_connection():
-            raise ConnectionError("机器人连接失败!")
+            raise ConnectionError("Robot connection failed!")
 
-        # IK 参数（可实时修改）— 从统一配置加载
+        # IK parameters (can be modified at runtime) — loaded from unified config
         from tianji_world_output.config_loader import TianjiConfig
         self._cfg = TianjiConfig.load(use_ros=False)
         self.zsp_type = self._cfg.zsp_type
@@ -101,35 +101,35 @@ class CartesianController:
         self.zsp_angle = self._cfg.zsp_angle
         self.dgr = list(self._cfg.dgr)
 
-        # IK 种子: 上一次成功的关节角, 每帧更新, 保证构型连续
+        # IK seed: last successful joint angles, updated each frame to ensure configuration continuity
         default_left = list(self._cfg.init_joints.get('left', [55.0, -65.0, -70.0, -60.0, 60.0, 0.0, 0.0]))
         default_right = list(self._cfg.init_joints.get('right', [-55.0, -65.0, 70.0, -60.0, -60.0, 0.0, 0.0]))
         self._last_valid_left_joints = default_left
         self._last_valid_right_joints = default_right
 
-        # 设置工具参数 (wuji hand)
+        # Set tool parameters (wuji hand)
         self._set_tool_params()
 
-        self.logger.info("✅ 双臂初始化完成")
+        self.logger.info("Dual-arm initialization complete")
 
     def _set_tool_params(self):
         """
-        设置工具参数（运动学 + 动力学）
+        Set tool parameters (kinematics + dynamics)
 
-        运动学参数 [X, Y, Z, A, B, C]:
-            X, Y, Z: 工具中心点相对于法兰的位置偏移 (mm)
-            A, B, C: 工具相对于法兰的姿态偏移 (度)
+        Kinematics parameters [X, Y, Z, A, B, C]:
+            X, Y, Z: Tool center point position offset relative to flange (mm)
+            A, B, C: Tool orientation offset relative to flange (degrees)
 
-        动力学参数 [M, mx, my, mz, Ixx, Ixy, Ixz, Iyy, Iyz, Izz]:
-            M: 工具质量 (kg)
-            mx, my, mz: 质心相对于法兰的位置 (mm)
-            Ixx~Izz: 惯性张量 (kg·mm²)
+        Dynamics parameters [M, mx, my, mz, Ixx, Ixy, Ixz, Iyy, Iyz, Izz]:
+            M: Tool mass (kg)
+            mx, my, mz: Center of mass position relative to flange (mm)
+            Ixx~Izz: Inertia tensor (kg*mm^2)
         """
-        # Wuji Hand 负载参数 (与 tianji_arm_controller.py 一致)
-        tool_kine = [0, 0, 120, 0, 0, 0]  # 工具中心点距法兰 120mm
-        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]  # 质量 0.95kg, 质心距法兰 90mm
+        # Wuji Hand payload parameters (consistent with tianji_arm_controller.py)
+        tool_kine = [0, 0, 120, 0, 0, 0]  # Tool center point 120mm from flange
+        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]  # Mass 0.95kg, center of mass 90mm from flange
 
-        self.logger.info("设置工具参数 (Wuji Hand): kine=%s, dyn=%s", tool_kine, tool_dyn)
+        self.logger.info("Setting tool parameters (Wuji Hand): kine=%s, dyn=%s", tool_kine, tool_dyn)
 
         self.robot.clear_set()
         self.robot.set_tool(arm='A', kineParams=tool_kine, dynamicParams=tool_dyn)
@@ -138,13 +138,13 @@ class CartesianController:
         time.sleep(0.3)
 
     def _verify_connection(self):
-        """验证机器人连接"""
+        """Verify robot connection"""
         dcss = DCSS()
         motion_tag = 0
         frame_update = None
         for i in range(5):
             sub_data = self.robot.subscribe(dcss)
-            # 检查左臂连接
+            # Check left arm connection
             serial = sub_data['outputs'][0]['frame_serial']
             if serial != 0 and frame_update != serial:
                 motion_tag += 1
@@ -153,7 +153,7 @@ class CartesianController:
         return motion_tag > 0
 
     def get_current_joints(self):
-        """获取当前双臂关节角度"""
+        """Get current dual-arm joint angles"""
         dcss = DCSS()
         sub_data = self.robot.subscribe(dcss)
         left_joints = sub_data["outputs"][0]["fb_joint_pos"]
@@ -161,8 +161,8 @@ class CartesianController:
         return left_joints, right_joints
 
     def set_impedance_mode(self, mode='joint', K=None, D=None):
-        """设置双臂阻抗模式"""
-        # 设置双臂状态
+        """Set dual-arm impedance mode"""
+        # Set dual-arm state
         self.robot.clear_set()
         self.robot.set_state(arm='A', state=3)
         self.robot.set_state(arm='B', state=3)
@@ -184,7 +184,7 @@ class CartesianController:
             self.robot.send_cmd()
             time.sleep(0.5)
 
-            self.logger.info("双臂笛卡尔阻抗模式 K=%s", K)
+            self.logger.info("Dual-arm Cartesian impedance mode K=%s", K)
 
         elif mode == 'joint':
             K = K or [2,2,2,1.6, 1, 1, 1]
@@ -202,42 +202,42 @@ class CartesianController:
             self.robot.send_cmd()
             time.sleep(0.5)
 
-            self.logger.info("双臂关节阻抗模式 K=%s", K)
+            self.logger.info("Dual-arm joint impedance mode K=%s", K)
 
     def move_to_init(self, wait=True, timeout=1, duration=3.0, dt=0.01,
                      init_joints_left=None, init_joints_right=None):
         """
-        双臂同时移动到初始位姿（使用关节空间轨迹插值实现柔顺运动）
+        Move both arms simultaneously to initial pose (using joint-space trajectory interpolation for compliant motion)
 
         Args:
-            wait: 是否等待运动完成
-            timeout: 到达后额外等待时间（秒）
-            duration: 轨迹总时长（秒），越大越慢越柔顺
-            dt: 插值时间步长（秒）
-            init_joints_left: 左臂初始关节角（度），None 使用默认值
-            init_joints_right: 右臂初始关节角（度），None 使用默认值
+            wait: Whether to wait for motion completion
+            timeout: Additional wait time after reaching target (seconds)
+            duration: Total trajectory duration (seconds), larger = slower and more compliant
+            dt: Interpolation time step (seconds)
+            init_joints_left: Left arm initial joint angles (degrees), None uses default
+            init_joints_right: Right arm initial joint angles (degrees), None uses default
 
         Returns:
-            bool: 是否成功
+            bool: Whether successful
         """
-        # 默认初始关节角度 — 从 tianji_robot.yaml 统一加载
+        # Default initial joint angles — loaded uniformly from tianji_robot.yaml
         DEFAULT_INIT_LEFT = list(self._cfg.init_joints.get('left', [55.0, -65.0, -70.0, -60.0, 60.0, 0.0, 0.0]))
         DEFAULT_INIT_RIGHT = list(self._cfg.init_joints.get('right', [-55.0, -65.0, 70.0, -60.0, -60.0, 0.0, 0.0]))
 
         INIT_JOINTS_LEFT = init_joints_left if init_joints_left is not None else DEFAULT_INIT_LEFT
         INIT_JOINTS_RIGHT = init_joints_right if init_joints_right is not None else DEFAULT_INIT_RIGHT
 
-        self.logger.debug("双臂移动到初始位姿（%ss 柔顺轨迹）...", duration)
+        self.logger.debug("Moving both arms to initial pose (%ss compliant trajectory)...", duration)
 
-        # 获取当前关节角度
+        # Get current joint angles
         left_joints, right_joints = self.get_current_joints()
         start_left = list(left_joints)
         start_right = list(right_joints)
         num_points = int(duration / dt)
 
-        # 使用五次多项式插值生成柔顺轨迹（起止速度和加速度为0）
+        # Use quintic polynomial interpolation for compliant trajectory (zero start/end velocity and acceleration)
         for i in range(num_points + 1):
-            t = i / num_points  # 归一化时间 [0, 1]
+            t = i / num_points  # Normalized time [0, 1]
             s = 10 * (t ** 3) - 15 * (t ** 4) + 6 * (t ** 5)
 
             target_left = [
@@ -249,7 +249,7 @@ class CartesianController:
                 for j in range(7)
             ]
 
-            # 发送双臂关节指令
+            # Send dual-arm joint commands
             self.robot.clear_set()
             self.robot.set_joint_cmd_pose(arm='A', joints=target_left)
             self.robot.set_joint_cmd_pose(arm='B', joints=target_right)
@@ -260,7 +260,7 @@ class CartesianController:
         if wait:
             time.sleep(timeout)
 
-        # 验证是否到达初始位姿
+        # Verify whether initial pose was reached
         final_left, final_right = self.get_current_joints()
         left_errors = [abs(final_left[i] - INIT_JOINTS_LEFT[i]) for i in range(7)]
         right_errors = [abs(final_right[i] - INIT_JOINTS_RIGHT[i]) for i in range(7)]
@@ -269,34 +269,34 @@ class CartesianController:
 
         success = True
         if max_left_error < 5.0:
-            self.logger.debug("[A臂] 已到达初始位姿")
+            self.logger.debug("[Arm A] Reached initial pose")
         else:
-            self.logger.warning("[A臂] 初始位姿误差较大 (%.1f°)", max_left_error)
+            self.logger.warning("[Arm A] Large initial pose error (%.1f deg)", max_left_error)
             success = False
 
         if max_right_error < 5.0:
-            self.logger.debug("[B臂] 已到达初始位姿")
+            self.logger.debug("[Arm B] Reached initial pose")
         else:
-            self.logger.warning("[B臂] 初始位姿误差较大 (%.1f°)", max_right_error)
+            self.logger.warning("[Arm B] Large initial pose error (%.1f deg)", max_right_error)
             success = False
 
-        # 设置 IK 种子为初始关节角
+        # Set IK seed to initial joint angles
         self._last_valid_left_joints = list(INIT_JOINTS_LEFT)
         self._last_valid_right_joints = list(INIT_JOINTS_RIGHT)
-        self.logger.info("IK 种子已设置")
+        self.logger.info("IK seed has been set")
 
         return success
 
     def move_to_pose_direct(self, left_pose, right_pose, unit='mm'):
         """
-        双臂同时 IK 解算并发送关节指令（非阻塞，用于实时追踪）
+        Dual-arm simultaneous IK solve and send joint commands (non-blocking, for real-time tracking)
 
         Args:
-            left_pose: 左臂目标位姿，None 表示不控制左臂
-                      - 若 unit='matrix': 4x4 numpy 矩阵 (米)
-                      - 若 unit='mm'/'m': [X, Y, Z, RX, RY, RZ] (毫米或米)
-            right_pose: 右臂目标位姿，None 表示不控制右臂 (格式同上)
-            unit: 'matrix' (4x4 矩阵), 'mm' (毫米) 或 'm' (米)
+            left_pose: Left arm target pose, None means do not control left arm
+                      - If unit='matrix': 4x4 numpy matrix (meters)
+                      - If unit='mm'/'m': [X, Y, Z, RX, RY, RZ] (millimeters or meters)
+            right_pose: Right arm target pose, None means do not control right arm (same format)
+            unit: 'matrix' (4x4 matrix), 'mm' (millimeters) or 'm' (meters)
 
         Returns:
             tuple: (left_success, right_success, left_joints, right_joints)
@@ -335,10 +335,10 @@ class CartesianController:
         return left_success, right_success, left_joints, right_joints
 
     def _convert_pose_to_mat(self, pose, unit, kine):
-        """将位姿转换为 IK 所需的矩阵格式 (mm)"""
+        """Convert pose to matrix format required by IK (mm)"""
         if unit == 'matrix':
             mat = pose.copy()
-            mat[:3, 3] *= 1000  # m → mm
+            mat[:3, 3] *= 1000  # m -> mm
             return mat.tolist()
         else:
             pose_mm = list(pose)
@@ -349,21 +349,21 @@ class CartesianController:
 
     def _solve_ik(self, kine, robot_serial, pose_mat, ref_joints, arm_name):
         """
-        IK 求解 (两步回退)
+        IK solve (two-step fallback)
 
-        1. zsp_type=1 (含肘部约束)
-        2. zsp_type=0 (最小化与种子的关节距离)
-        信任 IK 求解器: 有效解直接采用, 种子每帧更新保证连续性。
+        1. zsp_type=1 (with elbow constraint)
+        2. zsp_type=0 (minimize joint distance from seed)
+        Trust the IK solver: valid solutions are used directly, seed updated each frame to ensure continuity.
         """
         zsp_para = self.left_zsp_para if arm_name == 'A' else self.right_zsp_para
 
-        # 优先: 带肘部约束
+        # Primary: with elbow constraint
         joints = self._call_ik(kine, robot_serial, pose_mat, ref_joints,
                                 self.zsp_type, zsp_para, arm_name)
         if joints is not None:
             return joints, True
 
-        # 回退: 最小化关节距离
+        # Fallback: minimize joint distance
         if self.zsp_type != 0:
             joints = self._call_ik(kine, robot_serial, pose_mat, ref_joints,
                                     0, zsp_para, arm_name)
@@ -374,7 +374,7 @@ class CartesianController:
 
     def _call_ik(self, kine, robot_serial, pose_mat, ref_joints,
                   zsp_type, zsp_para, arm_name):
-        """单次 IK 调用, 返回关节角 list 或 None"""
+        """Single IK call, returns joint angle list or None"""
         try:
             ik_result = kine.ik(
                 robot_serial=robot_serial,
@@ -389,18 +389,18 @@ class CartesianController:
                 if not ik_result.m_Output_IsOutRange and not ik_result.m_Output_IsJntExd:
                     return ik_result.m_Output_RetJoint.to_list()
         except Exception as e:
-            self.logger.warning("[%s臂 IK] Exception: %s", arm_name, e)
+            self.logger.warning("[Arm %s IK] Exception: %s", arm_name, e)
         return None
 
     def disable_and_release(self):
-        """下使能并释放双臂 / Disable and release both arms"""
-        self.logger.info("双臂下使能 / Disabling arms...")
+        """Disable and release both arms"""
+        self.logger.info("Disabling both arms...")
         self.robot.clear_set()
         self.robot.set_state(arm='A', state=0)
         self.robot.set_state(arm='B', state=0)
         self.robot.send_cmd()
         time.sleep(2)
 
-        self.logger.debug("释放连接...")
+        self.logger.debug("Releasing connection...")
         self.robot.release_robot()
-        self.logger.info("已安全退出 / Safely exited")
+        self.logger.info("Safely exited")

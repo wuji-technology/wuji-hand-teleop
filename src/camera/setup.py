@@ -6,12 +6,12 @@ from glob import glob
 ros2_package_name = 'camera'
 
 setup(
-    name=ros2_package_name,  # 必须与package.xml中的<name>一致
+    name=ros2_package_name,  # Must match <name> in package.xml
     version='0.1.0',
     packages=find_packages(),
     data_files=[
         ('share/ament_index/resource_index/packages',
-            ['resource/' + ros2_package_name]),  # 使用ROS2包名而不是Python包名
+            ['resource/' + ros2_package_name]),  # Use ROS2 package name instead of Python package name
         ('share/' + ros2_package_name, ['package.xml']),
         # Install launch files
         (os.path.join('share', ros2_package_name, 'launch'),

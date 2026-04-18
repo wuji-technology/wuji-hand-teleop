@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
 """
-分析 PICO 录制数据中的运动模式
+Analyze motion patterns in PICO recorded data
 
-功能:
-  1. 分析各 tracker 在 X/Y/Z 方向的运动范围
-  2. 找出包含明显运动的时间段
-  3. 提取关键帧用于测试
-  4. 分析旋转变化，找出包含明显旋转的时间段
+Features:
+  1. Analyze motion range of each tracker along X/Y/Z axes
+  2. Find time segments containing significant motion
+  3. Extract key frames for testing
+  4. Analyze rotation changes, find time segments with significant rotation
 
-使用方法:
-  # 分析位置运动
+Usage:
+  # Analyze position motion
   python3 analyze_motion_data.py --file trackingData_whole_data.txt
 
-  # 分析旋转运动
+  # Analyze rotation motion
   python3 analyze_motion_data.py --file trackingData_whole_data.txt --rotation
 
-  # 同时分析位置和旋转
+  # Analyze both position and rotation
   python3 analyze_motion_data.py --file trackingData_whole_data.txt --all
 """
 
@@ -27,7 +27,7 @@ from scipy.spatial.transform import Rotation as R
 
 
 def load_data(filepath: str) -> list:
-    """加载录制数据"""
+    """Load recorded data"""
     frames = []
     with open(filepath, 'r') as f:
         for i, line in enumerate(f):
@@ -42,7 +42,7 @@ def load_data(filepath: str) -> list:
 
 
 def parse_pose(pose_str: str):
-    """解析位姿字符串 'x,y,z,qx,qy,qz,qw'"""
+    """Parse pose string 'x,y,z,qx,qy,qz,qw'"""
     parts = [float(x) for x in pose_str.split(',')]
     pos = np.array(parts[:3])
     quat = np.array(parts[3:7])
@@ -50,7 +50,7 @@ def parse_pose(pose_str: str):
 
 
 def extract_tracker_positions(frames: list, tracker_map: dict) -> dict:
-    """提取各 tracker 的位置序列"""
+    """Extract position sequences for each tracker"""
     import re
 
     positions = {
@@ -85,7 +85,7 @@ def extract_tracker_positions(frames: list, tracker_map: dict) -> dict:
                 if role in frame_trackers:
                     positions[role].append(frame_trackers[role])
 
-    # 转换为 numpy 数组
+    # Convert to numpy arrays
     for role in positions:
         if positions[role]:
             positions[role] = np.array(positions[role])
@@ -96,7 +96,7 @@ def extract_tracker_positions(frames: list, tracker_map: dict) -> dict:
 
 
 def extract_tracker_poses(frames: list, tracker_map: dict) -> dict:
-    """提取各 tracker 的位置和旋转序列"""
+    """Extract position and rotation sequences for each tracker"""
     import re
 
     poses = {
@@ -133,7 +133,7 @@ def extract_tracker_poses(frames: list, tracker_map: dict) -> dict:
                     poses[role]['pos'].append(frame_trackers[role][0])
                     poses[role]['quat'].append(frame_trackers[role][1])
 
-    # 转换为 numpy 数组
+    # Convert to numpy arrays
     for role in poses:
         if poses[role]['pos']:
             poses[role]['pos'] = np.array(poses[role]['pos'])
@@ -146,45 +146,45 @@ def extract_tracker_poses(frames: list, tracker_map: dict) -> dict:
 
 
 def quaternion_angle_diff(q1: np.ndarray, q2: np.ndarray) -> float:
-    """计算两个四元数之间的角度差（弧度）"""
-    # 确保四元数符号一致（取较短路径）
+    """Compute angular difference between two quaternions (radians)"""
+    # Ensure consistent quaternion signs (take shorter path)
     if np.dot(q1, q2) < 0:
         q2 = -q2
 
-    # 计算相对旋转
+    # Compute relative rotation
     r1 = R.from_quat(q1)
     r2 = R.from_quat(q2)
     r_diff = r2 * r1.inv()
 
-    # 返回旋转角度
+    # Return rotation angle
     return r_diff.magnitude()
 
 
 def analyze_rotation(quats: np.ndarray, role: str, window_size: int = 30):
-    """分析旋转模式"""
+    """Analyze rotation patterns"""
     if len(quats) < window_size:
-        print(f"  {role}: 数据不足")
+        print(f"  {role}: Insufficient data")
         return None
 
-    # 计算帧间旋转角度
+    # Compute inter-frame rotation angles
     frame_angles = []
     for i in range(1, len(quats)):
         angle = quaternion_angle_diff(quats[i-1], quats[i])
         frame_angles.append(np.degrees(angle))
     frame_angles = np.array(frame_angles)
 
-    # 整体统计
+    # Overall statistics
     total_rotation = np.sum(frame_angles)
     max_frame_rotation = np.max(frame_angles)
     mean_frame_rotation = np.mean(frame_angles)
 
     print(f"\n{role}:")
-    print(f"  帧数: {len(quats)}")
-    print(f"  累计旋转: {total_rotation:.2f}°")
-    print(f"  帧间最大旋转: {max_frame_rotation:.2f}°")
-    print(f"  帧间平均旋转: {mean_frame_rotation:.4f}°")
+    print(f"  Frames: {len(quats)}")
+    print(f"  Cumulative rotation: {total_rotation:.2f} deg")
+    print(f"  Max inter-frame rotation: {max_frame_rotation:.2f} deg")
+    print(f"  Mean inter-frame rotation: {mean_frame_rotation:.4f} deg")
 
-    # 找出窗口内累计旋转最大的片段
+    # Find segment with maximum cumulative rotation within window
     max_window_rotation = 0
     max_start = 0
     for i in range(len(frame_angles) - window_size + 1):
@@ -193,23 +193,23 @@ def analyze_rotation(quats: np.ndarray, role: str, window_size: int = 30):
             max_window_rotation = window_rotation
             max_start = i
 
-    # 计算窗口起止的相对旋转
+    # Compute relative rotation between window start and end
     if max_start + window_size < len(quats):
         q_start = quats[max_start]
         q_end = quats[max_start + window_size]
         relative_angle = np.degrees(quaternion_angle_diff(q_start, q_end))
 
-        # 分析主要旋转轴
+        # Analyze primary rotation axis
         r_start = R.from_quat(q_start)
         r_end = R.from_quat(q_end)
         r_diff = r_end * r_start.inv()
         rotvec = r_diff.as_rotvec()
         axis = rotvec / (np.linalg.norm(rotvec) + 1e-10)
 
-        print(f"  最大旋转片段: 帧 {max_start}-{max_start+window_size}")
-        print(f"    累计旋转: {max_window_rotation:.2f}°")
-        print(f"    起止相对旋转: {relative_angle:.2f}°")
-        print(f"    主旋转轴 (PICO): [{axis[0]:.3f}, {axis[1]:.3f}, {axis[2]:.3f}]")
+        print(f"  Max rotation segment: frames {max_start}-{max_start+window_size}")
+        print(f"    Cumulative rotation: {max_window_rotation:.2f} deg")
+        print(f"    Start-end relative rotation: {relative_angle:.2f} deg")
+        print(f"    Primary rotation axis (PICO): [{axis[0]:.3f}, {axis[1]:.3f}, {axis[2]:.3f}]")
 
     return {
         'total_rotation': total_rotation,
@@ -221,11 +221,11 @@ def analyze_rotation(quats: np.ndarray, role: str, window_size: int = 30):
 
 
 def find_rotation_segments(poses: dict, min_rotation_deg: float = 10.0, window_size: int = 30):
-    """找出包含明显旋转的片段"""
+    """Find segments containing significant rotation"""
     print("\n" + "=" * 70)
-    print("Wrist Tracker 旋转片段分析")
+    print("Wrist Tracker Rotation Segment Analysis")
     print("=" * 70)
-    print(f"最小旋转阈值: {min_rotation_deg}°")
+    print(f"Minimum rotation threshold: {min_rotation_deg} deg")
 
     segments = {'left_wrist': [], 'right_wrist': []}
 
@@ -236,19 +236,19 @@ def find_rotation_segments(poses: dict, min_rotation_deg: float = 10.0, window_s
 
         print(f"\n{role}:")
 
-        # 计算帧间旋转角度
+        # Compute inter-frame rotation angles
         frame_angles = []
         for i in range(1, len(quats)):
             angle = quaternion_angle_diff(quats[i-1], quats[i])
             frame_angles.append(np.degrees(angle))
         frame_angles = np.array(frame_angles)
 
-        # 滑动窗口找旋转片段
+        # Sliding window to find rotation segments
         for i in range(0, len(frame_angles) - window_size + 1, window_size // 2):
             window_rotation = np.sum(frame_angles[i:i+window_size])
 
             if window_rotation >= min_rotation_deg:
-                # 计算起止相对旋转和主轴
+                # Compute start-end relative rotation and primary axis
                 q_start = quats[i]
                 q_end = quats[i + window_size]
                 relative_angle = np.degrees(quaternion_angle_diff(q_start, q_end))
@@ -260,7 +260,7 @@ def find_rotation_segments(poses: dict, min_rotation_deg: float = 10.0, window_s
                 angle_mag = np.linalg.norm(rotvec)
                 axis = rotvec / (angle_mag + 1e-10) if angle_mag > 1e-6 else np.array([0, 0, 1])
 
-                # 判断主旋转方向
+                # Determine primary rotation direction
                 abs_axis = np.abs(axis)
                 main_axis_idx = np.argmax(abs_axis)
                 axis_names = ['X (Roll)', 'Y (Pitch)', 'Z (Yaw)']
@@ -277,33 +277,33 @@ def find_rotation_segments(poses: dict, min_rotation_deg: float = 10.0, window_s
                     'axis_vector': axis.tolist(),
                 })
 
-                print(f"  帧 {i:5d}-{i+window_size:5d}: "
-                      f"累计 {window_rotation:6.2f}°, "
-                      f"相对 {relative_angle:6.2f}°, "
-                      f"主轴: {axis_sign}{main_axis}")
+                print(f"  Frame {i:5d}-{i+window_size:5d}: "
+                      f"cumulative {window_rotation:6.2f} deg, "
+                      f"relative {relative_angle:6.2f} deg, "
+                      f"primary axis: {axis_sign}{main_axis}")
 
     return segments
 
 
 def analyze_motion(positions: np.ndarray, role: str, window_size: int = 30):
-    """分析运动模式"""
+    """Analyze motion patterns"""
     if len(positions) < window_size:
-        print(f"  {role}: 数据不足")
+        print(f"  {role}: Insufficient data")
         return None
 
-    # 整体统计
+    # Overall statistics
     pos_range = positions.max(axis=0) - positions.min(axis=0)
     pos_mean = positions.mean(axis=0)
 
     print(f"\n{role}:")
-    print(f"  帧数: {len(positions)}")
-    print(f"  位置均值 (PICO): X={pos_mean[0]:.4f}, Y={pos_mean[1]:.4f}, Z={pos_mean[2]:.4f}")
-    print(f"  位置范围 (PICO): X={pos_range[0]*100:.2f}cm, Y={pos_range[1]*100:.2f}cm, Z={pos_range[2]*100:.2f}cm")
+    print(f"  Frames: {len(positions)}")
+    print(f"  Position mean (PICO): X={pos_mean[0]:.4f}, Y={pos_mean[1]:.4f}, Z={pos_mean[2]:.4f}")
+    print(f"  Position range (PICO): X={pos_range[0]*100:.2f}cm, Y={pos_range[1]*100:.2f}cm, Z={pos_range[2]*100:.2f}cm")
 
-    # 找出各方向运动最明显的片段
+    # Find segment with maximum motion in each direction
     results = {}
-    for axis, axis_name, pico_dir in [(0, 'X', '左右'), (1, 'Y', '上下'), (2, 'Z', '前后')]:
-        # 滑动窗口找最大运动范围
+    for axis, axis_name, pico_dir in [(0, 'X', 'left-right'), (1, 'Y', 'up-down'), (2, 'Z', 'front-back')]:
+        # Sliding window to find maximum motion range
         max_range = 0
         max_start = 0
         for i in range(len(positions) - window_size):
@@ -313,7 +313,7 @@ def analyze_motion(positions: np.ndarray, role: str, window_size: int = 30):
                 max_range = seg_range
                 max_start = i
 
-        # 方向判断
+        # Direction determination
         segment = positions[max_start:max_start+window_size, axis]
         direction = "+" if segment[-1] > segment[0] else "-"
 
@@ -324,15 +324,15 @@ def analyze_motion(positions: np.ndarray, role: str, window_size: int = 30):
             'direction': direction
         }
 
-        print(f"  {axis_name} ({pico_dir}): 最大运动 {max_range*100:.2f}cm @ 帧 {max_start}-{max_start+window_size} (方向: {direction})")
+        print(f"  {axis_name} ({pico_dir}): max motion {max_range*100:.2f}cm @ frames {max_start}-{max_start+window_size} (direction: {direction})")
 
     return results
 
 
 def find_arm_movement_segments(positions: dict, min_movement_cm: float = 3.0, window_size: int = 30):
-    """找出 arm tracker 有明显运动的片段"""
+    """Find segments where arm tracker has significant motion"""
     print("\n" + "=" * 70)
-    print("Arm Tracker 运动片段分析")
+    print("Arm Tracker Motion Segment Analysis")
     print("=" * 70)
 
     segments = {'left_arm': [], 'right_arm': []}
@@ -344,8 +344,8 @@ def find_arm_movement_segments(positions: dict, min_movement_cm: float = 3.0, wi
 
         print(f"\n{role}:")
 
-        for axis, axis_name, pico_dir in [(0, 'X', '左右'), (1, 'Y', '上下'), (2, 'Z', '前后')]:
-            # 找出所有超过阈值的运动片段
+        for axis, axis_name, pico_dir in [(0, 'X', 'left-right'), (1, 'Y', 'up-down'), (2, 'Z', 'front-back')]:
+            # Find all motion segments exceeding threshold
             for i in range(0, len(pos) - window_size, window_size // 2):
                 segment = pos[i:i+window_size, axis]
                 seg_range = segment.max() - segment.min()
@@ -362,37 +362,37 @@ def find_arm_movement_segments(positions: dict, min_movement_cm: float = 3.0, wi
                         'start_pos': pos[i].tolist(),
                         'end_pos': pos[i + window_size - 1].tolist()
                     })
-                    print(f"  帧 {i:5d}-{i+window_size:5d}: {axis_name} ({pico_dir}) 移动 {seg_range*100:5.2f}cm ({direction})")
+                    print(f"  Frame {i:5d}-{i+window_size:5d}: {axis_name} ({pico_dir}) moved {seg_range*100:5.2f}cm ({direction})")
 
     return segments
 
 
 def main():
-    parser = argparse.ArgumentParser(description='分析 PICO 录制数据中的运动模式')
+    parser = argparse.ArgumentParser(description='Analyze motion patterns in PICO recorded data')
     parser.add_argument('--file', type=str, default='trackingData_whole_data.txt',
-                        help='数据文件路径')
+                        help='Data file path')
     parser.add_argument('--window', type=int, default=30,
-                        help='滑动窗口大小（帧数）')
+                        help='Sliding window size (frames)')
     parser.add_argument('--min-movement', type=float, default=3.0,
-                        help='最小位置运动阈值 (cm)')
+                        help='Minimum position motion threshold (cm)')
     parser.add_argument('--min-rotation', type=float, default=10.0,
-                        help='最小旋转阈值 (度)')
+                        help='Minimum rotation threshold (degrees)')
     parser.add_argument('--rotation', action='store_true',
-                        help='分析旋转运动')
+                        help='Analyze rotation motion')
     parser.add_argument('--all', action='store_true',
-                        help='同时分析位置和旋转')
+                        help='Analyze both position and rotation')
     args = parser.parse_args()
 
-    # 确定文件路径
+    # Determine file path
     data_file = Path(args.file)
     if not data_file.is_absolute():
         data_file = Path(__file__).parent / args.file
 
     if not data_file.exists():
-        print(f'❌ 找不到文件: {data_file}')
+        print(f'File not found: {data_file}')
         return
 
-    # Tracker SN 映射
+    # Tracker SN mapping
     tracker_map = {
         '190058': 'left_wrist',
         '190600': 'right_wrist',
@@ -401,53 +401,53 @@ def main():
     }
 
     print("=" * 70)
-    print("PICO 录制数据运动分析")
+    print("PICO Recorded Data Motion Analysis")
     print("=" * 70)
-    print(f"数据文件: {data_file}")
-    print(f"窗口大小: {args.window} 帧")
-    print(f"最小位置运动阈值: {args.min_movement} cm")
-    print(f"最小旋转阈值: {args.min_rotation}°")
-    print(f"分析模式: {'全部' if args.all else ('旋转' if args.rotation else '位置')}")
+    print(f"Data file: {data_file}")
+    print(f"Window size: {args.window} frames")
+    print(f"Min position motion threshold: {args.min_movement} cm")
+    print(f"Min rotation threshold: {args.min_rotation} deg")
+    print(f"Analysis mode: {'all' if args.all else ('rotation' if args.rotation else 'position')}")
 
-    # 加载数据
+    # Load data
     frames = load_data(str(data_file))
-    print(f"加载了 {len(frames)} 帧数据")
+    print(f"Loaded {len(frames)} frames of data")
 
-    # 提取位置和旋转
+    # Extract positions and rotations
     poses = extract_tracker_poses(frames, tracker_map)
 
-    # 位置分析
+    # Position analysis
     do_position = not args.rotation or args.all
     do_rotation = args.rotation or args.all
 
     if do_position:
-        # 提取位置（兼容旧接口）
+        # Extract positions (compatible with old interface)
         positions = {role: poses[role]['pos'] for role in poses}
 
-        # 分析各 tracker 运动
+        # Analyze each tracker's motion
         print("\n" + "=" * 70)
-        print("各 Tracker 整体运动分析 (PICO 坐标系)")
+        print("Overall Motion Analysis per Tracker (PICO Coordinate System)")
         print("=" * 70)
-        print("PICO 坐标系: X=左右, Y=上下, Z=前后(朝向用户)")
+        print("PICO coordinate system: X=left-right, Y=up-down, Z=front-back (toward user)")
 
         for role in ['head', 'left_wrist', 'right_wrist', 'left_arm', 'right_arm']:
             if len(positions[role]) > 0:
                 analyze_motion(positions[role], role, args.window)
 
-        # 找出 arm tracker 运动片段
+        # Find arm tracker motion segments
         segments = find_arm_movement_segments(positions, args.min_movement, args.window)
 
-        # 位置测试建议
+        # Position test suggestions
         print("\n" + "=" * 70)
-        print("位置测试的数据片段建议")
+        print("Suggested Data Segments for Position Testing")
         print("=" * 70)
-        print("\n可以使用以下帧范围测试机械臂位置运动:")
+        print("\nThe following frame ranges can be used to test arm position motion:")
 
         for role in ['left_wrist', 'right_wrist']:
             pos = positions[role]
             if len(pos) > args.window:
                 print(f"\n{role}:")
-                for axis, axis_name, pico_dir in [(0, 'X', '左右'), (1, 'Y', '上下'), (2, 'Z', '前后')]:
+                for axis, axis_name, pico_dir in [(0, 'X', 'left-right'), (1, 'Y', 'up-down'), (2, 'Z', 'front-back')]:
                     max_range = 0
                     max_start = 0
                     for i in range(len(pos) - args.window):
@@ -457,33 +457,33 @@ def main():
                             max_range = seg_range
                             max_start = i
                     if max_range * 100 >= args.min_movement:
-                        print(f"  {axis_name} ({pico_dir}): 帧 {max_start}-{max_start+args.window} (移动 {max_range*100:.2f}cm)")
+                        print(f"  {axis_name} ({pico_dir}): frames {max_start}-{max_start+args.window} (moved {max_range*100:.2f}cm)")
 
     if do_rotation:
-        # 分析旋转
+        # Analyze rotation
         print("\n" + "=" * 70)
-        print("各 Tracker 旋转分析 (PICO 坐标系)")
+        print("Rotation Analysis per Tracker (PICO Coordinate System)")
         print("=" * 70)
-        print("PICO 坐标系: X=Roll(左右倾斜), Y=Pitch(俯仰), Z=Yaw(水平旋转)")
+        print("PICO coordinate system: X=Roll (left-right tilt), Y=Pitch (up-down tilt), Z=Yaw (horizontal rotation)")
 
         rotation_results = {}
         for role in ['left_wrist', 'right_wrist']:
             if len(poses[role]['quat']) > 0:
                 rotation_results[role] = analyze_rotation(poses[role]['quat'], role, args.window)
 
-        # 找出旋转片段
+        # Find rotation segments
         rotation_segments = find_rotation_segments(poses, args.min_rotation, args.window)
 
-        # 旋转测试建议
+        # Rotation test suggestions
         print("\n" + "=" * 70)
-        print("旋转测试的数据片段建议")
+        print("Suggested Data Segments for Rotation Testing")
         print("=" * 70)
-        print("\n可以使用以下帧范围测试机械臂旋转控制:")
+        print("\nThe following frame ranges can be used to test arm rotation control:")
 
         for role in ['left_wrist', 'right_wrist']:
             if rotation_segments[role]:
                 print(f"\n{role}:")
-                # 按主旋转轴分组
+                # Group by primary rotation axis
                 by_axis = {}
                 for seg in rotation_segments[role]:
                     key = seg['main_axis']
@@ -494,11 +494,11 @@ def main():
                 for axis_key, segs in by_axis.items():
                     best = max(segs, key=lambda x: x['relative_rotation'])
                     sign = best['axis_sign']
-                    print(f"  {sign}{axis_key}: 帧 {best['start']}-{best['end']} "
-                          f"(旋转 {best['relative_rotation']:.2f}°)")
+                    print(f"  {sign}{axis_key}: frames {best['start']}-{best['end']} "
+                          f"(rotation {best['relative_rotation']:.2f} deg)")
 
     print("\n" + "=" * 70)
-    print("提示: 使用 step5 测试时添加 --start-frame 和 --end-frame 参数")
+    print("Tip: When testing with step5, add --start-frame and --end-frame arguments")
     print("=" * 70)
 
 

@@ -4,31 +4,33 @@
 
 ROS2-based teleoperation system for Wuji Hand and Tianji Arm. Supports multiple input devices including MANUS Gloves, HTC Vive Trackers, PICO VR, and custom devices through a standardized topic interface. Features a Monitor GUI for one-click launch and real-time device monitoring.
 
+[![Teleop Demo](docs/images/dataflow.png)](docs/teleop-demo.mp4)
+
+Click the image above to download the demo video.
+
 > [!WARNING]
 > This project is **not actively maintained** and **no after-sales support** is provided. If you encounter any issues, please [open an issue](https://github.com/wuji-technology/wuji-hand-teleop/issues) — but responses are not guaranteed. **Product version coming soon.**
 
 ## Table of Contents
 
-- [Hardware BOM](#hardware-bom)
 - [Repository Structure](#repository-structure)
 - [Usage](#usage)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Running](#running)
-  - [Monitor GUI](#monitor-gui)
-  - [Input Device Setup](#input-device-setup)
-  - [Configuration Reference](#configuration-reference)
+  - [System Architecture](#system-architecture)
+  - [Output](#output)
+- [Troubleshooting](#troubleshooting)
+- [Citation](#citation)
+- [Appendix](#appendix)
   - [Node Reference](#node-reference)
   - [Topic Interface](#topic-interface)
   - [Custom Input Device](#custom-input-device)
-- [Troubleshooting](#troubleshooting)
-- [Acknowledgements](#acknowledgements)
-- [Citation](#citation)
+  - [Configuration Files Summary](#configuration-files-summary)
+  - [Hardware BOM](#hardware-bom)
+  - [Documentation Index](#documentation-index)
+  - [Acknowledgements](#acknowledgements)
 - [Contact](#contact)
-
-## Hardware BOM
-
-For a complete list of hardware components required to build this teleoperation system, see the **[Hardware Bill of Materials](https://docs.google.com/document/d/19Md8R5tw9OyTvOUD-JKt7S6xMivlHVSCSNAKuoZr1eo/edit?tab=t.0)**.
 
 ## Repository Structure
 
@@ -38,24 +40,76 @@ wuji-hand-teleop/
 │   ├── wuji_teleop_bringup/       # Launch files for various teleoperation modes
 │   │   └── launch/
 │   ├── wuji_teleop_monitor/       # Monitor GUI for device monitoring and one-click launch
-│   │   └── wuji_teleop_monitor/
 │   ├── controller/                # Controller nodes for Wuji Hand and Tianji Arm
-│   │   └── controller/
 │   ├── input_devices/             # Input device packages
+│   │   ├── common_input/          #   Shared input utilities
 │   │   ├── openvr_input/          #   HTC Vive Tracker
 │   │   ├── manus_input/           #   MANUS Glove
 │   │   └── pico_input/            #   PICO VR
 │   ├── output_devices/            # Output device packages
-│   │   ├── tianji_output/         #   Tianji Arm controller
+│   │   ├── tianji_output/         #   Tianji Arm controller (SteamVR)
+│   │   ├── tianji_world_output/   #   Tianji Arm controller (PICO / world frame)
 │   │   └── wujihand_output/       #   Wuji Hand controller with IK
 │   ├── camera/                    # Camera system (RealSense, USB, StereoVR)
-│   │   ├── camera/
-│   │   └── stereocamera/
-│   └── wujihand_urdf/            # URDF models for RViz visualization
+│   ├── wujihandros2/              # Wuji Hand ROS2 driver (submodule)
+│   └── wujihand_urdf/             # URDF models for RViz visualization
+├── docker/                        # Docker deployment files
+├── docs/                          # Guides, images, and demo videos
+├── CHANGELOG.md
 └── README.md
 ```
 
 ## Usage
+
+<details>
+<summary>⚡ Quick Start — MANUS Glove + Wuji Hand (copy-paste one-liner)</summary>
+
+The fastest path from zero to a running hand teleoperation — MANUS Glove controlling Wuji Hand. For arm control, cameras, and tracker setup, follow the structured guide below.
+
+```bash
+# 1. Clone
+mkdir -p ~/ros2_ws/src && cd ~/ros2_ws/src
+git clone --recurse-submodules https://github.com/wuji-technology/wuji-hand-teleop.git
+cd wuji-hand-teleop
+git lfs install && git lfs pull
+
+# 2. Install dependencies
+sudo apt install ros-humble-desktop ros-humble-ament-cmake ros-humble-rclpy ros-humble-std-msgs ros-humble-tf2-ros libncurses-dev python3-pip
+python3 -m pip install numpy scipy pyyaml PyQt5 openvr
+wget https://github.com/wuji-technology/wujihandpy/releases/download/v1.5.1/wujihandcpp-1.5.1-amd64.deb
+sudo apt install ./wujihandcpp-1.5.1-amd64.deb
+cd ~/ros2_ws/src
+git clone --recurse-submodules https://github.com/wuji-technology/wuji-retargeting.git
+cd wuji-retargeting && python3 -m pip install .
+touch COLCON_IGNORE    # Prevent "Duplicate package names" with wujihandros2
+cd ~/ros2_ws/src/wuji-hand-teleop
+sudo cp src/input_devices/manus_input/config/udev/99-manus-libusb.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# 3. Configure Wuji Hand serial numbers
+#    Find your serials:
+#      lsusb -v -d 0483:2000 | grep iSerial
+#    Then edit:
+#      ~/ros2_ws/src/wuji-hand-teleop/src/output_devices/wujihand_output/config/wujihand_ik.yaml
+#      left_hand:  serial_number: "YOUR_LEFT_HAND_SERIAL"   (or null to disable)
+#      right_hand: serial_number: "YOUR_RIGHT_HAND_SERIAL"  (or null to disable)
+
+# 4. Build
+cd ~/ros2_ws
+colcon build --symlink-install
+source install/setup.bash
+# Expected: "Summary: 18 packages finished [xx.xs]" with 0 failed
+
+# 5. Launch
+ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
+# Expected: "Calibration loaded successfully for Left/Right glove"
+#           "Publishing hand data on '/hand_input' at 120.0 Hz"
+# Verify:   ros2 topic hz /hand_input  (should show ~120 Hz)
+```
+
+> **Using Docker?** See the [Docker Setup Guide](docker/README.md) — no manual dependency installation required.
+
+</details>
 
 ### Prerequisites
 
@@ -68,164 +122,163 @@ wuji-hand-teleop/
 | Category | Device | Description |
 |----------|--------|-------------|
 | Hand input | MANUS Glove | Data glove |
-| Hand input | PICO 4 + Tracker | VR headset + hand tracker |
+| Hand input | Wuji Glove | Data glove (coming soon) |
 | Hand input | Custom device | Publish to `/hand_input` topic |
 | Arm input | HTC Vive Tracker | External tracker |
-| Arm input | Custom device | Publish TF to `left_wrist`/`right_wrist` |
+| Arm input | PICO 4 + Tracker | VR headset + wrist/arm tracking |
+| Arm input | Custom device | Publish TF to `left_wrist`/`right_wrist` (SteamVR mode), or `PoseStamped` to `/left_arm_target_pose`/`right_arm_target_pose` (PICO mode, see [Custom Input Device](#custom-input-device)) |
 
 ### Installation
 
-1. **Install ROS2 dependencies**
+#### Software
 
-   ```bash
-   sudo apt install ros-humble-desktop
-   sudo apt install ros-humble-ament-cmake ros-humble-rclpy ros-humble-std-msgs ros-humble-tf2-ros
-   pip install numpy scipy pyyaml PyQt5 openvr
-   ```
-
-2. **Install external dependencies**
-
-   ```bash
-   # wujihandcpp C++ SDK (required by wujihand_driver)
-   # Pre-installed in Docker; for bare metal see: src/wujihandros2/README.md
-
-   # Hand retargeting algorithm
-   cd ~/ros2_ws/src
-   git clone --recurse-submodules https://github.com/wuji-technology/wuji-retargeting.git
-   cd wuji-retargeting && pip install -e .
-   ```
-
-   > **Note**: `--recurse-submodules` is required because the repo contains git submodules.
-
-3. **Build**
-
-   ```bash
-   cd ~/ros2_ws
-   colcon build --symlink-install
-   source install/setup.bash
-   ```
-
-### Running
-
-#### Full teleoperation (hand + arm)
+##### Step 1: Clone the Repository
 
 ```bash
-# Manus hand + Tracker arm (default)
-ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker
-
-# With RViz visualization
-ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker enable_rviz:=true
+mkdir -p ~/ros2_ws/src
+cd ~/ros2_ws/src
+git clone --recurse-submodules https://github.com/wuji-technology/wuji-hand-teleop.git
+cd wuji-hand-teleop
 ```
 
-#### Single-side teleoperation (one hand + one arm)
+> **Important**: `--recurse-submodules` is required. The repo contains submodules (wujihandros2, URDF models, etc.) that must be initialized.
+
+Pull large files (MANUS SDK binaries, ~250 MB). This step is **required** — without it, the `.so` files are LFS placeholders and `manus_ros2` will fail to link:
 
 ```bash
-# Right side: Manus + Tracker
-ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=right hand_input:=manus arm_input:=tracker
-
-# Left side: Manus + Tracker
-ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=left hand_input:=manus arm_input:=tracker
+git lfs install
+git lfs pull
 ```
 
-#### Hand-only control
+> **Note**: `git clone` does not automatically pull LFS files unless you have configured `git lfs install` globally before cloning. Always run `git lfs pull` after cloning to be safe.
+
+**If you already cloned without `--recurse-submodules`:**
 
 ```bash
-ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
+git submodule update --init --recursive
 ```
 
-#### Arm-only control
+**If `git lfs pull` was skipped**, the MANUS SDK `.so` files will be placeholder text files and `manus_ros2` will fail to link. Run `git lfs pull` to fix.
+
+**Verify**: `ls src/wujihandros2/` should show files (not empty). If empty, submodules were not initialized.
+
+##### Step 2: Install Dependencies
+
+###### ROS2 packages
 
 ```bash
-ros2 launch wuji_teleop_bringup wuji_teleop_arm.launch.py arm_input:=tracker
+sudo apt install ros-humble-desktop
+sudo apt install ros-humble-ament-cmake ros-humble-rclpy ros-humble-std-msgs ros-humble-tf2-ros
+sudo apt install libncurses-dev python3-pip    # Required by manus_ros2 and pip
 ```
 
-#### Debug arm axis
-
-Verify upper-arm tracker Y-axis direction and `zsp_para` without connecting the robot:
+###### Python packages
 
 ```bash
-ros2 launch wuji_teleop_bringup debug_arm_axis.launch.py
+python3 -m pip install numpy scipy pyyaml PyQt5 openvr
 ```
 
-#### Launch parameters
+###### wujihandcpp C++ SDK
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `hand_input` | `manus` | Hand input source: `manus` (MANUS Gloves) |
-| `arm_input` | `tracker` | Arm input source: `tracker` (HTC Vive Trackers) |
-| `side` | `right` | Single-side mode: `left` or `right` |
-| `enable_rviz` | `false` | Enable RViz visualization |
-| `hand_config` | default path | Hand configuration file path |
-
-### Monitor GUI
-
-Monitor is the recommended way to operate the teleoperation system. It provides device monitoring and one-click launch.
+Required by the Wuji Hand ROS2 driver (`wujihand_driver`). Pre-installed in Docker; for bare metal:
 
 ```bash
-source ~/ros2_ws/install/setup.bash
-ros2 run wuji_teleop_monitor monitor
+# Recommended version: 1.5.1 (minimum: 1.5.0)
+wget https://github.com/wuji-technology/wujihandpy/releases/download/v1.5.1/wujihandcpp-1.5.1-amd64.deb
+sudo apt install ./wujihandcpp-1.5.1-amd64.deb
 ```
 
-**Available launch presets** (all use Manus + Tracker):
+> **Note**: Check [wujihandpy releases](https://github.com/wuji-technology/wujihandpy/releases) for the latest version. The Wuji Hand hardware driver (`wujihand_driver`) will fail to build without this SDK.
 
-| Preset | Description | Launch file |
-|--------|-------------|-------------|
-| Hand only (Manus+Wuji) | Glove to dexterous hand | `wuji_teleop_hand.launch.py` |
-| Arm only (Tracker+Tianji) | Tracker to Tianji Arm | `wuji_teleop_arm.launch.py` |
-| Hand+Arm full | Full teleoperation | `wuji_teleop.launch.py` |
-| Hand+Arm+Camera full | With camera system | `wuji_teleop_camera.launch.py` |
-| Hand+Arm single (left) | Left side only | `wuji_teleop_single.launch.py` |
-| Hand+Arm single (right) | Right side only | `wuji_teleop_single.launch.py` |
+###### Hand retargeting algorithm
 
-**Workflow:**
+```bash
+cd ~/ros2_ws/src
+git clone --recurse-submodules https://github.com/wuji-technology/wuji-retargeting.git
+cd wuji-retargeting && python3 -m pip install .
+touch COLCON_IGNORE
+```
 
-1. Launch Monitor
-2. Verify device connections (gloves, hands, arms, trackers)
-3. Select a launch preset from the dropdown
-4. Click "Start Teleoperation"
-5. Click "Stop" to safely shut down all nodes
+> **Note**: `--recurse-submodules` is required for wuji-retargeting as well. The `COLCON_IGNORE` marker prevents `Duplicate package names: wuji_hand_description` conflicts with the copy inside wujihandros2.
 
-> **Warning**: After releasing the arm brake, the arm may drop due to gravity. Ensure safety before operating.
+###### MANUS USB dongle udev rule
 
-### Input Device Setup
+Grants non-root access to the MANUS dongle, so `manus_data_publisher` runs without sudo:
 
-#### MANUS Glove
+```bash
+cd ~/ros2_ws/src/wuji-hand-teleop
+sudo cp src/input_devices/manus_input/config/udev/99-manus-libusb.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
 
-The project includes a built-in MANUS C++ SDK at `manus_ros2/ManusSDK/`.
+> **Note**: Replug the dongle or reboot after installing the rule. Verify with `lsusb -d 3325:` — should list the MANUS dongle.
 
-**Calibration (required per user):**
+##### Step 3: Build
 
-1. Download Manus Core software on a Windows PC
+```bash
+cd ~/ros2_ws
+colcon build --symlink-install
+source install/setup.bash
+```
+
+> **Tip**: After the first build, you only need to rebuild changed packages:
+> ```bash
+> colcon build --packages-select <package_name> --symlink-install
+> ```
+
+**Verify**: `colcon build` should finish with `Summary: 18 packages finished` and 0 failed. If you see `Duplicate package names`, ensure `COLCON_IGNORE` exists in the wuji-retargeting directory (see [Troubleshooting](#troubleshooting)).
+
+> **Using Docker?** See the [Docker Setup Guide](docker/README.md) for containerized deployment — no manual dependency installation required.
+
+#### Hardware Configuration
+
+Before running teleoperation, set up the serial numbers and configuration for your hardware. All config files are YAML and can be edited with any text editor. All paths below are relative to the `wuji-hand-teleop` directory:
+
+```bash
+cd ~/ros2_ws/src/wuji-hand-teleop
+```
+
+##### 3.1 Wuji Hand Serial Numbers
+
+> **Firmware requirement**: Wuji Hand firmware v1.2.1 or later is recommended. To upgrade firmware, see [wujihand-upgrader](https://github.com/wuji-technology/wujihand-upgrader).
+
+Find your hand serial numbers:
+
+```bash
+lsusb -v -d 0483:2000 | grep iSerial
+```
+
+Edit `src/output_devices/wujihand_output/config/wujihand_ik.yaml`:
+
+```yaml
+left_hand:
+  serial_number: "YOUR_LEFT_HAND_SERIAL"    # Replace with your serial, or null to disable
+  name: "left_hand"
+
+right_hand:
+  serial_number: "YOUR_RIGHT_HAND_SERIAL"   # Replace with your serial, or null to disable
+  name: "right_hand"
+```
+
+> **Tip**: If you only have one hand, set the other's `serial_number` to `null` to disable it.
+
+##### 3.2 MANUS Glove
+
+###### Calibration (required per user)
+
+1. Download **MANUS Core** software on a Windows PC
 2. Connect and calibrate both hands following the software prompts
-3. Export calibration files (`.mcal` format) for left and right hands separately
+3. Export calibration files (`.mcal` format) for left and right hands
 4. Copy files to the calibration directory:
 
    ```bash
-   cd src/input_devices/manus_input/manus_ros2/calibration/
-   cp /path/to/left_calibration.mcal LeftMetaglovePro.mcal
-   cp /path/to/right_calibration.mcal RightMetaglovePro.mcal
+   cp /path/to/left_calibration.mcal  src/input_devices/manus_input/manus_ros2/calibration/LeftMetaglovePro.mcal
+   cp /path/to/right_calibration.mcal src/input_devices/manus_input/manus_ros2/calibration/RightMetaglovePro.mcal
    ```
 
-5. Rebuild: `colcon build --packages-select manus_ros2 && source install/setup.bash`
+###### Glove ID configuration
 
-**Run the MANUS node:**
-
-```bash
-ros2 run manus_ros2 manus_driver
-# or
-ros2 launch manus_ros2 manus_driver.launch.py
-```
-
-**Published topics:**
-
-| Topic | Type | Frequency | Description |
-|-------|------|-----------|-------------|
-| `/manus/left_hand/skeleton` | `geometry_msgs/PoseArray` | 200 Hz | Left hand skeleton poses |
-| `/manus/right_hand/skeleton` | `geometry_msgs/PoseArray` | 200 Hz | Right hand skeleton poses |
-| `/manus/left_hand/joint_states` | `sensor_msgs/JointState` | 200 Hz | Left hand joint angles |
-| `/manus/right_hand/joint_states` | `sensor_msgs/JointState` | 200 Hz | Right hand joint angles |
-
-**Glove configuration** at `src/input_devices/manus_input/manus_input_py/manus_input_py/config/manus_input.yaml`:
+Edit `src/input_devices/manus_input/manus_input_py/manus_input_py/config/manus_input.yaml`:
 
 ```yaml
 include_right_hand: true
@@ -234,23 +287,37 @@ left_glove_id: 0
 right_glove_id: 1
 ```
 
-#### HTC Vive Tracker
+##### 3.3 HTC Vive Tracker (for arm control)
 
-**Hardware setup:**
+Skip this section if you only need hand control.
+
+![Tracker wearing guide](docs/images/tracker-wearing-combined.jpg)
+
+For detailed wearing instructions, see [Tracker Wearing Guide](docs/tracker-wearing-guide.md). [Tracker-wearing demo video](docs/tracker-wearing-demo.mp4).
+
+###### Hardware setup
 
 1. Plug in two Tracker USB dongles
 2. Place two base stations in front of and behind the robot, level and unobstructed
 3. Set base stations to different channels (A/B/C) to avoid interference
 
-**SteamVR headless mode** (required for tracker-only use without a VR headset):
+###### SteamVR headless mode
+
+Required for tracker-only use without a VR headset. Two configuration files need to be modified:
 
 1. Install Steam and SteamVR: `sudo apt install steam`
-2. Modify SteamVR `default.vrsettings`:
+2. Enable the null driver in `~/.steam/steam/steamapps/common/SteamVR/drivers/null/resources/settings/default.vrsettings`:
+   - `"enable": true`
+3. Modify `~/.steam/debian-installation/config/steamvr.vrsettings`:
    - `"requireHmd": false`
    - `"forcedDriver": "null"`
    - `"activateMultipleDrivers": true`
 
-**Get tracker serial numbers** (SteamVR must be running):
+> For detailed SteamVR setup with Docker, see [SteamVR Guide](docker/STEAMVR.md).
+
+###### Get tracker serial numbers
+
+SteamVR must be running:
 
 ```bash
 python3 -c "
@@ -267,7 +334,9 @@ openvr.shutdown()
 "
 ```
 
-**Configure tracker mapping** at `src/input_devices/openvr_input/config/openvr_input.yaml`:
+###### Configure tracker mapping
+
+Edit `src/input_devices/openvr_input/config/openvr_input.yaml`:
 
 ```yaml
 tracker_serials:
@@ -278,7 +347,7 @@ tracker_serials:
   left_arm: "LHR-XXXXXXXX"     # Left upper-arm tracker (optional)
 ```
 
-**Tracker placement:**
+###### Tracker placement
 
 | Tracker | Position | Purpose |
 |---------|----------|---------|
@@ -288,19 +357,25 @@ tracker_serials:
 | `left_arm` | Left upper arm | Left arm angle following (optional) |
 | `right_arm` | Right upper arm | Right arm angle following (optional) |
 
-#### Camera system
+##### 3.4 Camera System
+
+Find RealSense camera serial numbers:
+
+```bash
+rs-enumerate-devices | grep "Serial Number"
+```
 
 Edit `src/camera/config/camera_config.yaml`:
 
 ```yaml
 global:
-  startup_delay: 2.0
-  enable_sync: true
+  startup_delay: 5.0
+  enable_sync: false
 
 cameras:
   head:
     enabled: true
-    type: d435i              # d435i, d405, or usb
+    type: usb                # usb, d435i, or d405
     camera_name: head_camera
     serial_number: ""        # Leave empty for auto-detection
     resolution:
@@ -314,47 +389,32 @@ cameras:
   left_wrist:
     enabled: true
     type: d405
+    serial_number: "YOUR_LEFT_WRIST_CAM_SERIAL"
     # ...
 
   right_wrist:
     enabled: true
     type: d405
+    serial_number: "YOUR_RIGHT_WRIST_CAM_SERIAL"
     # ...
 ```
 
-```bash
-# Launch cameras
-ros2 launch camera camera_launch.py
+##### 3.5 Tianji Arm (for arm control)
 
-# Launch StereoVR
-ros2 launch camera stereovr_launch.py
-
-# Get RealSense serial numbers
-rs-enumerate-devices | grep "Serial Number"
-```
-
-### Configuration Reference
-
-#### Wuji Hand
-
-Edit `src/output_devices/wujihand_output/config/wujihand_ik.yaml`:
+Edit `src/output_devices/tianji_output/tianji_output/config/tianji_output.yaml`:
 
 ```yaml
-right_hand_serial: "337A386F3233"   # Set to null to disable
-left_hand_serial: "337438793233"
-use_joint_input: false
+robot_ip: "192.168.1.190"
 ```
 
-Get serial numbers: `lsusb -v -d 0483:2000 | grep iSerial`
-
-#### Hand retargeting
+##### 3.6 Hand Retargeting (advanced)
 
 Config files at `src/output_devices/wujihand_output/config/`:
 
 | Input source | Config file | Note |
 |--------------|-------------|------|
-| Manus (right) | `retarget_manus_right.yaml` | z rotation: -15 degrees |
-| Manus (left) | `retarget_manus_left.yaml` | z rotation: +15 degrees |
+| MANUS (right) | `retarget_manus_right.yaml` | z rotation: -15 degrees |
+| MANUS (left) | `retarget_manus_left.yaml` | z rotation: +15 degrees |
 
 Key parameters:
 
@@ -363,70 +423,111 @@ retarget:
   mediapipe_rotation:
     x: 0.0
     y: 0.0
-    z: -15.0             # Manus right: -15, left: +15
+    z: -15.0             # MANUS right: -15, left: +15
 
   segment_scaling:       # Finger segment length scaling
-    thumb:  [0.98, 0.95, 0.95]
-    index:  [0.9, 0.95, 0.98]
+    thumb:  [0.98, 1, 1]
+    index:  [1.1, 0.989, 1.1]
 
-  lp_alpha: 0.2          # Low-pass filter coefficient (smaller = smoother)
+  lp_alpha: 0.3          # Low-pass filter coefficient (smaller = smoother)
 ```
 
-> **Note**: Manus left and right hands use separate config files due to coordinate system differences. When modifying retarget parameters, update both files (all parameters are identical except `mediapipe_rotation.z`).
+> **Note**: MANUS left and right hands use separate config files due to coordinate system differences. The only difference is `mediapipe_rotation.z` (-15 for right, +15 for left). All other parameters (including `pinch_thresholds`, `segment_scaling`, `lp_alpha`) are identical. When modifying shared parameters, update both files.
 
-#### Tianji Arm
+### Running
 
-Edit `src/output_devices/tianji_output/tianji_output/config/tianji_output.yaml`:
+> **Note**: MANUS gloves require a udev rule for USB dongle access (installed in Step 2). If you see `LIBUSB_ERROR_ACCESS` or no `/hand_input` data, the udev rule is missing — see [Troubleshooting](#troubleshooting).
 
-```yaml
-robot_ip: "192.168.1.190"
+#### Hand-Only Control (MANUS + Wuji Hand)
+
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
 ```
 
-### Node Reference
+**Verify**: In a new terminal, run `ros2 topic hz /hand_input` — should show ~50-120 Hz if MANUS glove is connected and streaming. To inspect the actual data, use `ros2 topic echo /hand_input --qos-reliability best_effort` (the topic uses BEST_EFFORT QoS).
 
-| Node | Package | Description |
-|------|---------|-------------|
-| `manus_data_publisher` | manus_ros2 | MANUS Glove C++ driver, publishes raw data |
-| `manus_input` | manus_input_py | MANUS data processor, converts to MediaPipe format |
-| `openvr_input` | openvr_input | HTC Vive Tracker data collection |
-| `pico_input` | pico_input | PICO VR hand and wrist tracking |
-| `wujihand_controller` | controller | Wuji Hand control node |
-| `tianji_arm_controller` | controller | Tianji Arm control node |
+#### Full Teleoperation (Hand + Arm)
 
-### Topic Interface
+```bash
+# MANUS hand + Tracker arm (default)
+ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker
 
-#### Published topics
-
-| Topic | Type | Publisher | Description |
-|-------|------|-----------|-------------|
-| `/hand_input` | `Float32MultiArray` | manus_input, pico_input | MediaPipe hand keypoints (63 values per hand, 126 = 2 x 21 x 3 for both) |
-| `/manus_glove_0` | `ManusGlove` | manus_data_publisher | Left hand MANUS raw data |
-| `/manus_glove_1` | `ManusGlove` | manus_data_publisher | Right hand MANUS raw data |
-| `/tf` | `TFMessage` | tf_broadcaster | TF transforms |
-
-### Custom Input Device
-
-Publish to the following interface to integrate a custom input device:
-
-**Hand control** — publish to `/hand_input` (`std_msgs/Float32MultiArray`):
-
-- Single hand: 63 values (21 keypoints x 3 coordinates)
-- Dual hands: 126 values (right hand first, then left)
-
-**Keypoint order (21 points per hand, MediaPipe format):**
-
-```text
-0: WRIST
-1-4: THUMB (CMC, MCP, IP, TIP)
-5-8: INDEX (MCP, PIP, DIP, TIP)
-9-12: MIDDLE (MCP, PIP, DIP, TIP)
-13-16: RING (MCP, PIP, DIP, TIP)
-17-20: PINKY (MCP, PIP, DIP, TIP)
+# With RViz visualization
+ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker enable_rviz:=true
 ```
 
-**Arm control** — publish TF transforms to `left_wrist` / `right_wrist` / `chest` frames.
+#### Single-Side Teleoperation
 
-## System Architecture
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=right hand_input:=manus arm_input:=tracker
+ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=left hand_input:=manus arm_input:=tracker
+```
+
+#### Arm-Only Control
+
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_arm.launch.py arm_input:=tracker
+```
+
+#### With Cameras
+
+```bash
+ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py hand_input:=manus arm_input:=tracker
+```
+
+#### Launch Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hand_input` | `manus` | Hand input source: `manus` (MANUS Gloves) |
+| `arm_input` | `tracker` | Arm input source: `tracker` (HTC Vive Trackers) |
+| `side` | `right` | Single-side mode: `left` or `right` |
+| `enable_rviz` | `false` | Enable RViz visualization |
+| `enable_camera` | `true` | Enable camera system (camera launch only) |
+| `hand_config` | default path | Hand configuration file path |
+| `left_serial` | from `wujihand_ik.yaml` | Override left hand serial number |
+| `right_serial` | from `wujihand_ik.yaml` | Override right hand serial number |
+
+> **Note**: `left_serial` and `right_serial` default to the values in `wujihand_ik.yaml`. You only need to pass them as launch arguments if you want to temporarily override without editing the YAML file.
+
+#### Monitor GUI
+
+Monitor is the recommended way to operate the teleoperation system. It provides device monitoring and one-click launch.
+
+```bash
+source ~/ros2_ws/install/setup.bash
+ros2 run wuji_teleop_monitor monitor
+```
+
+> **Note**: Ensure the MANUS udev rule is installed (Step 2) before using Monitor with MANUS gloves.
+
+**Workflow:**
+
+1. Launch Monitor
+2. Verify device connections (gloves, hands, arms, trackers)
+3. Select a launch preset from the dropdown
+4. Click "Start Teleoperation"
+5. Click "Stop" to safely shut down all nodes
+
+> **Warning**: After releasing the arm brake, the arm may drop due to gravity. Ensure safety before operating.
+
+**Available launch presets:**
+
+| Preset | Description | Launch file |
+|--------|-------------|-------------|
+| Hand only (MANUS+Wuji) | Glove to dexterous hand | `wuji_teleop_hand.launch.py` |
+| Arm only (Tracker+Tianji) | Tracker to Tianji Arm | `wuji_teleop_arm.launch.py` |
+| Hand+Arm full | Full teleoperation | `wuji_teleop.launch.py` |
+| Hand+Arm+Camera full | With camera system | `wuji_teleop_camera.launch.py` |
+| Hand+Arm single (left) | Left side only | `wuji_teleop_single.launch.py` |
+| Hand+Arm single (right) | Right side only | `wuji_teleop_single.launch.py` |
+
+### System Architecture
+
+![System dataflow](docs/images/dataflow.png)
+
+<details>
+<summary>Mermaid source (click to expand)</summary>
 
 ```mermaid
 graph TD
@@ -457,6 +558,39 @@ graph TD
     TO --> TA["Tianji Arm<br/>(Hardware)"]
 ```
 
+</details>
+
+### Output
+
+After completing Installation and Running, verify the system is working with the following checks:
+
+**Build output (after `colcon build --symlink-install`):**
+
+```text
+Summary: 18 packages finished [xx.xs]
+  0 packages failed
+```
+
+**Launch output (after `ros2 launch ... hand_input:=manus`):**
+
+```text
+Calibration loaded successfully for Left glove
+Calibration loaded successfully for Right glove
+Publishing hand data on '/hand_input' at 120.0 Hz
+```
+
+**Topic verification (in a new terminal):**
+
+```bash
+ros2 topic hz /hand_input
+# Expected: ~50-120 Hz if MANUS glove is connected and streaming
+
+ros2 topic echo /hand_input --qos-reliability best_effort
+# Inspects actual keypoint data (topic uses BEST_EFFORT QoS)
+```
+
+If the verifications above do not show the expected values, see [Troubleshooting](#troubleshooting).
+
 ## Troubleshooting
 
 | Problem | Solution |
@@ -464,16 +598,22 @@ graph TD
 | Hand serial not found | Run `lsusb -v -d 0483:2000 \| grep iSerial` |
 | Robot connection failed | Verify robot is powered on, confirm IP address with `ping`, check network |
 | TF tree incomplete | Ensure `tf_broadcaster` node is running |
-| `ImportError: wuji_retargeting` | Install from source: `pip install -e .` |
-| `wujihandcpp not found` | Install C++ SDK: `sudo apt install ./wujihandcpp-*.deb` (see wujihandros2/README.md) |
+| `ImportError: wuji_retargeting` | Install from source: `python3 -m pip install .` in the wuji-retargeting directory |
+| `Duplicate package names: wuji_hand_description` | Create `COLCON_IGNORE` in the wuji-retargeting directory: `touch ~/ros2_ws/src/wuji-retargeting/COLCON_IGNORE` |
+| `wujihandcpp not found` | Install C++ SDK: `wget https://github.com/wuji-technology/wujihandpy/releases/download/v1.5.1/wujihandcpp-1.5.1-amd64.deb && sudo apt install ./wujihandcpp-1.5.1-amd64.deb` |
 | Package not found | Run `colcon build` then `source install/setup.bash` |
+| `manus_ros2` link error | Run `git lfs pull` — SDK `.so` files may be LFS placeholders |
+| MANUS glove no data / `LIBUSB_ERROR_ACCESS` | Install udev rule: `sudo cp src/input_devices/manus_input/config/udev/99-manus-libusb.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger`. Replug the dongle or reboot |
+| MANUS launch fails but udev rule is installed | A lingering `manus_data_publisher` process may be holding the USB device. Kill it first: `pkill -9 manus_data_publisher`, then relaunch |
 | Tracker flickering / lost tracking | Check base station placement and angles |
 | SteamVR "No HMD" error | Verify headless mode configuration |
 | Tracker not recognized | Confirm dongle is plugged in, tracker is powered on and paired |
 | Camera not recognized | Check USB connection, run `lsusb` or `v4l2-ctl --list-devices` |
 | RealSense launch failure | Verify librealsense installation, test with `realsense-viewer` |
 | StereoVR no image | Check v4l2loopback module: `lsmod \| grep v4l2loopback` |
+| `ros2 topic echo` shows no data | The `/hand_input` topic uses BEST_EFFORT QoS. Use `ros2 topic echo /hand_input --qos-reliability best_effort` |
 | Calibration drift after applying | Verify correct `.mcal` file for each hand, rebuild and re-source |
+| Forgot `--recurse-submodules` | Run `git submodule update --init --recursive` |
 
 **Enable debug logging:**
 
@@ -487,15 +627,6 @@ ros2 service call /wujihand_controller/set_logger_level rcl_interfaces/srv/SetLo
 # level: 10=DEBUG, 20=INFO, 30=WARN, 40=ERROR
 ```
 
-## Acknowledgements
-
-- **StereoVR stereo vision module** — Liang ZHU (lzhu686@connect.hkust-gz.edu.cn)
-- **Tianji Arm controller** — based on [TJ_FX_ROBOT_CONTRL_SDK](https://github.com/cynthia-you/TJ_FX_ROBOT_CONTRL_SDK)
-- **Related projects**:
-  - [wuji-retargeting](https://github.com/wuji-technology/wuji-retargeting) — Hand pose retargeting algorithm
-  - [wujihandros2](https://github.com/wuji-technology/wujihandros2) — Wuji Hand ROS2 driver
-  - [pico-ros2-bridge](https://github.com/wuji-technology/pico-ros2-bridge) — PICO VR to ROS2 bridge
-
 ## Citation
 
 If you find this project useful, please consider citing it:
@@ -503,12 +634,101 @@ If you find this project useful, please consider citing it:
 ```bibtex
 @software{wuji2025handteleop,
   title   = {Wuji Hand Teleop: ROS2 Teleoperation for Dexterous Hands and Robot Arms},
-  author  = {Guanqi He and Wentao Zhang and Liang Zhu},
-  year    = {2025},
+  author  = {Guanqi He, Wentao Zhang, Liang Zhu, Duo Han, and Shiquan Qiu},
+  year    = {2026},
   url     = {https://github.com/wuji-technology/wuji-hand-teleop}
 }
 ```
 
+## Appendix
+
+### Node Reference
+
+| Node | Package | Description |
+|------|---------|-------------|
+| `manus_data_publisher` | manus_ros2 | MANUS Glove C++ driver, publishes raw data |
+| `manus_input` | manus_input_py | MANUS data processor, converts to MediaPipe format |
+| `openvr_input` | openvr_input | HTC Vive Tracker data collection |
+| `pico_input` | pico_input | PICO VR hand and wrist tracking |
+| `wujihand_controller` | controller | Wuji Hand control node |
+| `tianji_arm_controller` | controller | Tianji Arm control node |
+
+### Topic Interface
+
+| Topic | Type | Publisher | Description |
+|-------|------|-----------|-------------|
+| `/hand_input` | `Float32MultiArray` | manus_input, pico_input | MediaPipe hand keypoints (63 values per hand, 126 = 2 x 21 x 3 for both) |
+| `/manus_glove_0` | `MANUSGlove` | manus_data_publisher | Left hand MANUS raw data |
+| `/manus_glove_1` | `MANUSGlove` | manus_data_publisher | Right hand MANUS raw data |
+| `/tf` | `TFMessage` | tf_broadcaster | TF transforms |
+
+> For a complete list of all active topics, run `ros2 topic list` after launch.
+
+### Custom Input Device
+
+Publish to the following interface to integrate a custom input device:
+
+**Hand control** — publish to `/hand_input` (`std_msgs/Float32MultiArray`):
+
+- Single hand: 63 values (21 keypoints x 3 coordinates)
+- Dual hands: 126 values (right hand first, then left)
+
+**Keypoint order (21 points per hand, MediaPipe format):**
+
+```text
+0: WRIST
+1-4: THUMB (CMC, MCP, IP, TIP)
+5-8: INDEX (MCP, PIP, DIP, TIP)
+9-12: MIDDLE (MCP, PIP, DIP, TIP)
+13-16: RING (MCP, PIP, DIP, TIP)
+17-20: PINKY (MCP, PIP, DIP, TIP)
+```
+
+**Arm control** — two options depending on which output package you use:
+
+- **TF mode** (for `tianji_output` / SteamVR): publish TF transforms to `left_wrist` / `right_wrist` / `chest` frames
+- **Topic mode** (for `tianji_world_output` / PICO): publish `PoseStamped` to `/left_arm_target_pose` (frame: `world_left`) and `/right_arm_target_pose` (frame: `world_right`). These are chest-frame poses — `pico_input` converts from world coordinates internally. If building a custom input, you need to transform your world-frame pose into the `world_left`/`world_right` chest frame before publishing. See `tianji_world_output/transform_utils.py` for coordinate transform utilities.
+
+### Configuration Files Summary
+
+| Config | File Path |
+|--------|-----------|
+| Wuji Hand serials | `src/output_devices/wujihand_output/config/wujihand_ik.yaml` |
+| Hand retargeting | `src/output_devices/wujihand_output/config/retarget_manus_*.yaml` |
+| MANUS glove IDs | `src/input_devices/manus_input/manus_input_py/manus_input_py/config/manus_input.yaml` |
+| MANUS calibration | `src/input_devices/manus_input/manus_ros2/calibration/*.mcal` |
+| HTC Tracker serials | `src/input_devices/openvr_input/config/openvr_input.yaml` |
+| Camera serials | `src/camera/config/camera_config.yaml` |
+| Tianji Arm IP | `src/output_devices/tianji_output/tianji_output/config/tianji_output.yaml` |
+
+### Hardware BOM
+
+For a complete list of hardware components, see the **[Hardware Bill of Materials](https://docs.google.com/document/d/19Md8R5tw9OyTvOUD-JKt7S6xMivlHVSCSNAKuoZr1eo/edit?tab=t.0)**.
+
+### Documentation Index
+
+| Document | Description |
+|----------|-------------|
+| [Docker Setup](docker/README.md) | Docker deployment guide |
+| [SteamVR Guide](docker/STEAMVR.md) | HTC Vive Tracker + SteamVR setup in Docker |
+| [PICO Guide](docker/PICO.md) | PICO VR setup in Docker |
+| [Tracker Wearing Guide](docs/tracker-wearing-guide.md) | HTC Vive Tracker placement |
+| [MANUS Calibration](src/input_devices/manus_input/manus_ros2/CALIBRATION_GUIDE.md) | MANUS glove calibration |
+| [PICO Input Module](src/input_devices/pico_input/README.md) | PICO input device technical details |
+| [Camera System](src/camera/README.md) | Camera configuration and setup |
+| [Tianji World Output](src/output_devices/tianji_world_output/README.md) | Tianji Arm controller (PICO / world coordinate) |
+| [Monitor Log Guide](src/wuji_teleop_monitor/LOG_GUIDE.md) | Teleop monitor logging system |
+| [Hardware BOM](https://docs.google.com/document/d/19Md8R5tw9OyTvOUD-JKt7S6xMivlHVSCSNAKuoZr1eo/edit?tab=t.0) | Complete hardware bill of materials |
+
+### Acknowledgements
+
+- **StereoVR stereo vision module** — Liang ZHU (lzhu686@connect.hkust-gz.edu.cn)
+- **Tianji Arm controller** — based on [TJ_FX_ROBOT_CONTRL_SDK](https://github.com/cynthia-you/TJ_FX_ROBOT_CONTRL_SDK)
+- **Related projects**:
+  - [wuji-retargeting](https://github.com/wuji-technology/wuji-retargeting) — Hand pose retargeting algorithm
+  - [wujihandros2](https://github.com/wuji-technology/wujihandros2) — Wuji Hand ROS2 driver
+  - [XRoboToolkit-PC-Service-Pybind](https://github.com/lzhu686/XRoboToolkit-PC-Service-Pybind) — Python bindings for PICO VR XRoboToolkit SDK
+
 ## Contact
 
-For bug reports and feature requests, please [open an issue](https://github.com/wuji-technology/wuji-hand-teleop/issues).
+For any questions, please contact [support@wuji.tech](mailto:support@wuji.tech).

@@ -6,13 +6,13 @@
 #   python3 -c "import openvr; openvr.init(openvr.VRApplication_Other); vr=openvr.VRSystem(); [print(f'{i}: {vr.getStringTrackedDeviceProperty(i, openvr.Prop_SerialNumber_String)}') for i in range(64) if vr.getTrackedDeviceClass(i)==openvr.TrackedDeviceClass_GenericTracker]; openvr.shutdown()"
 # Or use the list_trackers.py script from teleop-wujihand-arm project
 tracker_serials:
-  chest: "LHR-7CB3B9FE"        # 胸部   LHR-7CB3B9FE
-  right_wrist: "LHR-6D76C4E0"  # 右腕   LHR-6D76C4E0
-  left_wrist: "LHR-E55BF559"   # 左腕    LHR-E55BF559
-  left_arm:  "LHR-A1F9840D"    # 左大臂   LHR-A1F9840D
-  right_arm:   "LHR-A722FD35"   # 右大臂   LHR-A722FD35
+  chest: "LHR-XXXXXXXX"        # Chest
+  right_wrist: "LHR-XXXXXXXX"  # Right wrist
+  left_wrist: "LHR-XXXXXXXX"   # Left wrist
+  left_arm:  "LHR-XXXXXXXX"    # Left upper arm
+  right_arm:   "LHR-XXXXXXXX"   # Right upper arm
 
-  # head: "LHR-29A9B0BE"           # 头部
+  # head: "LHR-XXXXXXXX"           # Head
 
 # Wrist tracker offset in tracker's local frame [x, y, z] (meters)
 # This offset is applied BEFORE coordinate correction to map tracker position to actual wrist

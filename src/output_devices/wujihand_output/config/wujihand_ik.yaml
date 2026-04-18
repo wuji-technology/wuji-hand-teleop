@@ -1,40 +1,40 @@
-# Wuji Hand 统一配置 — 灵巧手参数的唯一来源
+# Wuji Hand Unified Configuration — Single source of truth for dexterous hand parameters
 #
-# 此文件同时被以下两处加载:
-#   1. wujihand_controller 节点 (通过 -c 参数)
-#   2. launch 文件 (通过 wuji_teleop_bringup.hand_defaults 模块)
+# This file is loaded by both of the following:
+#   1. wujihand_controller node (via -c argument)
+#   2. Launch files (via wuji_teleop_bringup.hand_defaults module)
 #
-# ===== 手套接入协议 =====
+# ===== Glove Integration Protocol =====
 #
-# 统一话题: /hand_input (std_msgs/Float32MultiArray)
-# 数据格式: MediaPipe 21-point 关键点 (每只手 21 × 3 = 63 floats)
-#   - 单手: 63 values
-#   - 双手: 126 values (right 在前, left 在后)
+# Unified topic: /hand_input (std_msgs/Float32MultiArray)
+# Data format: MediaPipe 21-point keypoints (21 x 3 = 63 floats per hand)
+#   - Single hand: 63 values
+#   - Dual hands: 126 values (right first, left second)
 #
-# 接入新手套只需:
-#   1. 编写输入节点, 将手套数据转换为 MediaPipe 21-point 格式, 发布到 /hand_input
-#   2. 添加 retarget 配置: config/retarget_{source}.yaml (双手共用)
-#      或 config/retarget_{source}_left.yaml + retarget_{source}_right.yaml (分侧)
-#   3. 在 launch 文件中添加 LaunchConfigurationEquals 条件块
+# To integrate a new glove:
+#   1. Write an input node that converts glove data to MediaPipe 21-point format, publish to /hand_input
+#   2. Add retarget config: config/retarget_{source}.yaml (shared for both hands)
+#      or config/retarget_{source}_left.yaml + retarget_{source}_right.yaml (per-side)
+#   3. Add LaunchConfigurationEquals condition block in the launch file
 #
-# 已支持: manus (retarget_manus_left/right.yaml)
+# Supported: manus (retarget_manus_left/right.yaml)
 
-# 输入源: "manus"
-# 自动加载对应的 retarget 配置 (优先 retarget_{source}_{side}.yaml, 回退 retarget_{source}.yaml)
+# Input source: "manus"
+# Automatically loads corresponding retarget config (prefers retarget_{source}_{side}.yaml, falls back to retarget_{source}.yaml)
 input_source: "manus"
 
-# ===== 灵巧手硬件 =====
-# 序列号获取方式: lsusb -v -d 0483:2000 | grep iSerial
+# ===== Dexterous Hand Hardware =====
+# How to get serial number: lsusb -v -d 0483:2000 | grep iSerial
 left_hand:
-  serial_number: "307A377F3333"
-  name: "left_hand"           # wujihandros2 驱动命名空间
+  serial_number: "YOUR_LEFT_HAND_SERIAL"
+  name: "left_hand"           # wujihandros2 driver namespace
 
 right_hand:
-  serial_number: "358137563533"
-  name: "right_hand"          # wujihandros2 驱动命名空间
+  serial_number: "YOUR_RIGHT_HAND_SERIAL"
+  name: "right_hand"          # wujihandros2 driver namespace
 
-# ===== wujihandros2 驱动参数 =====
+# ===== wujihandros2 Driver Parameters =====
 driver:
-  publish_rate: 1000.0        # 驱动发布频率 (Hz)
-  filter_cutoff_freq: 10.0    # 硬件 LP 滤波 (恢复默认, 待固件 PID 诊断后再调整)
-  diagnostics_rate: 10.0      # 诊断信息发布频率 (Hz)
+  publish_rate: 1000.0        # Driver publish rate (Hz)
+  filter_cutoff_freq: 10.0    # Hardware LP filter (restored to default, pending firmware PID diagnostics before adjustment)
+  diagnostics_rate: 10.0      # Diagnostics publish rate (Hz)

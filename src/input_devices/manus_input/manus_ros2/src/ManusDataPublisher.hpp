@@ -108,12 +108,12 @@ protected:
 
     std::string ErgonomicsDataTypeToString(ErgonomicsDataType p_ErgonomicsDataType);
 
-    // 自动加载校准文件
+    // Auto-load calibration file
     bool LoadCalibrationFile(uint32_t p_GloveId, Side p_Side);
 
     static ManusDataPublisher *s_Instance;
 
-    // 校准加载状态
+    // Calibration load status
     bool m_LeftCalibrationLoaded = false;
     bool m_RightCalibrationLoaded = false;
     

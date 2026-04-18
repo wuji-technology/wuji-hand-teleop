@@ -1,34 +1,35 @@
-# SteamVR 遥操方案
 
-HTC Vive Tracker + Manus 手套，通过 SteamVR 追踪手臂位姿。
+# SteamVR Teleoperation Solution
 
-> **前置步骤:** 请先完成 [README.md](README.md) 步骤 1-5 (Docker 安装、构建、启动)。
+HTC Vive Tracker + MANUS Gloves, arm pose tracking via SteamVR.
 
-## 1. 宿主机安装 SteamVR
+> **Prerequisites:** Please first complete [README.md](README.md) steps 1-5 (Docker installation, build, startup).
 
-SteamVR 运行在**宿主机** (非容器内)，容器通过 `.steam` 挂载访问。
+## 1. Install SteamVR on Host
+
+SteamVR runs on the **host machine** (not inside the container); the container accesses it via `.steam` mount.
 
 ```bash
-# 1. 安装 Steam (如未安装)
+# 1. Install Steam (if not already installed)
 sudo apt install steam
 
-# 2. 打开 Steam → 库 → 搜索 "SteamVR" → 安装
+# 2. Open Steam → Library → Search "SteamVR" → Install
 
-# 3. 验证安装路径
+# 3. Verify installation path
 ls ~/.steam/debian-installation/steamapps/common/SteamVR/
 ```
 
-## 2. 配置 Null Driver (无头显模式)
+## 2. Configure Null Driver (Headset-Free Mode)
 
-遥操不需要 VR 头显，只用 Vive Tracker。配置 Null Driver 让 SteamVR 无头显启动。需修改两个文件:
+Teleoperation does not require a VR headset; only Vive Trackers are used. Configure the Null Driver to let SteamVR start without a headset. Two files need to be modified:
 
-**文件 1 — 启用 null driver** (驱动默认配置):
+**File 1 — Enable null driver** (driver default config):
 
 ```bash
 nano ~/.steam/steam/steamapps/common/SteamVR/drivers/null/resources/settings/default.vrsettings
 ```
 
-将 `"enable": false` 改为 `"enable": true`:
+Change `"enable": false` to `"enable": true`:
 
 ```json
 {
@@ -39,13 +40,13 @@ nano ~/.steam/steam/steamapps/common/SteamVR/drivers/null/resources/settings/def
 }
 ```
 
-**文件 2 — 强制使用 null driver** (用户配置，首次启动 SteamVR 后自动生成):
+**File 2 — Force use of null driver** (user config, auto-generated after first SteamVR launch):
 
 ```bash
 nano ~/.steam/debian-installation/config/steamvr.vrsettings
 ```
 
-在 `"steamvr"` 段中确保包含:
+Ensure the `"steamvr"` section contains:
 
 ```json
 {
@@ -57,74 +58,74 @@ nano ~/.steam/debian-installation/config/steamvr.vrsettings
 }
 ```
 
-> **说明:** `forcedDriver: "null"` 使 SteamVR 跳过头显检测，`requireHmd: false` 避免无头显时报错。Vive Tracker 仍通过 Lighthouse 正常追踪。
+> **Note:** `forcedDriver: "null"` makes SteamVR skip headset detection, and `requireHmd: false` prevents errors when no headset is present. Vive Trackers still track normally via Lighthouse.
 
-## 3. 启动 SteamVR
+## 3. Start SteamVR
 
 ```bash
-# Wayland 桌面 (Ubuntu 22.04+ 默认) 必须加 XWayland 参数
+# Wayland desktop (Ubuntu 22.04+ default) requires XWayland parameters
 GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb steam steam://rungameid/250820
 
-# X11 桌面可直接启动
+# X11 desktop can start directly
 # steam steam://rungameid/250820
 ```
 
-验证 null driver 生效:
+Verify null driver is active:
 
 ```bash
 grep "null" ~/.steam/debian-installation/logs/vrserver.txt | tail -3
-# 应看到: "Using existing HMD null.Null Serial Number"
+# Should see: "Using existing HMD null.Null Serial Number"
 
-# 验证 SteamVR 进程
+# Verify SteamVR process
 ps aux | grep vrserver
 ```
 
-> **Wayland 注意:** Gnome Wayland 不支持 SteamVR 所需的 DRM lease，vrmonitor 崩溃会连带 vrserver 退出。**每次启动都需要加 `GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb` 前缀**。通过 `echo $XDG_SESSION_TYPE` 确认桌面类型。
+> **Wayland note:** Gnome Wayland does not support the DRM lease required by SteamVR; vrmonitor crashing will cause vrserver to exit as well. **Every launch requires the `GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb` prefix**. Confirm desktop type with `echo $XDG_SESSION_TYPE`.
 
-## 4. HTC Vive Tracker 设置
+## 4. HTC Vive Tracker Setup
 
-### 硬件关系
+### Hardware Relationships
 
+```text
+Base Station                  Tracker               Dongle             PC
+  Emits IR light  ──→  Tracker receives IR to compute its own pose  ──radio──→  Dongle (USB) ──→  SteamVR
 ```
-基站 (Base Station)          Tracker               Dongle             PC
-  发射 IR 红外光  ──→  Tracker 接收 IR 计算自身位姿  ──无线电──→  Dongle (USB) ──→  SteamVR
-```
 
-- **基站**: 发射红外激光，Tracker 靠接收基站 IR 信号定位自身。基站只需通电，无需配对
-- **Dongle**: USB 无线接收器，每个 Tracker 配对一个 Dongle，负责将 Tracker 数据传回 PC
-- **Tracker**: 需要在基站 IR 覆盖范围内才能定位。通过 Dongle 与 PC 通信
+- **Base Station**: Emits infrared laser; Tracker locates itself by receiving IR signals from the base station. Base stations only need power, no pairing required
+- **Dongle**: USB wireless receiver; each Tracker is paired with one Dongle, responsible for transmitting Tracker data back to the PC
+- **Tracker**: Must be within the base station IR coverage area for positioning. Communicates with the PC via Dongle
 
-### 硬件准备
+### Hardware Preparation
 
-- 2 个 Vive Tracker (分别绑定左右手臂)
-- 2 个 Lighthouse 基站 (追踪空间)
-- 2 个 USB Dongle 接收器 (每个 Tracker 一个)
+- 2 Vive Trackers (bound to left and right arms respectively)
+- 2 Lighthouse Base Stations (tracking space)
+- 2 USB Dongle receivers (one per Tracker)
 
-### 连接 Dongle
+### Connect Dongle
 
-插入 Dongle，确认识别:
+Plug in the Dongle and verify detection:
 
 ```bash
 lsusb | grep 28de
-# 应看到: Valve Software Watchman Dongle
+# Should see: Valve Software Watchman Dongle
 ```
 
-### 配对 Tracker
+### Pair Tracker
 
-1. 确保基站已通电，指示灯绿色常亮
-2. SteamVR 状态窗口 → **≡ 菜单** → **Devices** → **Pair Controller**
-3. 选择 **I want to pair a different type of controller** → **Vive Tracker**
-4. **长按 Tracker 中间按钮 ~5 秒**，蓝灯快闪 → 配对完成后灯变绿
-5. 配对信息保存在 Dongle 中，之后开机自动连接
+1. Ensure base stations are powered on with green indicator light steady
+2. SteamVR status window → **≡ Menu** → **Devices** → **Pair Controller**
+3. Select **I want to pair a different type of controller** → **Vive Tracker**
+4. **Long press the Tracker center button for ~5 seconds**, blue light flashes rapidly → light turns green when pairing is complete
+5. Pairing info is saved in the Dongle; subsequent boots connect automatically
 
-### 固定 Tracker
+### Mount Tracker
 
-将 Tracker 用绑带固定在双臂上:
-- **左手臂:** Tracker 朝向一致
-- **右手臂:** Tracker 朝向一致
-- 两个 Tracker 方向需保持相同
+Secure the Trackers to both arms with straps:
+- **Left arm:** Tracker orientation consistent
+- **Right arm:** Tracker orientation consistent
+- Both Trackers must face the same direction
 
-### 验证 (容器内)
+### Verify (Inside Container)
 
 ```bash
 python3 -c "
@@ -141,31 +142,31 @@ openvr.shutdown()
 "
 ```
 
-> **注意:** "Failed to lease display" 警告可忽略 — null driver 模式下不需要 VR 显示输出。
+> **Note:** "Failed to lease display" warnings can be ignored — display output is not needed in null driver mode.
 >
-> 不使用 SteamVR 时，注释掉 `docker-compose.yml` 中 SteamVR 相关的 volumes 挂载即可，不影响 PICO 和 Manus 功能。
+> When not using SteamVR, comment out the SteamVR-related volumes mounts in `docker-compose.yml`; this does not affect PICO and MANUS functionality.
 
-## 5. 进入容器启动遥操
+## 5. Enter Container and Start Teleoperation
 
 ```bash
-# 1. 允许容器 X11 访问 (GUI 显示需要)
+# 1. Allow container X11 access (required for GUI display)
 xhost +local:docker
 
-# 2. 进入容器
+# 2. Enter container
 docker exec -it wuji-teleop bash
 ```
 
-### 启动命令
+### Launch Commands
 
-| 启动方式 | 说明 |
-|----------|------|
-| `ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py` | 手 + 臂 + 相机 (推荐) |
-| `ros2 launch wuji_teleop_bringup wuji_teleop.launch.py` | 手 + 臂 (无相机) |
+| Launch Method | Description |
+|---------------|-------------|
+| `ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py` | Hand + arm + camera (recommended) |
+| `ros2 launch wuji_teleop_bringup wuji_teleop.launch.py` | Hand + arm (no camera) |
 
-### 参数说明
+### Parameter Description
 
 ```bash
-# 完整参数示例
+# Full parameter example
 ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py \
     hand_input:=manus \
     arm_input:=tracker \
@@ -173,60 +174,60 @@ ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py \
     enable_rviz:=false
 ```
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `hand_input` | `manus` | 手部输入: `manus` |
-| `arm_input` | `tracker` | 手臂输入: `tracker` |
-| `enable_camera` | `true` | 是否启动相机 |
-| `enable_rviz` | `false` | 是否启动 RViz 可视化 |
-| `enable_head` | `true` | 头部双目相机 (camera launch) |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `hand_input` | `manus` | Hand input: `manus` |
+| `arm_input` | `tracker` | Arm input: `tracker` |
+| `enable_camera` | `true` | Whether to start cameras |
+| `enable_rviz` | `false` | Whether to start RViz visualization |
+| `enable_head` | `true` | Head stereo camera (camera launch) |
 
-> **坐标系:** SteamVR 方案使用**胸部坐标系 IK** (`tianji_output`)，Vive Tracker 数据经 SteamVR 转换后输入。
+> **Coordinate system:** The SteamVR solution uses **chest coordinate system IK** (`tianji_output`); Vive Tracker data is converted through SteamVR before input.
 
 ## 6. Monitor GUI
 
-容器内可启动图形化监控界面:
+A graphical monitoring interface can be launched inside the container:
 
 ```bash
-# 宿主机先执行 (允许 X11)
+# Run on host first (allow X11)
 xhost +local:docker
 
-# 容器内启动
+# Launch inside container
 ros2 run wuji_teleop_monitor monitor
 ```
 
-Monitor 提供设备状态监控、话题检查、相机预览，以及一键启动遥操作的下拉菜单:
+Monitor provides device status monitoring, topic inspection, camera preview, and a dropdown menu for one-click teleoperation launch:
 
-| 预设 | 说明 | 对应 Launch 文件 |
-|------|------|-----------------|
-| 仅手部 | Manus 手套 → Wuji 灵巧手 | `wuji_teleop_hand.launch.py` |
-| 仅机械臂 | Vive Tracker → 天机臂 | `wuji_teleop_arm.launch.py` |
-| 手+臂 | Manus + Tracker → 全遥操 | `wuji_teleop.launch.py` |
-| 手+臂+相机 | 完整遥操 + 相机 | `wuji_teleop_camera.launch.py` |
-| 单侧 (左/右) | 单臂+单手调试 | `wuji_teleop_single.launch.py` |
+| Preset | Description | Corresponding Launch File |
+|--------|-------------|--------------------------|
+| Hand only | MANUS Gloves → Wuji Hand | `wuji_teleop_hand.launch.py` |
+| Arm only | Vive Tracker → Tianji Arm | `wuji_teleop_arm.launch.py` |
+| Hand + Arm | MANUS + Tracker → Full teleoperation | `wuji_teleop.launch.py` |
+| Hand + Arm + Camera | Full teleoperation + cameras | `wuji_teleop_camera.launch.py` |
+| Single side (Left/Right) | Single arm + single hand debug | `wuji_teleop_single.launch.py` |
 
-## 7. 验证
+## 7. Verification
 
 ```bash
-# 检查所有话题
+# Check all topics
 ros2 topic list
 
-# 关键话题频率
-ros2 topic hz /stereo/left/compressed                              # 头部双目 (~30fps)
-ros2 topic hz /cam_left_wrist/color/image_rect_raw/compressed      # 左腕 D405
-ros2 topic hz /cam_right_wrist/color/image_rect_raw/compressed     # 右腕 D405
+# Key topic frequencies
+ros2 topic hz /stereo/left/compressed                              # Head stereo (~30fps)
+ros2 topic hz /cam_left_wrist/color/image_rect_raw/compressed      # Left wrist D405
+ros2 topic hz /cam_right_wrist/color/image_rect_raw/compressed     # Right wrist D405
 ```
 
-## 8. 常见问题
+## 8. FAQ
 
-| 问题 | 解决 |
-|------|------|
-| SteamVR 启动后立刻退出 | Wayland 桌面需加 `GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb` 前缀启动 |
-| SteamVR 窗口不显示 | 宿主机 `xhost +local:docker` |
-| `[--] OpenVR (SteamVR 未挂载)` | 确认宿主机已安装 SteamVR，`ls ~/.steam/debian-installation/steamapps/common/SteamVR/` |
-| openvr_input 连不上 SteamVR | 确认宿主机 SteamVR 已启动，容器需 `pid: host` (docker-compose.yml 已配置) |
-| Vive Tracker 未识别 | 确认 Lighthouse 基站开启、Tracker 已配对、Dongle 已插入 (`lsusb \| grep 28de`) |
-| Tracker 灯不亮 | 检查 Dongle 是否插入、基站是否通电、Tracker 是否在基站 IR 范围内 |
-| Null Driver 不生效 | 检查两个配置文件: driver `default.vrsettings` 中 `enable: true`，用户 `steamvr.vrsettings` 中 `forcedDriver: "null"` |
-| Monitor GUI 无法显示 | 宿主机执行 `xhost +local:docker` 允许 X11 访问 |
-| Manus 手套无数据 | 宿主机 `git lfs pull` 确保 SDK 文件完整 |
+| Problem | Solution |
+|---------|----------|
+| SteamVR exits immediately after launch | Wayland desktop requires `GDK_BACKEND=x11 QT_QPA_PLATFORM=xcb` prefix when launching |
+| SteamVR window not displayed | Run `xhost +local:docker` on host |
+| `[--] OpenVR (SteamVR not mounted)` | Confirm SteamVR is installed on host, `ls ~/.steam/debian-installation/steamapps/common/SteamVR/` |
+| openvr_input cannot connect to SteamVR | Confirm SteamVR is running on host; container needs `pid: host` (already configured in docker-compose.yml) |
+| Vive Tracker not recognized | Confirm Lighthouse base stations are on, Tracker is paired, Dongle is plugged in (`lsusb \| grep 28de`) |
+| Tracker light not on | Check if Dongle is plugged in, base station is powered on, Tracker is within base station IR range |
+| Null Driver not taking effect | Check both config files: `enable: true` in driver `default.vrsettings`, `forcedDriver: "null"` in user `steamvr.vrsettings` |
+| Monitor GUI cannot display | Run `xhost +local:docker` on host to allow X11 access |
+| MANUS Gloves no data | Run `git lfs pull` on host to ensure SDK files are complete |

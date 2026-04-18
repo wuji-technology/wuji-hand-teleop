@@ -1,12 +1,12 @@
 """
-PICO Input Launch - 独立启动 PICO 数据采集
+PICO Input Launch - Standalone launch for PICO data acquisition
 
-默认仅发布 TF，用于测试 PICO 连接。
-要控制机器人需使用: pico_teleop.launch.py
+By default only publishes TF, for testing PICO connection.
+To control the robot use: pico_teleop.launch.py
 
 Usage:
     ros2 launch pico_input pico_input.launch.py
-    ros2 launch pico_input pico_input.launch.py enable_topic_publishing:=true  # 发布 target_pose 等 topic
+    ros2 launch pico_input pico_input.launch.py enable_topic_publishing:=true  # Publish target_pose and other topics
 """
 
 from pathlib import Path
@@ -23,7 +23,7 @@ def generate_launch_description() -> LaunchDescription:
     enable_topic_publishing_arg = DeclareLaunchArgument(
         "enable_topic_publishing",
         default_value="false",
-        description="启用 Topic 发布 (/left_arm_target_pose 等，用于 RViz/仿真)"
+        description="Enable topic publishing (/left_arm_target_pose etc., for RViz/simulation)"
     )
 
     return LaunchDescription([

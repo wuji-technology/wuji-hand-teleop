@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FFmpeg 编码工具函数
+FFmpeg encoding utility functions
 
-提供:
-1. NVENC/libx264 编码器检测与参数生成
-2. H.264 NAL 单元解析
-3. 跨平台相机输入参数构建
-4. H.264 帧读取生成器 (SPS 分帧)
+Provides:
+1. NVENC/libx264 encoder detection and parameter generation
+2. H.264 NAL unit parsing
+3. Cross-platform camera input parameter building
+4. H.264 frame reader generator (SPS-based frame splitting)
 
-被 unified_stereo_node.py 使用。
+Used by unified_stereo_node.py.
 
-作者: Liang ZHU
+Author: Liang ZHU
 """
 
 import sys
@@ -21,14 +21,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# ============== 进程管理 ==============
+# ============== Process Management ==============
 
 def terminate_ffmpeg(process: subprocess.Popen, label: str = "FFmpeg"):
     """
-    安全终止 FFmpeg 进程
+    Safely terminate FFmpeg process
 
-    步骤: SIGTERM → wait(2s) → SIGKILL → wait(1s)
-    确保无论何种情况都释放相机资源。
+    Steps: SIGTERM → wait(2s) → SIGKILL → wait(1s)
+    Ensures camera resources are released in all cases.
     """
     if process is None:
         return
@@ -37,30 +37,30 @@ def terminate_ffmpeg(process: subprocess.Popen, label: str = "FFmpeg"):
         try:
             process.wait(timeout=2)
         except subprocess.TimeoutExpired:
-            logger.warning(f"{label} 未响应 terminate，强制 kill...")
+            logger.warning(f"{label} did not respond to terminate, force killing...")
             process.kill()
             process.wait(timeout=1)
     except Exception as e:
-        logger.warning(f"终止 {label} 时出错: {e}")
+        logger.warning(f"Error terminating {label}: {e}")
         try:
             process.kill()
         except Exception:
             pass
 
 
-# ============== 流媒体常量 ==============
+# ============== Streaming Constants ==============
 
-BUFFER_READ_SIZE = 32768        # FFmpeg stdout 读取缓冲 (32KB)
-MAX_BUFFER_SIZE = 512 * 1024    # 帧缓冲区溢出阈值 (512KB)
+BUFFER_READ_SIZE = 32768        # FFmpeg stdout read buffer (32KB)
+MAX_BUFFER_SIZE = 512 * 1024    # Frame buffer overflow threshold (512KB)
 
 
 def check_nvenc_available() -> bool:
     """
-    检测 NVIDIA NVENC 硬件编码器是否真正可用
+    Detect whether NVIDIA NVENC hardware encoder is actually available
 
-    仅检查 FFmpeg 编码器列表不够 — 还需要 libcuda.so.1 (NVIDIA 驱动)。
-    Docker 容器内如果没有 --gpus all，NVENC 会列出但无法使用。
-    因此实际尝试编码一帧来验证。
+    Checking the FFmpeg encoder list alone is not enough — libcuda.so.1 (NVIDIA driver) is also required.
+    Inside a Docker container without --gpus all, NVENC will be listed but unusable.
+    Therefore, actually try encoding a frame to verify.
     """
     try:
         result = subprocess.run(
@@ -70,36 +70,36 @@ def check_nvenc_available() -> bool:
         if 'h264_nvenc' not in result.stdout:
             return False
 
-        # 实际测试 NVENC 能否编码 (检测 libcuda.so.1 是否可用)
+        # Actually test if NVENC can encode (check if libcuda.so.1 is available)
         test = subprocess.run(
             ['ffmpeg', '-hide_banner', '-f', 'lavfi', '-i', 'nullsrc=s=64x64:d=0.1',
              '-c:v', 'h264_nvenc', '-f', 'null', '-'],
             capture_output=True, text=True, timeout=5
         )
         if test.returncode == 0:
-            logger.info("检测到 NVIDIA NVENC 硬件编码器 (已验证可用)")
+            logger.info("NVIDIA NVENC hardware encoder detected (verified available)")
             return True
         else:
-            logger.info("NVENC 已列出但不可用 (缺少 libcuda.so.1 或 GPU 访问)，回退到 libx264")
+            logger.info("NVENC listed but not available (missing libcuda.so.1 or GPU access), falling back to libx264")
             return False
     except Exception as e:
-        logger.debug(f"检测 NVENC 失败: {e}")
+        logger.debug(f"NVENC detection failed: {e}")
     return False
 
 
 def get_encoder_args(bitrate_k: int, use_nvenc: bool) -> list:
     """
-    获取 H.264 编码器参数 (低延迟优先)
+    Get H.264 encoder arguments (low latency priority)
 
-    参数:
-        bitrate_k: 码率 (kbps)
-        use_nvenc: 是否使用 NVENC 硬件编码
+    Args:
+        bitrate_k: Bitrate (kbps)
+        use_nvenc: Whether to use NVENC hardware encoding
 
-    返回:
-        FFmpeg 编码器参数列表
+    Returns:
+        FFmpeg encoder argument list
     """
     if use_nvenc:
-        logger.info(f"使用 NVENC 硬件编码器 (低延迟), 码率: {bitrate_k} kbps")
+        logger.info(f"Using NVENC hardware encoder (low latency), bitrate: {bitrate_k} kbps")
         return [
             '-pix_fmt', 'yuv420p',
             '-c:v', 'h264_nvenc',
@@ -117,7 +117,7 @@ def get_encoder_args(bitrate_k: int, use_nvenc: bool) -> list:
             '-zerolatency', '1',
         ]
     else:
-        logger.info(f"使用 libx264 软件编码器 (低延迟), 码率: {bitrate_k} kbps")
+        logger.info(f"Using libx264 software encoder (low latency), bitrate: {bitrate_k} kbps")
         return [
             '-pix_fmt', 'yuv420p',
             '-c:v', 'libx264',
@@ -135,21 +135,21 @@ def get_encoder_args(bitrate_k: int, use_nvenc: bool) -> list:
 
 def find_nal_type(data: bytes, nal_type: int, start_pos: int = 0) -> int:
     """
-    查找特定类型的 H.264 NAL 单元
+    Find a specific type of H.264 NAL unit
 
-    NAL 类型:
+    NAL types:
         7: SPS (Sequence Parameter Set)
         8: PPS (Picture Parameter Set)
-        5: IDR slice (关键帧)
-        1: P slice (预测帧)
+        5: IDR slice (keyframe)
+        1: P slice (predicted frame)
 
-    参数:
-        data: H.264 Annexb 数据
-        nal_type: 目标 NAL 类型
-        start_pos: 搜索起始位置
+    Args:
+        data: H.264 Annexb data
+        nal_type: Target NAL type
+        start_pos: Search start position
 
-    返回:
-        NAL startcode 位置，未找到返回 -1
+    Returns:
+        NAL startcode position, returns -1 if not found
     """
     NAL_STARTCODE_4 = b'\x00\x00\x00\x01'
     NAL_STARTCODE_3 = b'\x00\x00\x01'
@@ -169,20 +169,20 @@ def find_nal_type(data: bytes, nal_type: int, start_pos: int = 0) -> int:
     return -1
 
 
-# ============== 相机输入参数 ==============
+# ============== Camera Input Arguments ==============
 
 def build_camera_input_args(device_path: str, width: int, height: int, fps: int) -> list:
     """
-    构建 FFmpeg 相机输入参数 (跨平台)
+    Build FFmpeg camera input arguments (cross-platform)
 
-    参数:
-        device_path: 设备路径 (Linux: /dev/video0, Windows: video=Name)
-        width: 视频宽度
-        height: 视频高度
-        fps: 帧率
+    Args:
+        device_path: Device path (Linux: /dev/video0, Windows: video=Name)
+        width: Video width
+        height: Video height
+        fps: Frame rate
 
-    返回:
-        FFmpeg 输入参数列表
+    Returns:
+        FFmpeg input argument list
     """
     if sys.platform == 'win32':
         return [
@@ -202,31 +202,31 @@ def build_camera_input_args(device_path: str, width: int, height: int, fps: int)
         ]
 
 
-# ============== H.264 帧读取生成器 ==============
+# ============== H.264 Frame Reader Generator ==============
 
 def read_h264_frames(stdout, is_running=None, poll_interval=None):
     """
-    从 FFmpeg stdout 读取 H.264 帧的生成器
+    Generator that reads H.264 frames from FFmpeg stdout
 
-    按 SPS NAL (type 7) 分割帧，适用于 GOP=1 模式。
-    封装了缓冲区管理、NAL 解析和溢出保护。
+    Splits frames by SPS NAL (type 7), suitable for GOP=1 mode.
+    Encapsulates buffer management, NAL parsing, and overflow protection.
 
-    参数:
-        stdout: FFmpeg 进程的 stdout 管道
-        is_running: 可选的状态检查函数，返回 False 时停止。
-                    如果为 None，仅在 EOF 时停止。
-        poll_interval: 如果设置，使用 select() 进行非阻塞读取 (秒)。
-                       适用于需要快速响应停止信号的场景。
-                       如果为 None，使用阻塞读取 (需要外部终止 FFmpeg 来退出)。
+    Args:
+        stdout: FFmpeg process stdout pipe
+        is_running: Optional status check function, stops when returning False.
+                    If None, only stops on EOF.
+        poll_interval: If set, uses select() for non-blocking reads (seconds).
+                       Suitable for scenarios requiring fast response to stop signals.
+                       If None, uses blocking reads (requires external FFmpeg termination to exit).
 
     Yields:
-        bytes: 完整的 H.264 帧数据 (从一个 SPS 到下一个 SPS)
+        bytes: Complete H.264 frame data (from one SPS to the next SPS)
     """
     buffer = b''
     first_sps_found = False
 
     while is_running is None or is_running():
-        # 非阻塞读取模式 (用于需要快速响应停止信号的场景)
+        # Non-blocking read mode (for scenarios requiring fast response to stop signals)
         if poll_interval is not None:
             import select
             readable, _, _ = select.select([stdout], [], [], poll_interval)
@@ -239,7 +239,7 @@ def read_h264_frames(stdout, is_running=None, poll_interval=None):
 
         buffer += chunk
 
-        # 按 SPS NAL 分割帧
+        # Split frames by SPS NAL
         while len(buffer) > 5:
             if not first_sps_found:
                 sps_idx = find_nal_type(buffer, 7, 0)
@@ -255,9 +255,9 @@ def read_h264_frames(stdout, is_running=None, poll_interval=None):
                 yield buffer[:next_sps_idx]
                 buffer = buffer[next_sps_idx:]
             else:
-                # 缓冲区溢出保护
+                # Buffer overflow protection
                 if len(buffer) > MAX_BUFFER_SIZE:
-                    logger.warning("H.264 缓冲区溢出，重置帧同步")
+                    logger.warning("H.264 buffer overflow, resetting frame sync")
                     buffer = b''
                     first_sps_found = False
                 break

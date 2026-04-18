@@ -8,10 +8,10 @@ import logging
 from pathlib import Path
 from .robot_structures import *
 
-# 配置日志系统
+# Configure log system
 logging.basicConfig(format='%(message)s')
 logger = logging.getLogger('debug_printer')
-logger.setLevel(logging.WARNING)  # 减少日志输出，只显示警告和错误
+logger.setLevel(logging.WARNING)  # Reduce log output, only display warnings and errors
 
 # Get the lib directory path relative to this file
 _package_dir = Path(__file__).resolve().parent
@@ -20,7 +20,7 @@ _lib_dir = _package_dir / 'lib'
 
 class Marvin_Kine:
     def __init__(self):
-        """初始化机器人控制类"""
+        """Initialize robot control class"""
         import sys
         logger.info(f'user platform: {sys.platform}')
         if sys.platform == 'win32':
@@ -32,31 +32,31 @@ class Marvin_Kine:
 
         logger.info(f'Loaded library from: {lib_path}')
 
-        # 创建结构体实例
+        # Create structure instances
         self.sp = FX_InvKineSolvePara()
         self.jacobi = FX_Jacobi()
         self.jacobi_dot = FX_Jacobi()
 
     def help(self, method_name: str = None) -> None:
-        """显示帮助信息
-        参数:method_name (str): 可选的方法名，显示特定方法的帮助信息
+        """Display help information
+        Args: method_name (str): Optional method name to display specific method help
         """
-        print(f"\n{' API 帮助 ':=^50}\n")
+        print(f"\n{' API help ':=^50}\n")
 
-        # 获取所有公共方法
+        # Get all public methods
         methods = [
             (name, func)
             for name, func in inspect.getmembers(self, inspect.ismethod)
             if not name.startswith('_') and name != 'help'
         ]
 
-        # 如果没有指定方法名，显示所有方法列表
+        # If no method name specified, display all methods list
         if method_name is None:
-            print("可用方法:")
+            print("Available methods:")
             for name, func in methods:
-                # 获取函数签名
+                # Get function signature
                 signature = inspect.signature(func)
-                # 获取参数列表
+                # Get parameter list
                 params = []
                 for param in signature.parameters.values():
                     param_str = param.name
@@ -75,62 +75,62 @@ class Marvin_Kine:
                 param_list = ", ".join(params)
                 print(f"  - {name}({param_list})")
 
-            print("\n使用 help('方法名') 获取详细帮助信息")
+            print("\nUse help('method_name') for detailed help information")
             print(f"{'=' * 50}")
             return
 
-        # 显示特定方法的帮助
+        # Display help for specific method
         method_dict = dict(methods)
         if method_name in method_dict:
             func = method_dict[method_name]
-            doc = inspect.getdoc(func) or "没有文档说明"
+            doc = inspect.getdoc(func) or "No documentation available"
 
-            # 获取函数签名
+            # Get function signature
             signature = inspect.signature(func)
 
-            print(f"方法: {method_name}{signature}")
+            print(f"Method: {method_name}{signature}")
             print("\n" + dedent(doc))
 
-            # 显示参数详细信息
-            print("\n参数详情:")
+            # Display parameter details
+            print("\nParameter details:")
             for param in signature.parameters.values():
                 param_info = f"  {param.name}: "
                 if param.annotation is not param.empty:
-                    param_info += f"类型: {param.annotation.__name__}, "
+                    param_info += f"type: {param.annotation.__name__}, "
                 if param.default is not param.empty:
-                    param_info += f"默认值: {param.default!r}"
-                # param_info += f"类型: {_param_kind_to_str(param.kind)}"
+                    param_info += f"default: {param.default!r}"
+                # param_info += f"type: {_param_kind_to_str(param.kind)}"
                 print(param_info)
         else:
-            print(f"错误: 没有找到方法 '{method_name}'")
+            print(f"Error: method not found '{method_name}'")
 
         print(f"{'=' * 50}")
 
     def _param_kind_to_str(kind):
-        """将参数类型转换为可读字符串"""
+        """Convert parameter kind to readable string"""
         mapping = {
-            inspect.Parameter.POSITIONAL_ONLY: "位置参数",
-            inspect.Parameter.POSITIONAL_OR_KEYWORD: "位置或关键字参数",
-            inspect.Parameter.VAR_POSITIONAL: "可变位置参数(*args)",
-            inspect.Parameter.KEYWORD_ONLY: "仅关键字参数",
-            inspect.Parameter.VAR_KEYWORD: "可变关键字参数(**kwargs)"
+            inspect.Parameter.POSITIONAL_ONLY: "Positional argument",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD: "Positional or keyword argument",
+            inspect.Parameter.VAR_POSITIONAL: "Variable positional argument (*args)",
+            inspect.Parameter.KEYWORD_ONLY: "Keyword-only argument",
+            inspect.Parameter.VAR_KEYWORD: "Variable keyword argument (**kwargs)"
         }
-        return mapping.get(kind, "未知参数类型")
+        return mapping.get(kind, "Unknown parameter type")
 
     def load_config(self, config_path: str):
-        ''' 使用前，请一定确认机型，导入正确的配置文件。导入机械臂配置信息
-        :param config_path: 本地机械臂配置文件a.MvKDCfg, 可相对路径.
-        • a.MvKDCfg文件中包含与运动学、动力学计算相关的双臂参数，进行计算之前需要导入机械臂配置相关文件
-        • TYPE=1006，DL机型；TYPE=1007，Pilot-SRS机型（双臂为MARVIN）；TYPE=1017，Pilot-CCS机型双臂为MARVIN）！
-        • GRV参数为双臂重力方向，如[0.000,9.810,0.000];DH参数为双臂MDH参数，包含各关节MDH参数及法兰MDH参数；PNVA参数为双臂各关节所允许的正负最大加速度及加加速度；BD参数为Pilot-CCS机型特定参数，为六七关节自干涉允许范围的拟合二阶多项式曲线，其他机型中该参数均为0；Mass参数为双臂各关节质量；MCP参数为双臂各关节质心；I参数为双臂各关节惯量
-        • MDH参数单位为度和毫米（mm），速度加速度单位为度/秒，关节质量、关节质心、关节惯量单位均为国际标准单位
+        ''' Before use, make sure to confirm the robot model and import the correct configuration file. Import robot arm configuration.
+        :param config_path: Local robot arm configuration file a.MvKDCfg, can be relative path.
+        - The a.MvKDCfg file contains dual-arm parameters related to kinematics and dynamics computation. Before computation, the robot arm configuration file must be imported.
+        - TYPE=1006: DL robot model; TYPE=1007: Pilot-SRS robot model (dual arms are MARVIN); TYPE=1017: Pilot-CCS robot model (dual arms are MARVIN)!
+        - GRV parameters are dual-arm gravity direction, e.g. [0.000,9.810,0.000]; DH parameters are dual-arm MDH parameters, containing each joint's MDH parameters and flange MDH parameters; PNVA parameters are the maximum positive/negative acceleration and jerk allowed for each joint of both arms; BD parameters are specific to the Pilot-CCS robot model, representing the second-order polynomial curve fit for joints 6-7 self-interference allowable range (other robot models have all zeros for this parameter); Mass parameters are each joint's mass for both arms; MCP parameters are each joint's center of mass for both arms; I parameters are each joint's inertia for both arms.
+        - MDH parameter units are degrees and millimeters (mm); velocity and acceleration units are degrees/second; joint mass, joint center of mass, and joint inertia units are all in SI units.
         :return:
         '''
 
         if not os.path.exists(config_path):
             raise ValueError("no config file")
 
-        # 定义函数原型
+        # Define function prototype
         self.kine.LOADMvCfg.argtypes = [
             c_char_p,  # FX_CHAR* path
             ctypes.POINTER(c_long * 2),  # FX_INT32L TYPE[2]
@@ -142,9 +142,9 @@ class Marvin_Kine:
             ctypes.POINTER(((c_double * 3) * 7) * 2),  # FX_DOUBLE MCP[2][7][3]
             ctypes.POINTER(((c_double * 6) * 7) * 2)  # FX_DOUBLE I[2][7][6]
         ]
-        self.kine.LOADMvCfg.restype = c_bool  # 返回类型FX_BOOL
+        self.kine.LOADMvCfg.restype = c_bool  # return type FX_BOOL
 
-        # 初始化所有数组参数
+        # Initialize all array parameters
         TYPE = (c_long * 2)()
         GRV = ((c_double * 3) * 2)()
         DH = (((c_double * 4) * 8) * 2)()
@@ -154,7 +154,7 @@ class Marvin_Kine:
         MCP = (((c_double * 3) * 7) * 2)()
         I = (((c_double * 6) * 7) * 2)()
 
-        # 调用函数
+        # Call function
 
         success = self.kine.LOADMvCfg(
             config_path.encode('utf-8'),
@@ -168,7 +168,7 @@ class Marvin_Kine:
             ctypes.byref(I)
         )
 
-        # 处理结果
+        # Process result
         if success:
             result = {
                 'TYPE': [TYPE[i] for i in range(2)],
@@ -187,14 +187,14 @@ class Marvin_Kine:
             return None
 
     def initial_kine(self, robot_serial: int, robot_type: int, dh: list, pnva: list, j67: list):
-        '''初始化运动学相关参数
-        • 运动学相关计算前，需要按照该顺序调用初始化函数，将配置中导入的参数进行初始化
-        • RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param robot_serial:  int, RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param type: int.机器人机型代号
-        :param dh: list(8,4), 每个轴DH：alpha, a d,theta.
-        :param pnva: list(7,4), 每个轴:关节上界p,关节下界n，最大速度v,最大加速度a.
-        :param j67: list(4,3),仅CCS机型生效， 67关节干涉限制。
+        '''Initialize kinematics-related parameters
+        - Before kinematics calculations, initialization functions must be called in this order to initialize imported configuration parameters.
+        - RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param robot_serial:  int, RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param type: int. Robot model identifier
+        :param dh: list(8,4), Each axis DH: alpha, a, d, theta.
+        :param pnva: list(7,4), Each axis: joint upper limit p, joint lower limit n, max velocity v, max acceleration a.
+        :param j67: list(4,3), Only effective for CCS model, joints 6-7 interference limits.
         :return:
             bool
         '''
@@ -276,9 +276,9 @@ class Marvin_Kine:
             return False
 
     def set_tool_kine(self, robot_serial: int, tool_mat: list):
-        '''工具运动学设置
-        :param robot_serial:  int, RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param tool_mat: list(4,4) 工具的运动学信息，齐次变换矩阵，相对末端法兰的旋转和平移，请确认法兰坐标系。
+        '''Tool kinematics setup
+        :param robot_serial:  int, RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param tool_mat: list(4,4) tool kinematics info, homogeneous transformation matrix, rotation and translation relative to end-effector flange. Please confirm the flange coordinate system.
         :return:bool
         '''
         if robot_serial != 0 and robot_serial != 1:
@@ -310,8 +310,8 @@ class Marvin_Kine:
             return False
 
     def remove_tool_kine(self, robot_serial: int):
-        '''移除工具运动学设置
-        :param robot_serial:  int, RobotSerial=0，左臂；RobotSerial=1，右臂
+        '''Remove tool kinematics setup
+        :param robot_serial:  int, RobotSerial=0, left arm; RobotSerial=1, right arm
         :return:bool
         '''
         if robot_serial != 0 and robot_serial != 1:
@@ -332,11 +332,11 @@ class Marvin_Kine:
 
 
     def fk(self, robot_serial: int, joints: list):
-        '''关节角度正解到末端TCP位置和姿态4*4
-        :param robot_serial:  int, RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param joints: list(7,1). 角度值
+        '''Forward kinematics: joint angles to end-effector TCP position and orientation 4x4
+        :param robot_serial:  int, RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param joints: list(7,1). Angle values
         :return:
-            4x4的位姿矩阵，list(4,4)
+            4x4 pose matrix, list(4,4)
         '''
         if robot_serial != 0 and robot_serial != 1:
             raise ValueError("robot_serial must be 0 or 1")
@@ -371,20 +371,20 @@ class Marvin_Kine:
 
     def ik(self, robot_serial: int, pose_mat: list, ref_joints: list, zsp_type: int, zsp_para: list,
                zsp_angle: float, dgr: list):
-        '''末端位置和姿态逆解到关节值
-        :param pose_mat: list(4,4), 位置姿态4x4list.
-        :param ref_joints: list(7,1),参考输入角度，约束构想接近参考解读，防止解出来的构型跳变。
-        :param zsp_type: int, 零空间约束类型（0：与参考角欧式距离最小；1：与参考臂角平面最近）
-        :param zsp_para: list(6,), 若选择零空间约束类型为1，则需额外输入参考角平面参数,[x,y,z,a,b,c]=[0,0,0,0,0,0],可选择x,y,z其中一个方向调整
-        :param zsp_angle: float, 末端位姿不变的情况下，零空间臂角相对于参考平面的旋转角度（单位：度）
-        :param dgr: list(3,), 选择123关节发生奇异允许的角度范围，如无额外要求无需输入，默认值为0.05（单位：度）
+        '''Inverse kinematics: end-effector position and orientation to joint values
+        :param pose_mat: list(4,4), 4x4 position-orientation list.
+        :param ref_joints: list(7,1),Reference input angles, constrains solution configuration to be close to reference, prevents solution configuration jumps.
+        :param zsp_type: int, Nullspace constraint type (0: minimum Euclidean distance to reference angles; 1: closest to reference arm angle plane)
+        :param zsp_para: list(6,), If Nullspace constraint type is 1, additional reference angle plane parameters are needed,[x,y,z,a,b,c]=[0,0,0,0,0,0],Can adjust in one of x, y, z directions
+        :param zsp_angle: float, With end-effector pose unchanged, nullspace arm angle rotation relative to reference plane(unit: degrees)
+        :param dgr: list(3,), Allowable angle range for singularity at joints 1/2/3. If no extra requirements, no input needed. Default is 0.05(unit: degrees)
         :return:
-            结构体，以下几项最相关：
-                m_Output_RetJoint      ：逆运动学解出的关节角度（单位：度）
-                m_Output_IsOutRange    ：当前位姿是否超出位置可达空间（False：未超出；True：超出）
-                m_Output_IsDeg[7]      ：各关节是否发生奇异（False：未奇异；True：奇异）:
-                m_Output_IsJntExd      : 是否有关节超出位置正负限制（False：未超出；True：超出）:
-                m_Output_JntExdTags[7] ：各关节是否超出位置正负限制（False：未超出；True：超出）:
+            Structure. The following fields are most relevant:
+                m_Output_RetJoint      : Inverse kinematics solved joint angles (unit: degrees)
+                m_Output_IsOutRange    : Whether current pose exceeds reachable workspace (False: not exceeded; True: exceeded)
+                m_Output_IsDeg[7]      : Whether each joint is singular (False: not singular; True: singular):
+                m_Output_IsJntExd      : Whether any joint exceeds positive/negative position limits (False: not exceeded; True: exceeded):
+                m_Output_JntExdTags[7] : Whether each joint exceeds positive/negative position limits (False: not exceeded; True: exceeded):
         '''
         if robot_serial != 0 and robot_serial != 1:
             raise ValueError("robot_serial must be 0 or 1")
@@ -400,7 +400,7 @@ class Marvin_Kine:
             raise ValueError("ref_joints must be (7,)")
 
         Serial = ctypes.c_long(robot_serial)
-        # 将 4x4 矩阵数据复制到 sp.m_Input_IK_TargetTCP
+        # Copy 4x4 matrix data to sp.m_Input_IK_TargetTCP
         matrix_data = []
         for i in range(4):
             for j in range(4):
@@ -408,7 +408,7 @@ class Marvin_Kine:
 
         self.sp.m_Input_IK_TargetTCP = Matrix4(matrix_data)
 
-        # 将关节角度值复制到 sp.m_Input_IK_RefJoint
+        # Copy joint angle values to sp.m_Input_IK_RefJoint
         j0_, j1_, j2_, j3_, j4_, j5_, j6_ = ref_joints
         jv = (c_double * 7)(j0_, j1_, j2_, j3_, j4_, j5_, j6_)
         self.sp.m_Input_IK_RefJoint = Vect7(jv)
@@ -427,7 +427,7 @@ class Marvin_Kine:
         self.sp.m_DGR3 = dgr3
 
 
-        # 调用逆运动学函数
+        # Call inverse kinematics function
         self.kine.FX_Robot_Kine_IK.argtypes = [c_long, POINTER(FX_InvKineSolvePara)]
         self.kine.FX_Robot_Kine_IK.restype = c_bool
         success = self.kine.FX_Robot_Kine_IK(Serial, byref(self.sp))
@@ -440,21 +440,21 @@ class Marvin_Kine:
 
     def ik_nsp(self, robot_serial: int, pose_mat: list, ref_joints: list, zsp_type: int, zsp_para: list,
                zsp_angle: float, dgr: list):
-        '''逆解优化：可调整方向,不能单独使用，ik得到的逆运动学解的臂角不满足当前选解需求时使用。
-        :param robot_serial:  int, RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param pose_mat: list(4,4), 位置姿态4x4list.
-        :param ref_joints: list(7,1),参考输入角度，约束构想接近参考解读，防止解出来的构型跳变。
-        :param zsp_type: int, 零空间约束类型（0：与参考角欧式距离最小；1：与参考臂角平面最近）
-        :param zsp_para: list(6,), 若选择零空间约束类型为1，则需额外输入参考角平面参数,[x,y,z,a,b,c]=[0,0,0,0,0,0],可选择x,y,z其中一个方向调整
-        :param zsp_angle: float, 末端位姿不变的情况下，零空间臂角相对于参考平面的旋转角度（单位：度）
-        :param dgr: list(3,), 选择123关节发生奇异允许的角度范围，如无额外要求无需输入，默认值为0.05（单位：度）
+        '''IK optimization: adjustable direction. Cannot be used alone. Use when the arm angle from IK solution does not satisfy the current solution selection requirements.
+        :param robot_serial:  int, RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param pose_mat: list(4,4), 4x4 position-orientation list.
+        :param ref_joints: list(7,1),Reference input angles, constrains solution configuration to be close to reference, prevents solution configuration jumps.
+        :param zsp_type: int, Nullspace constraint type (0: minimum Euclidean distance to reference angles; 1: closest to reference arm angle plane)
+        :param zsp_para: list(6,), If Nullspace constraint type is 1, additional reference angle plane parameters are needed,[x,y,z,a,b,c]=[0,0,0,0,0,0],Can adjust in one of x, y, z directions
+        :param zsp_angle: float, With end-effector pose unchanged, nullspace arm angle rotation relative to reference plane(unit: degrees)
+        :param dgr: list(3,), Allowable angle range for singularity at joints 1/2/3. If no extra requirements, no input needed. Default is 0.05(unit: degrees)
         :return:
-            结构体，以下几项最相关：
-                m_Output_RetJoint      ：逆运动学解出的关节角度（单位：度）
-                m_Output_IsOutRange    ：当前位姿是否超出位置可达空间（False：未超出；True：超出）
-                m_Output_IsDeg[7]      ：各关节是否发生奇异（False：未奇异；True：奇异）:
-                m_Output_IsJntExd      : 是否有关节超出位置正负限制（False：未超出；True：超出）:
-                m_Output_JntExdTags[7] ：各关节是否超出位置正负限制（False：未超出；True：超出）:
+            Structure. The following fields are most relevant:
+                m_Output_RetJoint      : Inverse kinematics solved joint angles (unit: degrees)
+                m_Output_IsOutRange    : Whether current pose exceeds reachable workspace (False: not exceeded; True: exceeded)
+                m_Output_IsDeg[7]      : Whether each joint is singular (False: not singular; True: singular):
+                m_Output_IsJntExd      : Whether any joint exceeds positive/negative position limits (False: not exceeded; True: exceeded):
+                m_Output_JntExdTags[7] : Whether each joint exceeds positive/negative position limits (False: not exceeded; True: exceeded):
         '''
 
         if robot_serial != 0 and robot_serial != 1:
@@ -472,7 +472,7 @@ class Marvin_Kine:
 
         Serial = ctypes.c_long(robot_serial)
 
-        # 将 4x4 矩阵数据复制到 sp.m_Input_IK_TargetTCP
+        # Copy 4x4 matrix data to sp.m_Input_IK_TargetTCP
         matrix_data = []
         for i in range(4):
             for j in range(4):
@@ -480,7 +480,7 @@ class Marvin_Kine:
 
         self.sp.m_Input_IK_TargetTCP = Matrix4(matrix_data)
 
-        # 将关节角度值复制到 sp.m_Input_IK_RefJoint
+        # Copy joint angle values to sp.m_Input_IK_RefJoint
         j0_, j1_, j2_, j3_, j4_, j5_, j6_ = ref_joints
         jv = (c_double * 7)(j0_, j1_, j2_, j3_, j4_, j5_, j6_)
         self.sp.m_Input_IK_RefJoint = Vect7(jv)
@@ -510,10 +510,10 @@ class Marvin_Kine:
             return self.sp
 
     def joints2JacobMatrix(self, robot_serial: int, joints: list):
-        '''当前关节角度转成雅可比矩阵
-        :param robot_serial:  int, RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param joints: list(7,1), 当前关节
-        :return: 雅可比矩阵6*7矩阵
+        '''Convert current joint angles to Jacobian matrix
+        :param robot_serial:  int, RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param joints: list(7,1), Current joints
+        :return: Jacobian matrix 6x7
         '''
         if robot_serial != 0 and robot_serial != 1:
             raise ValueError("robot_serial must be 0 or 1")
@@ -536,7 +536,7 @@ class Marvin_Kine:
             [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
         ]
 
-        # 设置雅可比矩阵
+        # Set Jacobian matrix
         self.jacobi.set_jcb(example_matrix)
 
         self.kine.FX_Robot_Kine_Jacb.argtypes = [c_long, c_double * 7, POINTER(FX_Jacobi)]
@@ -553,10 +553,10 @@ class Marvin_Kine:
 
 
     def mat4x4_to_xyzabc(self,pose_mat:list):
-        '''末端位置和姿态转XYZABC
-        :param pose_mat: list(4,4), 位置姿态4x4list.
+        '''Convert end-effector position and orientation to XYZABC
+        :param pose_mat: list(4,4), 4x4 position-orientation list.
         :return:
-                （6,1）位姿信息XYZ及欧拉角ABC（单位：mm/度）
+                (6,1) Pose information XYZ and Euler angles ABC (unit: mm/degrees)
         '''
         if len(pose_mat) != 4:
             raise ValueError("pose_mat  must be 4 rows")
@@ -588,7 +588,7 @@ class Marvin_Kine:
 
 
     def xyzabc_to_mat4x4(self,xyzabc:list):
-        '''末端XYZABC转位置和姿态矩阵
+        '''Convert end-effector XYZABC to position and orientation matrix
         param xyzabc: list(6,),
         return:
             mat4x4  list(4,4)
@@ -622,18 +622,18 @@ class Marvin_Kine:
 
 
     def movL(self,robot_serial: int,start_xyzabc:list, end_xyzabc:list,ref_joints:list,vel:float,acc:float,save_path):
-        '''直线规划（MOVL），规划文件的频率500Hz，即每2ms执行一行
+        '''Linear planning (MOVL). Planning file frequency 500Hz, i.e. one row executed every 2ms.
 
-        :param robot_serial: int, RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param start_xyzabc:起始点末端的位置和姿态：xyz平移单位：mm abc旋转单位度
-        :param end_xyzabc:结束点末端的位置和姿态：xyz平移单位：mm abc旋转单位度
-        :param ref_joints:参考关节构型
-        :param vel:规划速度
-        :param acc:规划加速度
-        :param save_path:保存的规划文件的路径
+        :param robot_serial: int, RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param start_xyzabc:Start point end-effector position and orientation: xyz translation unit: mm, abc rotation unit: degrees
+        :param end_xyzabc:End point end-effector position and orientation: xyz translation unit: mm, abc rotation unit: degrees
+        :param ref_joints: Reference joint configuration
+        :param vel:Planning velocity
+        :param acc:Planning acceleration
+        :param save_path:Path to save the planned file
         :return: bool
-        特别提示:1 直线规划前,需要将起始关节位置调正解接口,将数据更新到起始关节.
-                2 需要读函数返回值,如果关节超限,返回为false,并且不会保存规划的PVT文件.
+        Special notes: 1. Before linear planning, the starting joint position must be passed through the forward kinematics interface to update the starting joint data.
+                2. Must read the function return value. If joint exceeds limits, return is false, and the planning PVT file will not be saved.
         '''
         if robot_serial != 0 and robot_serial != 1:
             raise ValueError("robot_serial must be 0 or 1")
@@ -669,16 +669,16 @@ class Marvin_Kine:
 
 
     def movL_KeepJ(self,robot_serial: int,start_joints:list, end_joints:list,vel:float,save_path):
-        '''直线规划保持关节构型（MOVL KeepJ）, 规划文件的点位频率50Hz，即每20ms执行一行
+        '''Linear planning with joint configuration preserved (MOVL KeepJ). Planning file point frequency 50Hz, i.e. one row executed every 20ms.
 
-        :param robot_serial: int, RobotSerial=0，左臂；RobotSerial=1，右臂
-        :param start_joints:起始点各个关节位置（单位：角度）
-        :param end_joints:终点各个关节位置（单位：角度）
-        :param vel:规划速度，百分比，值范围0-100
-        :param save_path:规划文件的保存路径
+        :param robot_serial: int, RobotSerial=0, left arm; RobotSerial=1, right arm
+        :param start_joints: Starting point joint positions (unit: degrees)
+        :param end_joints: End point joint positions (unit: degrees)
+        :param vel:Planning velocity, percentage, value range 0-100
+        :param save_path:Save path for the planned file
         :return: bool
-        特别提示:1 直线规划前,需要将起始关节位置调正解接口,将数据更新到起始关节.
-                2 需要读函数返回值,如果关节超限,返回为false,并且不会保存规划的PVT文件.
+        Special notes: 1. Before linear planning, the starting joint position must be passed through the forward kinematics interface to update the starting joint data.
+                2. Must read the function return value. If joint exceeds limits, return is false, and the planning PVT file will not be saved.
         '''
         if robot_serial != 0 and robot_serial != 1:
             raise ValueError("robot_serial must be 0 or 1")
@@ -709,13 +709,13 @@ class Marvin_Kine:
 
 
     def identify_tool_dyn(self, robot_type: int, ipath: str):
-        '''工具动力学参数辨识
-        :param robot_type: int . 1:CCS机型，2:SRS机型
-        :param ipath: sting, 相对路径导入工具辨识轨迹数据。
+        '''Tool dynamics parameter identification
+        :param robot_type: int. 1: CCS robot model, 2: SRS robot model
+        :param ipath: sting, Import tool identification trajectory data via relative path.
         :return:
-          辨识成功，返回一个长度为10的list:
+          Identification successful, returns a list of length 10:
                     m,mcp,i
-        辨识失败，返回一串字符文本，请通过文本类容解决错误。
+        Identification failed, returns a text string. Please resolve the error based on the text content.
 
         '''
         if type(robot_type) != int:
@@ -733,12 +733,12 @@ class Marvin_Kine:
         iden_path = ipath.encode('utf-8')
         path_char = ctypes.c_char_p(iden_path)
 
-        # 创建指针变量而不是数组
+        # Create pointer variables instead of arrays
         mm_ptr = pointer(c_double(0))
         mcp_ptr = (c_double * 3)()
         ii_ptr = (c_double * 6)()
 
-        # 设置函数原型
+        # Set function prototype
         self.kine.FX_Robot_Iden_LoadDyn.argtypes = [
             c_int,
             c_char_p,
@@ -748,7 +748,7 @@ class Marvin_Kine:
         ]
         self.kine.FX_Robot_Iden_LoadDyn.restype = c_int
 
-        # 调用函数
+        # Call function
         ret_int = self.kine.FX_Robot_Iden_LoadDyn(
             robot_type_,
             path_char,
@@ -759,7 +759,7 @@ class Marvin_Kine:
         if ret_int==0:
             logger.info('Identify tool dynamics successful')
 
-            # 提取结果
+            # Extract result
             dyn_para=[]
             m_val = mm_ptr.contents.value
             mcp_list = [mcp_ptr[i] for i in range(3)]
@@ -782,21 +782,21 @@ class Marvin_Kine:
             return dyn_para
         else:
             logger.error('Identify tool dynamics failed!')
-            logger.error(f'identify_tool_dyn 返回错误码:{ret_int}\n ret=1, 计算错误，需重新采集数据计算\n ret=2,打开采集数据文件错误，须检查采样文件\n ret=3,配置文件被修改\n ret=4, 采集时间不够，缺少有效数据')
+            logger.error(f'identify_tool_dyn returnError code:{ret_int}\n ret=1, Computation error, need to re-collect data\n ret=2,Error opening data collection file, check the sampling file\n ret=3,Configuration file has been modified\n ret=4, Insufficient collection time, lacking valid data')
             if ret_int==1:
-                return 'ret=1, 计算错误，需重新采集数据计算'
+                return 'ret=1, Computation error, need to re-collect data'
             elif ret_int==2:
-                return 'ret=2,打开采集数据文件错误，须检查采样文件'
+                return 'ret=2,Error opening data collection file, check the sampling file'
             elif ret_int==3:
-                return "ret=3,配置文件被修改"
+                return "ret=3,Configuration file has been modified"
             elif ret_int==4:
-                return 'ret=4, 采集时间不够，缺少有效数据'
+                return 'ret=4, Insufficient collection time, lacking valid data'
 
 
 
 
 if __name__ == "__main__":
-    kk = Marvin_Kine()  # 实例化
-    kk.help()  # 查看方法
+    kk = Marvin_Kine()  # Instantiate
+    kk.help()  # View methods
     kk.help('load_config')
     exit()

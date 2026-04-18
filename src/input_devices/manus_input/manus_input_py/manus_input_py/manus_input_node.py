@@ -95,8 +95,8 @@ class ManusInputNode(Node):
         # Storage for latest data from each glove
         self._left_fingers: Optional[np.ndarray] = None
         self._right_fingers: Optional[np.ndarray] = None
-        # 新鲜度标志: 仅当 C++ 层有新数据到达时才发布
-        # 防止手套断连后无限重发过期数据导致灵巧手抖动
+        # Freshness flag: only publish when new data arrives from C++ layer
+        # Prevents infinite re-publishing of stale data causing dexterous hand jitter after glove disconnects
         self._new_data_received: bool = False
 
         # Configure QoS for real-time performance
@@ -165,22 +165,22 @@ class ManusInputNode(Node):
     def _publish_latest_frame(self) -> None:
         """Publish the latest hand data. Skip if no valid data received yet.
 
-        仅当 C++ 层有新数据到达时才发布，防止手套断连后
-        无限重发过期数据导致灵巧手抖动。
+        Only publishes when new data arrives from C++ layer. Prevents infinite
+        re-publishing of stale data causing dexterous hand jitter after glove disconnects.
 
         Data format: [right_hand (63), left_hand (63)] - MediaPipe 21-point format.
         """
-        # 无新数据: 不发布，避免过期数据导致下游持续 retarget
+        # No new data: skip publishing to avoid stale data causing continuous downstream retarget
         if not self._new_data_received:
             return
 
-        # 先检查数据完整性，再清除标志 (防止数据丢失)
+        # Check data completeness before clearing flag (prevent data loss)
         if self.config.include_right_hand and self._right_fingers is None:
-            return  # 右手数据尚未到达，保留标志等待下次重试
+            return  # Right hand data not yet arrived, keep flag for next retry
         if self.config.include_left_hand and self._left_fingers is None:
-            return  # 左手数据尚未到达，保留标志等待下次重试
+            return  # Left hand data not yet arrived, keep flag for next retry
 
-        # 数据齐全，清除标志并发布
+        # Data complete, clear flag and publish
         self._new_data_received = False
 
         payloads = []

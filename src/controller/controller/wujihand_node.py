@@ -1,20 +1,20 @@
-"""灵巧手控制器节点
+"""Dexterous hand controller node
 
-通过 wujihandros2 驱动 (C++ wujihandcpp SDK) 控制 Wuji 灵巧手
+Controls Wuji dexterous hand via wujihandros2 driver (C++ wujihandcpp SDK)
 
-两种控制模式：
-1. TELEOP 模式：hand_input → IK 逆重定向 → 灵巧手
-2. INFERENCE 模式：joint_command → 灵巧手
+Two control modes:
+1. TELEOP mode: hand_input → IK retargeting → dexterous hand
+2. INFERENCE mode: joint_command → dexterous hand
 
-控制架构 (定时器驱动, 固定频率):
-  订阅回调仅缓存数据 → 100Hz 定时器 consume-once → retarget → 硬件
-  保证输出时序均匀, 避免 CPU 满载时序抖动
+Control architecture (timer-driven, fixed frequency):
+  Subscription callbacks only cache data → 100Hz timer consume-once → retarget → hardware
+  Ensures uniform output timing, avoids timing jitter under CPU load
 
-  注: driver (C++) 以 1000Hz 将最新指令转发到固件,
-  因此 controller 端重复发送不增加硬件实际更新率。
-  提高平滑度的正确路径是提升 retarget 频率 (需 C++ 重写)。
+  Note: driver (C++) forwards the latest commands to firmware at 1000Hz,
+  so repeated sending from the controller does not increase the actual hardware update rate.
+  The correct way to improve smoothness is to increase retarget frequency (requires C++ rewrite).
 
-模式切换服务：/wuji_hand/switch_mode
+Mode switching service: /wuji_hand/switch_mode
 """
 from __future__ import annotations
 
@@ -39,18 +39,18 @@ from .common import (
     get_package_config_path,
 )
 
-# 话题名称
+# Topic names
 LEFT_HAND_CMD_TOPIC = "/wuji_hand/left/joint_command"
 RIGHT_HAND_CMD_TOPIC = "/wuji_hand/right/joint_command"
 HAND_INPUT_TOPIC = "/hand_input"
 
-# 控制频率 (Hz)
-# 100Hz: retarget ~6.6ms/帧 → CPU ~66%, 留余量给 GC/调度
-# lp_alpha=0.3 @ 100Hz → 截止 5.7Hz, 覆盖人手动态
-# driver (C++ 1000Hz) 自动以 1000Hz 重复转发最新指令到固件
+# Control frequency (Hz)
+# 100Hz: retarget ~6.6ms/frame → CPU ~66%, leaves margin for GC/scheduling
+# lp_alpha=0.3 @ 100Hz → cutoff 5.7Hz, covers human hand dynamics
+# driver (C++ 1000Hz) automatically repeats forwarding latest commands to firmware at 1000Hz
 CONTROL_RATE_HZ = 100.0
 
-# 关节名称
+# Joint names
 JOINT_NAMES = [
     "thumb_joint_0", "thumb_joint_1", "thumb_joint_2", "thumb_joint_3",
     "index_joint_0", "index_joint_1", "index_joint_2", "index_joint_3",
@@ -61,17 +61,17 @@ JOINT_NAMES = [
 
 
 class WujiHandControllerNode(Node):
-    """灵巧手控制器节点 (通过 wujihandros2 驱动)
+    """Dexterous hand controller node (via wujihandros2 driver)
 
-    控制架构 (定时器驱动):
-      订阅回调仅缓存最新数据 (零计算) → 100Hz 定时器 consume-once → retarget → 硬件
-      - 固定 10ms 间隔, 输出时序均匀
-      - CPU ~66%, 留余量给 Python GIL/GC
-      - 输入 120Hz 中的重复帧自动跳过
-      - driver (C++ 1000Hz) 自动重复转发, 无需 controller 高频发送
+    Control architecture (timer-driven):
+      Subscription callbacks only cache latest data (zero computation) → 100Hz timer consume-once → retarget → hardware
+      - Fixed 10ms interval, uniform output timing
+      - CPU ~66%, leaves margin for Python GIL/GC
+      - Duplicate frames from 120Hz input are automatically skipped
+      - driver (C++ 1000Hz) automatically repeats forwarding, no need for high-frequency sending from controller
 
-    关节状态由 wujihandros2 driver 直接发布 (1000Hz):
-      /{hand_name}/joint_states — 数据录制/监控请订阅此话题
+    Joint states are published directly by wujihandros2 driver (1000Hz):
+      /{hand_name}/joint_states — subscribe to this topic for data recording/monitoring
     """
 
     def __init__(
@@ -88,8 +88,8 @@ class WujiHandControllerNode(Node):
         self._right_hand_name = right_hand_name
         self._logger_adapter = ROS2LoggerAdapter(self.get_logger())
 
-        # 初始化控制器 (通过 wujihandros2)
-        self.get_logger().info("正在初始化灵巧手控制器 (wujihandros2)...")
+        # Initialize controller (via wujihandros2)
+        self.get_logger().info("Initializing dexterous hand controller (wujihandros2)...")
         self.controller = WujiHandController(
             input_source=input_source,
             logger=self._logger_adapter,
@@ -97,22 +97,22 @@ class WujiHandControllerNode(Node):
             left_hand_name=left_hand_name,
             right_hand_name=right_hand_name,
         )
-        self.get_logger().info("控制器初始化完成")
+        self.get_logger().info("Controller initialization complete")
 
-        # TELEOP: 缓存最新手部输入 (回调写入, 定时器消费)
+        # TELEOP: cache latest hand input (written by callback, consumed by timer)
         self._latest_raw: Optional[np.ndarray] = None
 
-        # INFERENCE: 关节指令缓存
+        # INFERENCE: joint command cache
         self._left_inference_angles: Optional[np.ndarray] = None
         self._right_inference_angles: Optional[np.ndarray] = None
 
         qos = get_default_qos()
 
-        # 发布者 (指令话题, 状态由 wujihandros2 driver 1000Hz 发布)
+        # Publishers (command topics, states published by wujihandros2 driver at 1000Hz)
         self.left_cmd_pub = self.create_publisher(JointState, LEFT_HAND_CMD_TOPIC, qos)
         self.right_cmd_pub = self.create_publisher(JointState, RIGHT_HAND_CMD_TOPIC, qos)
 
-        # 订阅者 (仅缓存数据, 不做 retarget)
+        # Subscribers (cache data only, no retarget)
         self.hand_input_sub = self.create_subscription(
             Float32MultiArray, HAND_INPUT_TOPIC, self._hand_input_callback, qos)
         self.left_cmd_sub = self.create_subscription(
@@ -120,34 +120,34 @@ class WujiHandControllerNode(Node):
         self.right_cmd_sub = self.create_subscription(
             JointState, RIGHT_HAND_CMD_TOPIC, self._right_cmd_callback, qos)
 
-        # 服务
+        # Services
         self.create_service(SetBool, '/wuji_hand/switch_mode', self._switch_mode_callback)
         self.create_service(Trigger, '/wuji_hand/get_mode', self._get_mode_callback)
 
-        # 定时器 (固定频率, 保证输出时序均匀)
+        # Timer (fixed frequency, ensures uniform output timing)
         control_period = 1.0 / CONTROL_RATE_HZ
         self.create_timer(control_period, self._teleop_loop)
         self.create_timer(control_period, self._inference_loop)
 
         self.get_logger().info(
-            f"初始化完成，模式: {self._mode.value.upper()}，"
-            f"控制频率: {CONTROL_RATE_HZ}Hz"
+            f"Initialization complete, mode: {self._mode.value.upper()}, "
+            f"Control frequency: {CONTROL_RATE_HZ}Hz"
         )
 
     @property
     def mode(self) -> ControlMode:
         return self._mode
 
-    # -------------------- 服务回调 --------------------
+    # -------------------- Service Callbacks --------------------
 
     def _switch_mode_callback(self, request: SetBool.Request, response: SetBool.Response):
         new_mode = ControlMode.INFERENCE if request.data else ControlMode.TELEOP
         if self._mode != new_mode:
             self._mode = new_mode
             self._latest_raw = None
-            self.get_logger().info(f"切换到 {new_mode.value} 模式")
+            self.get_logger().info(f"Switched to {new_mode.value} mode")
         response.success = True
-        response.message = f"当前模式: {new_mode.value}"
+        response.message = f"Current mode: {new_mode.value}"
         return response
 
     def _get_mode_callback(self, request: Trigger.Request, response: Trigger.Response):
@@ -155,7 +155,7 @@ class WujiHandControllerNode(Node):
         response.message = self._mode.value
         return response
 
-    # -------------------- 订阅回调 (仅缓存, 零计算) --------------------
+    # -------------------- Subscription Callbacks (cache only, zero computation) --------------------
 
     def _left_cmd_callback(self, msg: JointState):
         if self._mode == ControlMode.INFERENCE and msg.position:
@@ -166,28 +166,28 @@ class WujiHandControllerNode(Node):
             self._right_inference_angles = np.array(msg.position, dtype=np.float32)
 
     def _hand_input_callback(self, msg: Float32MultiArray):
-        """缓存最新手部输入 (零计算), 由 _teleop_loop 定时器消费"""
+        """Cache latest hand input (zero computation), consumed by _teleop_loop timer"""
         if self._mode != ControlMode.TELEOP:
             return
         raw = np.array(msg.data, dtype=np.float32)
         if raw.size > 0:
             self._latest_raw = raw
 
-    # -------------------- 控制循环 (100Hz 定时器驱动) --------------------
+    # -------------------- Control Loop (100Hz timer-driven) --------------------
 
     def _teleop_loop(self):
-        """TELEOP 控制循环: consume-once → retarget → 硬件
+        """TELEOP control loop: consume-once → retarget → hardware
 
-        固定 100Hz (10ms) 间隔, 保证:
-        - 输出时序均匀 (无 CPU 满载抖动)
-        - 每帧数据只 retarget 一次 (无重复计算)
-        - CPU ~66% (留余量给 Python GIL/GC)
-        - driver 以 1000Hz 自动重复转发最新指令到固件
+        Fixed 100Hz (10ms) interval, ensures:
+        - Uniform output timing (no CPU-load jitter)
+        - Each frame retargeted only once (no redundant computation)
+        - CPU ~66% (leaves margin for Python GIL/GC)
+        - driver automatically repeats forwarding latest commands to firmware at 1000Hz
         """
         if self._mode != ControlMode.TELEOP:
             return
 
-        # Consume-once: 取出并清空缓存
+        # Consume-once: retrieve and clear cache
         raw = self._latest_raw
         if raw is None:
             return
@@ -196,7 +196,7 @@ class WujiHandControllerNode(Node):
         try:
             right_kp, left_kp = self._split_keypoints(raw)
         except ValueError as e:
-            self.get_logger().error(f"无效数据: {e}")
+            self.get_logger().error(f"Invalid data: {e}")
             return
 
         _, _, left_angles, right_angles = self.controller.set_keypoints(
@@ -204,7 +204,7 @@ class WujiHandControllerNode(Node):
         self._publish_command(left_angles, right_angles)
 
     def _inference_loop(self):
-        """INFERENCE 控制循环: 直接转发关节指令"""
+        """INFERENCE control loop: directly forward joint commands"""
         if self._mode != ControlMode.INFERENCE:
             return
         left = self._left_inference_angles
@@ -214,7 +214,7 @@ class WujiHandControllerNode(Node):
         if right is not None and self.controller.right_hand:
             self.controller.right_hand.set_joint_positions(right)
 
-    # -------------------- 发布 --------------------
+    # -------------------- Publishing --------------------
 
     def _publish_command(self, left: Optional[np.ndarray], right: Optional[np.ndarray]):
         stamp = self.get_clock().now().to_msg()
@@ -231,10 +231,10 @@ class WujiHandControllerNode(Node):
             msg.position = right.tolist()
             self.right_cmd_pub.publish(msg)
 
-    # -------------------- 工具方法 --------------------
+    # -------------------- Utility Methods --------------------
 
     def _split_keypoints(self, raw: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
-        """分割关键点数据为左右手"""
+        """Split keypoint data into left and right hands"""
         single, double = 63, 126
         if raw.size == double:
             return raw[:single].reshape(21, 3), raw[single:].reshape(21, 3)
@@ -243,22 +243,22 @@ class WujiHandControllerNode(Node):
             if self.controller.is_left_connected() and not self.controller.is_right_connected():
                 return None, kp
             return kp, None
-        raise ValueError(f"期望 {single} 或 {double}，得到 {raw.size}")
+        raise ValueError(f"Expected {single} or {double}, got {raw.size}")
 
     def shutdown(self):
-        self.get_logger().info("正在关闭...")
+        self.get_logger().info("Shutting down...")
         self.controller.disable_and_release()
-        self.get_logger().info("已安全退出")
+        self.get_logger().info("Safely exited")
 
 
-# -------------------- 入口函数 --------------------
+# -------------------- Entry Function --------------------
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="灵巧手控制器")
-    parser.add_argument("-c", "--config", help="配置文件路径")
-    parser.add_argument("-i", "--input-source", choices=["manus"], help="输入源")
-    parser.add_argument("--left-hand", help="左手 wujihandros2 驱动命名空间")
-    parser.add_argument("--right-hand", help="右手 wujihandros2 驱动命名空间")
+    parser = argparse.ArgumentParser(description="Dexterous hand controller")
+    parser.add_argument("-c", "--config", help="Configuration file path")
+    parser.add_argument("-i", "--input-source", choices=["manus"], help="Input source")
+    parser.add_argument("--left-hand", help="Left hand wujihandros2 driver namespace")
+    parser.add_argument("--right-hand", help="Right hand wujihandros2 driver namespace")
     return parser.parse_args(argv)
 
 
@@ -268,7 +268,7 @@ def main(argv: Optional[list[str]] = None):
     cli_argv = remove_ros_args(raw_argv)[1:]
     args = _parse_args(cli_argv)
 
-    # 加载配置 (CLI 参数优先于配置文件)
+    # Load configuration (CLI args take precedence over config file)
     config_path = args.config or get_package_config_path("wujihand_output", "wujihand_ik.yaml")
     config = load_yaml_config(config_path)
 

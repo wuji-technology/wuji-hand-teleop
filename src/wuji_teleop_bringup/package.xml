@@ -5,7 +5,6 @@
   <version>0.1.0</version>
   <description>
     Launch files for Wuji Hand and Tianji Arm teleoperation system.
-    悟己手和天机臂遥操作系统的启动文件。
   </description>
   <maintainer email="support@wuji.tech">Wuji Tech</maintainer>
   <license>MIT</license>

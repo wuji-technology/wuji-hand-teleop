@@ -1,36 +1,38 @@
-# Manus 手套校准参数配置指南
 
-## 1. 校准文件放置位置
+# MANUS Glove Calibration Parameter Configuration Guide
 
-将你的 `.mcal` 校准文件放置到 manus_ros2 包内的 calibration 目录：
+## 1. Calibration File Placement
 
+Place your `.mcal` calibration files in the calibration directory within the manus_ros2 package. The code loads separate files for each hand:
+
+- Left hand: `LeftMetaglovePro.mcal`
+- Right hand: `RightMetaglovePro.mcal`
+
+```text
+manus_ros2/calibration/LeftMetaglovePro.mcal
+manus_ros2/calibration/RightMetaglovePro.mcal
 ```
-manus_ros2/calibration/Calibration.mcal
-```
 
-完整路径：
-```
-/home/os/ros2_ws/src/wuji-hand-teleop-ros2/src/input_devices/manus_input/manus_ros2/calibration/Calibration.mcal
-```
-
-### 操作命令
+### Commands
 
 ```bash
-# 复制你的校准文件（重命名为 Calibration.mcal）
-cp /path/to/your/calibration.mcal \
-   ~/ros2_ws/src/wuji-hand-teleop-ros2/src/input_devices/manus_input/manus_ros2/calibration/Calibration.mcal
+cp /path/to/left_calibration.mcal \
+   ~/ros2_ws/src/wuji-hand-teleop/src/input_devices/manus_input/manus_ros2/calibration/LeftMetaglovePro.mcal
+cp /path/to/right_calibration.mcal \
+   ~/ros2_ws/src/wuji-hand-teleop/src/input_devices/manus_input/manus_ros2/calibration/RightMetaglovePro.mcal
 ```
 
-**注意**: 文件必须命名为 `Calibration.mcal`
+**Note**: The filenames must match exactly (`LeftMetaglovePro.mcal` and `RightMetaglovePro.mcal`)
 
 ---
 
-## 2. 目录结构
+## 2. Directory Structure
 
-```
+```text
 manus_ros2/
 ├── calibration/
-│   └── Calibration.mcal    # <-- 校准文件放这里
+│   ├── LeftMetaglovePro.mcal     # <-- Left hand calibration
+│   └── RightMetaglovePro.mcal    # <-- Right hand calibration
 ├── CMakeLists.txt
 ├── ManusSDK/
 ├── src/
@@ -42,52 +44,52 @@ manus_ros2/
 
 ---
 
-## 3. 代码修改说明
+## 3. Code Modification Details
 
-### 3.1 修改 `CMakeLists.txt`
+### 3.1 Modify `CMakeLists.txt`
 
-添加 ament_index_cpp 依赖和安装校准目录：
+Add ament_index_cpp dependency and install calibration directory:
 
 ```cmake
-# 添加依赖
+# Add dependency
 find_package(ament_index_cpp REQUIRED)
 
-# 安装校准文件目录
+# Install calibration file directory
 install(DIRECTORY calibration/
   DESTINATION share/${PROJECT_NAME}/calibration)
 
-# 更新 ament_target_dependencies
+# Update ament_target_dependencies
 ament_target_dependencies(manus_data_publisher rclcpp std_msgs geometry_msgs manus_ros2_msgs ament_index_cpp)
 ```
 
-### 3.2 修改 `ManusDataPublisher.hpp`
+### 3.2 Modify `ManusDataPublisher.hpp`
 
-在 `protected` 部分添加：
+Add to the `protected` section:
 
 ```cpp
-// 自动加载校准文件
+// Auto-load calibration file
 bool LoadCalibrationFile(uint32_t p_GloveId, Side p_Side);
 
-// 校准加载状态
+// Calibration load status
 bool m_LeftCalibrationLoaded = false;
 bool m_RightCalibrationLoaded = false;
 ```
 
-### 3.3 修改 `ManusDataPublisher.cpp`
+### 3.3 Modify `ManusDataPublisher.cpp`
 
-#### 添加头文件
+#### Add Header
 
 ```cpp
 #include <ament_index_cpp/get_package_share_directory.hpp>
 ```
 
-#### 添加加载函数实现
+#### Add Load Function Implementation
 
 ```cpp
-/// @brief 自动加载校准文件
+/// @brief Auto-load calibration file
 bool ManusDataPublisher::LoadCalibrationFile(uint32_t p_GloveId, Side p_Side)
 {
-    // 从 ROS2 包目录获取校准文件路径
+    // Get calibration file path from ROS2 package directory
     std::string t_PackageShareDir;
     try {
         t_PackageShareDir = ament_index_cpp::get_package_share_directory("manus_ros2");
@@ -96,26 +98,27 @@ bool ManusDataPublisher::LoadCalibrationFile(uint32_t p_GloveId, Side p_Side)
         return false;
     }
 
-    std::string t_CalibrationPath = t_PackageShareDir + "/calibration/Calibration.mcal";
+    std::string t_CalibrationFile = (p_Side == Side_Left) ? "LeftMetaglovePro.mcal" : "RightMetaglovePro.mcal";
+    std::string t_CalibrationPath = t_PackageShareDir + "/calibration/" + t_CalibrationFile;
 
-    // 检查文件是否存在
+    // Check if file exists
     std::ifstream t_File(t_CalibrationPath, std::ios::binary);
     if (!t_File) {
         ClientLog::warn("Calibration file not found: {}", t_CalibrationPath);
         return false;
     }
 
-    // 获取文件大小
+    // Get file size
     t_File.seekg(0, std::ios::end);
     int t_FileLength = static_cast<int>(t_File.tellg());
     t_File.seekg(0, std::ios::beg);
 
-    // 读取校准数据
+    // Read calibration data
     std::vector<unsigned char> t_CalibrationData(t_FileLength);
     t_File.read(reinterpret_cast<char*>(t_CalibrationData.data()), t_FileLength);
     t_File.close();
 
-    // 应用校准数据
+    // Apply calibration data
     SetGloveCalibrationReturnCode t_Result;
     CoreSdk_SetGloveCalibration(p_GloveId, t_CalibrationData.data(), t_FileLength, &t_Result);
 
@@ -131,12 +134,12 @@ bool ManusDataPublisher::LoadCalibrationFile(uint32_t p_GloveId, Side p_Side)
 }
 ```
 
-#### 在 `PublishCallback` 函数中添加自动加载逻辑
+#### Add Auto-Load Logic in `PublishCallback` Function
 
-在 `for (size_t i = 0; i < m_Landscape->gloveDevices.gloveCount; i++)` 循环开始处添加：
+Add at the beginning of the `for (size_t i = 0; i < m_Landscape->gloveDevices.gloveCount; i++)` loop:
 
 ```cpp
-// 自动加载校准文件（每只手只加载一次）
+// Auto-load calibration file (load once per hand)
 uint32_t t_GloveId = m_Landscape->gloveDevices.gloves[i].id;
 Side t_Side = m_Landscape->gloveDevices.gloves[i].side;
 
@@ -153,74 +156,75 @@ if (t_Side == Side_Left && !m_LeftCalibrationLoaded) {
 
 ---
 
-## 4. 编译和运行
+## 4. Build and Run
 
 ```bash
-# 进入工作空间
+# Enter workspace
 cd ~/ros2_ws
 
-# 编译
+# Build
 source /opt/ros/humble/setup.bash
 colcon build --packages-select manus_ros2
 
-# 运行
+# Run
 source install/setup.bash
 ros2 run manus_ros2 manus_data_publisher
 ```
 
 ---
 
-## 5. 工作原理
+## 5. How It Works
 
-1. **编译时** → `calibration/` 目录被安装到 `install/manus_ros2/share/manus_ros2/calibration/`
-2. **程序启动** → 连接到 Manus Core
-3. **检测到手套** → 自动从包的 share 目录加载 `Calibration.mcal`
-4. **校准应用** → 调用 `CoreSdk_SetGloveCalibration()` 将校准数据发送到 Manus Core
-5. **后续使用** → 所有 SDK 调用都会使用已加载的校准参数
+1. **At build time** → The `calibration/` directory is installed to `install/manus_ros2/share/manus_ros2/calibration/`
+2. **Program starts** → Connects to MANUS Core
+3. **Glove detected** → Automatically loads `LeftMetaglovePro.mcal` or `RightMetaglovePro.mcal` based on hand side
+4. **Calibration applied** → Calls `CoreSdk_SetGloveCalibration()` to send calibration data to MANUS Core
+5. **Subsequent usage** → All SDK calls will use the loaded calibration parameters
 
 ---
 
-## 6. 打包说明
+## 6. Packaging Notes
 
-由于校准文件现在在包内部，打包时会自动包含：
+Since the calibration file is now inside the package, it will be automatically included when packaging:
 
 ```bash
-# 打包整个 manus_ros2 目录即可
+# Just package the entire manus_ros2 directory
 tar -czvf manus_ros2.tar.gz manus_ros2/
 ```
 
-安装后校准文件位置：
+Installed calibration file locations:
+```text
+<ros2_ws>/install/manus_ros2/share/manus_ros2/calibration/LeftMetaglovePro.mcal
+<ros2_ws>/install/manus_ros2/share/manus_ros2/calibration/RightMetaglovePro.mcal
 ```
-<ros2_ws>/install/manus_ros2/share/manus_ros2/calibration/Calibration.mcal
-```
 
 ---
 
-## 7. 注意事项
+## 7. Important Notes
 
-- 校准文件格式为二进制 `.mcal` 文件
-- 每次程序启动时会自动加载校准（无需手动操作）
-- 如果校准文件不存在，程序会打印警告但继续运行
-- 左右手分别跟踪加载状态，避免重复加载
-- **重新编译后校准文件会被安装到 install 目录**
-
----
-
-## 8. 错误代码说明
-
-| 错误码 | 含义 |
-|--------|------|
-| `SetGloveCalibrationReturnCode_Success` | 加载成功 |
-| `SetGloveCalibrationReturnCode_WrongSideError` | 左右手不匹配 |
-| `SetGloveCalibrationReturnCode_VersionError` | 版本不兼容 |
-| `SetGloveCalibrationReturnCode_GloveNotFoundError` | 手套未找到 |
+- The calibration file format is binary `.mcal`
+- Calibration is automatically loaded each time the program starts (no manual operation needed)
+- If the calibration file does not exist, the program will print a warning but continue running
+- Left and right hand loading states are tracked separately to avoid duplicate loading
+- **After recompiling, the calibration file will be installed to the install directory**
 
 ---
 
-## 9. 快速检查清单
+## 8. Error Code Reference
 
-- [ ] 校准文件已放置到 `manus_ros2/calibration/Calibration.mcal`
-- [ ] 代码已修改
-- [ ] 已重新编译 (`colcon build --packages-select manus_ros2`)
-- [ ] Manus Core 正在运行
-- [ ] 手套已连接
+| Error Code | Meaning |
+|------------|---------|
+| `SetGloveCalibrationReturnCode_Success` | Loaded successfully |
+| `SetGloveCalibrationReturnCode_WrongSideError` | Left/right hand mismatch |
+| `SetGloveCalibrationReturnCode_VersionError` | Version incompatible |
+| `SetGloveCalibrationReturnCode_GloveNotFoundError` | Glove not found |
+
+---
+
+## 9. Quick Checklist
+
+- [ ] Calibration files placed at `manus_ros2/calibration/LeftMetaglovePro.mcal` and `manus_ros2/calibration/RightMetaglovePro.mcal`
+- [ ] Code has been modified
+- [ ] Recompiled (`colcon build --packages-select manus_ros2`)
+- [ ] MANUS Core is running
+- [ ] Gloves are connected

@@ -1,14 +1,13 @@
 """
-Wuji Full Teleoperation Launch File / Wuji 完整遥操作启动文件
+Wuji Full Teleoperation Launch File
 
 Launches all components for hand and arm teleoperation with configurable input devices.
-启动手部和机械臂遥操作的所有组件，支持配置不同的输入设备。
 
-Supported combinations / 支持的组合:
+Supported combinations:
   - hand_input: manus (Manus Gloves)
   - arm_input: tracker (HTC Vive Trackers)
 
-Usage / 使用方式:
+Usage:
     # Manus gloves + Vive Trackers
     ros2 launch wuji_teleop_bringup wuji_teleop.launch.py hand_input:=manus arm_input:=tracker
 
@@ -71,7 +70,7 @@ def generate_launch_description() -> LaunchDescription:
         description="Path to wujihand_ik config file",
     )
 
-    # ===== wujihandros2 驱动参数 =====
+    # ===== wujihandros2 driver parameters =====
     left_serial_arg = DeclareLaunchArgument(
         "left_serial",
         default_value=LEFT_HAND_SERIAL,
@@ -176,14 +175,13 @@ def generate_launch_description() -> LaunchDescription:
         ),
 
         # ==================== HAND INPUT: Manus ====================
-        # Manus ROS2 Driver (needs root for USB dongle access)
+        # Manus ROS2 Driver (USB access via udev rule, no sudo needed)
         Node(
             package="manus_ros2",
             executable="manus_data_publisher",
             name="manus_data_publisher",
             output="screen",
             emulate_tty=True,
-            prefix="sudo -E",
             condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
         # Manus Input Node (convert to MediaPipe format)

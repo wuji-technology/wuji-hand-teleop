@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """
-头部双目相机独立启动文件 (向后兼容包装)
-Stereo Head Camera Independent Launch File (backward-compatible wrapper)
+Head Stereo Camera Independent Launch File (backward-compatible wrapper)
 
-等价于: ros2 launch camera camera_launch.py enable_head:=true
 Equivalent to: ros2 launch camera camera_launch.py enable_head:=true
 
 Usage:
@@ -27,7 +25,7 @@ def generate_launch_description():
     pkg_share = Path(get_package_share_directory('camera'))
     camera_launch_path = str(pkg_share / 'launch' / 'camera_launch.py')
 
-    # 允许覆盖的参数
+    # Parameters that can be overridden
     camera_device_arg = DeclareLaunchArgument(
         'camera_device',
         default_value='/dev/stereo_camera',
@@ -52,7 +50,7 @@ def generate_launch_description():
         description='Enable stereo head camera ROS2 publisher (default: true)'
     )
 
-    # 包含 camera_launch.py，默认启用头部相机
+    # Include camera_launch.py, head camera enabled by default
     camera_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(camera_launch_path),
         launch_arguments={

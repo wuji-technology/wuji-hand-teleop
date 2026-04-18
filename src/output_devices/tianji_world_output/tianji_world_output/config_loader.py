@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
 """
-天机机器人配置加载器
+Tianji Robot Configuration Loader
 
-统一加载 tianji_robot.yaml 配置文件，提供类型安全的访问接口。
+Unified loader for tianji_robot.yaml config file, providing type-safe access interface.
 
-使用方法:
+Usage:
     from tianji_world_output.config_loader import TianjiConfig
 
-    # 加载配置 (自动查找配置文件)
+    # Load config (auto-locates config file)
     config = TianjiConfig.load()
 
-    # 访问配置
+    # Access config
     init_pos = config.init_pos['left']          # numpy array
     init_rot = config.init_rot['left']          # numpy 3x3 matrix
     init_quat = config.init_quat['left']        # numpy array [qx, qy, qz, qw]
     world_to_chest_quat = config.world_to_chest_quat['left']
 
-    # 获取完整配置字典
+    # Get raw config dictionary
     raw = config.raw
 
-    # 在测试脚本中使用 (不需要 ROS 环境):
+    # Use in test scripts (no ROS environment needed):
     config = TianjiConfig.load(use_ros=False)
 """
 
@@ -37,63 +37,63 @@ except ImportError as exc:
 
 @dataclass
 class TianjiConfig:
-    """天机机器人配置"""
+    """Tianji Robot Configuration"""
 
-    # 原始配置字典
+    # Raw config dictionary
     raw: Dict[str, Any]
 
-    # 机器人连接
+    # Robot connection
     robot_ip: str
 
-    # 初始关节角度
+    # Initial joint angles
     init_joints: Dict[str, np.ndarray]
 
-    # 初始末端位姿 (Chest 坐标系)
-    init_pos: Dict[str, np.ndarray]     # [x, y, z] 米
-    init_rot: Dict[str, np.ndarray]     # 3x3 旋转矩阵
+    # Initial end-effector pose (Chest coordinate frame)
+    init_pos: Dict[str, np.ndarray]     # [x, y, z] meters
+    init_rot: Dict[str, np.ndarray]     # 3x3 rotation matrix
     init_quat: Dict[str, np.ndarray]    # [qx, qy, qz, qw]
 
-    # World → Chest 坐标变换
+    # World -> Chest coordinate transform
     world_to_chest_quat: Dict[str, np.ndarray]  # [qx, qy, qz, qw]
     world_to_chest_trans: Dict[str, np.ndarray]  # [x, y, z]
 
-    # 前臂 Tracker 初始位置 (Chest 坐标系)
-    arm_init_pos: Dict[str, np.ndarray]    # [x, y, z] 米
+    # Forearm tracker initial position (Chest coordinate frame)
+    arm_init_pos: Dict[str, np.ndarray]    # [x, y, z] meters
     arm_init_quat: Dict[str, np.ndarray]   # [qx, qy, qz, qw]
 
-    # PICO → Robot 坐标变换
-    pico_to_robot: np.ndarray  # 3x3 矩阵
+    # PICO -> Robot coordinate transform
+    pico_to_robot: np.ndarray  # 3x3 matrix
 
-    # IK 参数
+    # IK parameters
     zsp_type: int
     default_zsp_para: Dict[str, list]
     zsp_angle: float
     dgr: list
 
-    # Tracker 映射
+    # Tracker mapping
     tracker_serial_map: Dict[str, str]
 
-    # 配置文件路径
+    # Config file path
     config_path: Path
 
     @classmethod
     def load(cls, config_path: Optional[str] = None, use_ros: bool = True) -> 'TianjiConfig':
         """
-        加载配置文件
+        Load configuration file
 
         Args:
-            config_path: 配置文件路径，None 则自动查找
-            use_ros: 是否使用 ROS2 包查找机制
+            config_path: Config file path, None for auto-locate
+            use_ros: Whether to use ROS2 package lookup mechanism
 
         Returns:
-            TianjiConfig 实例
+            TianjiConfig instance
         """
         if config_path is None:
             config_path = cls._find_config_file(use_ros)
 
         path = Path(config_path)
         if not path.exists():
-            raise FileNotFoundError(f"配置文件不存在: {path}")
+            raise FileNotFoundError(f"Config file not found: {path}")
 
         with path.open('r', encoding='utf-8') as f:
             raw = yaml.safe_load(f)
@@ -102,8 +102,8 @@ class TianjiConfig:
 
     @classmethod
     def _find_config_file(cls, use_ros: bool = True) -> str:
-        """查找配置文件"""
-        # 方法1: 使用 ROS2 包查找
+        """Find config file"""
+        # Method 1: Use ROS2 package lookup
         if use_ros:
             try:
                 from ament_index_python.packages import get_package_share_directory
@@ -114,7 +114,7 @@ class TianjiConfig:
             except Exception:
                 pass
 
-        # 方法2: 相对于当前文件查找
+        # Method 2: Search relative to current file
         current_dir = Path(__file__).parent
         possible_paths = [
             current_dir / 'config' / 'tianji_robot.yaml',
@@ -126,13 +126,13 @@ class TianjiConfig:
                 return str(path)
 
         raise FileNotFoundError(
-            "找不到 tianji_robot.yaml 配置文件。\n"
-            "请确保文件位于 tianji_world_output/config/ 目录下。"
+            "Cannot find tianji_robot.yaml config file.\n"
+            "Please ensure the file is located in the tianji_world_output/config/ directory."
         )
 
     @classmethod
     def _parse(cls, raw: Dict[str, Any], config_path: Path) -> 'TianjiConfig':
-        """解析配置字典"""
+        """Parse config dictionary"""
 
         def to_numpy_dict(d: Dict[str, list]) -> Dict[str, np.ndarray]:
             return {k: np.array(v) for k, v in d.items()}
@@ -158,17 +158,17 @@ class TianjiConfig:
         )
 
     def get_world_to_chest_rotation(self, side: str) -> np.ndarray:
-        """获取 World → Chest 的旋转矩阵"""
+        """Get World -> Chest rotation matrix"""
         from scipy.spatial.transform import Rotation as R
         quat = self.world_to_chest_quat[side]
         return R.from_quat(quat).as_matrix()
 
     def get_chest_to_world_rotation(self, side: str) -> np.ndarray:
-        """获取 Chest → World 的旋转矩阵 (逆变换)"""
+        """Get Chest -> World rotation matrix (inverse transform)"""
         return self.get_world_to_chest_rotation(side).T
 
     def get_default_zsp_direction(self, side: str) -> np.ndarray:
-        """获取归一化的默认 zsp 方向向量 (前3个分量)"""
+        """Get normalized default zsp direction vector (first 3 components)"""
         zsp = self.default_zsp_para.get(side, [0, -1, -0.5, 0, 0, 0] if side == 'left' else [0, 1, -0.5, 0, 0, 0])
         direction = np.array(zsp[:3], dtype=float)
         norm = np.linalg.norm(direction)
@@ -177,16 +177,16 @@ class TianjiConfig:
         return direction
 
     def get_kine_config_path(self) -> str:
-        """获取运动学配置文件路径 (ccs_m6.MvKDCfg)"""
-        # 配置文件位于 tianji_world_output/config/ 目录下
+        """Get kinematics config file path (ccs_m6.MvKDCfg)"""
+        # Config file is in the tianji_world_output/config/ directory
         kine_file = self.raw.get('kine_config_file', 'ccs_m6.MvKDCfg')
 
-        # 优先查找相对于此文件的路径
+        # Prefer path relative to this file
         local_path = Path(__file__).parent / 'config' / kine_file
         if local_path.exists():
             return str(local_path)
 
-        # 尝试从 share 目录查找 (ROS2 安装后)
+        # Try from share directory (after ROS2 install)
         try:
             from ament_index_python.packages import get_package_share_directory
             share_path = Path(get_package_share_directory('tianji_world_output')) / 'config' / kine_file
@@ -195,16 +195,16 @@ class TianjiConfig:
         except Exception:
             pass
 
-        # 回退到旧路径
+        # Fallback to legacy path
         return str(self.config_path.parent / kine_file)
 
 
-# 全局单例 (延迟加载)
+# Global singleton (lazy-loaded)
 _config_instance: Optional[TianjiConfig] = None
 
 
 def get_config(use_ros: bool = True) -> TianjiConfig:
-    """获取配置单例"""
+    """Get config singleton"""
     global _config_instance
     if _config_instance is None:
         _config_instance = TianjiConfig.load(use_ros=use_ros)
@@ -212,7 +212,7 @@ def get_config(use_ros: bool = True) -> TianjiConfig:
 
 
 def reload_config(config_path: Optional[str] = None, use_ros: bool = True) -> TianjiConfig:
-    """重新加载配置"""
+    """Reload configuration"""
     global _config_instance
     _config_instance = TianjiConfig.load(config_path=config_path, use_ros=use_ros)
     return _config_instance

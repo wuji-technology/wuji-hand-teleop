@@ -1,45 +1,49 @@
+
 # XRoboToolkit Unity Client APK
 
-APK 文件已从 Git 仓库移除，以保持仓库轻量。
+APK files have been removed from the Git repository to keep it lightweight.
 
-## 下载 APK
+## Download APK
 
-请从 GitHub Release 下载最新版本：
+Please download the latest version from GitHub Releases:
 
-**v1.3.0（最新）**
-- **本地坐标系版本（推荐 - 更稳定）⭐**: [XRoboToolkit-v1.3.0-local.apk](https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.3.0/XRoboToolkit-v1.3.0-local.apk)
-- 全局坐标系版本（仅特殊场景）: [XRoboToolkit-v1.3.0-global.apk](https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.3.0/XRoboToolkit-v1.3.0-global.apk)
+**v1.4 (Latest)**
+- [v1.4.apk](https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.4/v1.4.apk) — No longer distinguishes local/global; uses local coordinate system by default
+
+**v1.3.0**
+- Local coordinate system (Recommended): [v1.3local.apk](https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.3.0/v1.3local.apk)
+- Global coordinate system (Special scenarios only): [v1.3global.apk](https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.3.0/v1.3global.apk)
 
 **v1.2.0**
-- [XRoboToolkit-v1.2.0.apk](https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.2.0/XRoboToolkit-v1.2.0.apk)
+- [v1.2.apk](https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.2.0/v1.2.apk)
 
-## 坐标系模式说明
+## Coordinate System Mode Description
 
-| 模式 | 稳定性 | 推荐使用 |
-|------|--------|----------|
-| **Local（本地坐标系）** | ⭐⭐⭐⭐⭐ 更稳定 | ✅ 推荐日常使用 |
-| **Global（全局坐标系）** | ⭐⭐⭐ 可能不稳定 | 仅多设备空间对齐场景 |
+| Mode | Stability | Recommended Use |
+|------|-----------|-----------------|
+| **Local (Local coordinate system)** | More stable | Recommended for daily use |
+| **Global (Global coordinate system)** | May be unstable | Only for multi-device spatial alignment scenarios |
 
-**Local 模式优势：**
-- 相对于设备初始位置的坐标系
-- 不依赖环境特征点，追踪更稳定可靠
-- 适合单设备使用、机械臂遥操作等日常开发
+**Local mode advantages:**
+- Coordinate system relative to device initial position
+- Does not depend on environmental feature points, more stable and reliable tracking
+- Suitable for single device use, robotic arm teleoperation, and daily development
 
-**Global 模式限制：**
-- 依赖环境空间锚点和特征点
-- 可能因光照变化、环境遮挡导致追踪不稳定
-- 仅在需要多设备空间对齐时使用
+**Global mode limitations:**
+- Depends on environmental spatial anchors and feature points
+- May experience unstable tracking due to lighting changes or environmental occlusion
+- Use only when multi-device spatial alignment is needed
 
-## 安装
+## Installation
 
 ```bash
-# 1. 下载 APK（推荐 local 版本）
-wget https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.3.0/XRoboToolkit-v1.3.0-local.apk
+# 1. Download APK
+wget https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases/download/v1.4/v1.4.apk
 
-# 2. 安装到 PICO 头显
-adb install -r -g XRoboToolkit-v1.3.0-local.apk
+# 2. Install to PICO headset
+adb install -r -g v1.4.apk
 ```
 
-## 所有 Release 版本
+## All Release Versions
 
-查看所有版本: https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases
+View all versions: https://github.com/lzhu686/XRoboToolkit-Unity-Client/releases

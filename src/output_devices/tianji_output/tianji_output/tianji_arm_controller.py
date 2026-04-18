@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-天机臂统一控制器 - 封装类 / Tianji Arm Unified Controller
+Tianji Arm Unified Controller
 
-整合笛卡尔空间控制和关节空间控制：
-- 笛卡尔空间控制：通过末端位姿控制（IK 解算）
-- 关节空间控制：直接使用关节角度控制
+Integrates Cartesian space control and joint space control:
+- Cartesian space control: via end-effector pose control (IK solving)
+- Joint space control: direct joint angle control
 """
 try:
     from tianji_output._internal.fx_robot import Marvin_Robot
@@ -22,24 +22,24 @@ from ament_index_python.packages import get_package_share_directory
 
 class TianjiArmController:
     """
-    天机臂统一控制器 / Tianji Arm Unified Controller
+    Tianji Arm Unified Controller
 
-    同时支持笛卡尔空间控制和关节空间控制。
+    Supports both Cartesian space control and joint space control.
     """
 
     def __init__(self, robot_ip='192.168.1.190', config_path=None, logger=None):
         """
-        初始化天机臂控制器（同时初始化左右两臂）
+        Initialize Tianji arm controller (initializes both left and right arms)
 
         Args:
-            robot_ip: 机器人IP地址
-            config_path: 运动学配置文件路径
-                - None: 使用默认的 'ccs_m6.MvKDCfg'（从ROS2包中自动查找）
-                - 相对路径: 从ROS2包的config目录中查找
-                - 绝对路径: 直接使用该路径
-            logger: 外部传入的 logger（可选，用于集成 ROS2 日志系统）
+            robot_ip: Robot IP address
+            config_path: Kinematics configuration file path
+                - None: Use default 'ccs_m6.MvKDCfg'(auto-searched from ROS2 package)
+                - Relative path: search from ROS2 package config directory
+                - Absolute path: use this path directly
+            logger: External logger (optional, for integrating ROS2 logging system)
         """
-        # 日志：优先使用外部传入的 logger
+        # Logging: prefer externally provided logger
         if logger is not None:
             self.logger = logger
         else:
@@ -50,20 +50,20 @@ class TianjiArmController:
                 handler.setFormatter(logging.Formatter('[%(name)s] %(message)s'))
                 self.logger.addHandler(handler)
 
-        # 解析配置文件路径
+        # Parse configuration file path
         if config_path is None:
             config_filename = 'ccs_m6.MvKDCfg'
             package_share = get_package_share_directory('tianji_output')
             config_path = os.path.join(package_share, 'config', config_filename)
 
         if not os.path.exists(config_path):
-            raise FileNotFoundError(f"配置文件不存在: {config_path}")
+            raise FileNotFoundError(f"Configuration file does not exist: {config_path}")
 
-        self.logger.debug(f"加载配置文件: {config_path}")
+        self.logger.debug(f"Loading configuration file: {config_path}")
 
-        # ---------------------- 初始化运动学 ----------------------
-        # 初始化左臂运动学
-        self.logger.debug("[A臂] 初始化运动学SDK...")
+        # ---------------------- Initialize kinematics ----------------------
+        # Initialize left arm kinematics
+        self.logger.debug("[Arm A] Initializing kinematics SDK...")
         self.kine_left = Marvin_Kine()
         config_result = self.kine_left.load_config(config_path=config_path)
         time.sleep(0.3)
@@ -75,8 +75,8 @@ class TianjiArmController:
             j67=config_result['BD'][0]
         )
 
-        # 初始化右臂运动学
-        self.logger.debug("[B臂] 初始化运动学SDK...")
+        # Initialize right arm kinematics
+        self.logger.debug("[Arm B] Initializing kinematics SDK...")
         self.kine_right = Marvin_Kine()
         config_result = self.kine_right.load_config(config_path=config_path)
         time.sleep(0.3)
@@ -88,13 +88,13 @@ class TianjiArmController:
             j67=config_result['BD'][1]
         )
 
-        # ---------------------- 初始化机器人连接 ----------------------
-        self.logger.debug("初始化机器人控制...")
+        # ---------------------- Initialize robot connection ----------------------
+        self.logger.debug("Initializing robot control...")
         self.robot = Marvin_Robot()
 
         init = self.robot.connect(robot_ip)
         if init == 0:
-            raise ConnectionError("连接失败：端口占用!")
+            raise ConnectionError("Connection failed: port occupied!")
 
         time.sleep(0.5)
         self.robot.clear_set()
@@ -104,43 +104,43 @@ class TianjiArmController:
         time.sleep(0.5)
 
         if not self._verify_connection():
-            raise ConnectionError("机器人连接失败!")
+            raise ConnectionError("Robot connection failed!")
 
-        # 保存为共享实例
+        # Save as shared instance
         TianjiArmController._shared_robot = self.robot
         TianjiArmController._shared_kine_left = self.kine_left
         TianjiArmController._shared_kine_right = self.kine_right
         TianjiArmController._initialized = True
 
-        # ---------------------- IK 参数（可实时修改）----------------------
-        self.zsp_type = 1                           # 零空间约束类型
-        self.left_zsp_para = [0, -1, -1, 0, 0, 0]   # 左臂零空间参考平面参数
-        self.right_zsp_para = [0, 1, -1, 0, 0, 0]   # 右臂零空间参考平面参数
-        self.zsp_angle = 0.0                        # 零空间臂角旋转角度
-        self.dgr = [5.0, 5.0, 5.0]                  # 奇异允许角度范围
+        # ---------------------- IK parameters (can be modified in real-time)----------------------
+        self.zsp_type = 1                           # Nullspace constraint type
+        self.left_zsp_para = [0, -1, -1, 0, 0, 0]   # Left arm nullspace reference plane parameters
+        self.right_zsp_para = [0, 1, -1, 0, 0, 0]   # Right arm nullspace reference plane parameters
+        self.zsp_angle = 0.0                        # Nullspace arm angle rotation angle
+        self.dgr = [5.0, 5.0, 5.0]                  # Singularity tolerance angle range
 
-        # 设置工具参数 (wuji hand)
+        # Set tool parameters (wuji hand)
         self._set_tool_params()
 
-        self.logger.info("双臂控制器初始化完成")
+        self.logger.info("Dual-arm controller initialization complete")
 
     def _set_tool_params(self):
         """
-        设置工具参数（运动学 + 动力学）
+        Set tool parameters (kinematics + dynamics)
 
-        运动学参数 [X, Y, Z, A, B, C]:
-            X, Y, Z: 工具中心点相对于法兰的位置偏移 (mm)
-            A, B, C: 工具相对于法兰的姿态偏移 (度)
+        Kinematics parameters [X, Y, Z, A, B, C]:
+            X, Y, Z: Tool center point offset relative to flange (mm)
+            A, B, C: Tool orientation offset relative to flange (degrees)
 
-        动力学参数 [M, mx, my, mz, Ixx, Ixy, Ixz, Iyy, Iyz, Izz]:
-            M: 工具质量 (kg)
-            mx, my, mz: 质心相对于法兰的位置 (mm)
-            Ixx~Izz: 惯性张量 (kg·mm²)
+        Dynamics parameters [M, mx, my, mz, Ixx, Ixy, Ixz, Iyy, Iyz, Izz]:
+            M: Tool mass (kg)
+            mx, my, mz: Center of mass position relative to flange (mm)
+            Ixx~Izz: inertia tensor (kg·mm²)
         """
-        tool_kine = [0, 0, 120, 0, 0, 0]  # 工具中心点距法兰 120mm
-        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]  # 质量 0.95kg, 质心距法兰 90mm
+        tool_kine = [0, 0, 120, 0, 0, 0]  # Tool center point 120mm from flange
+        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]  # Mass 0.95kg, center of mass 90mm from flange
 
-        self.logger.debug(f"设置工具参数: kine={tool_kine}, dyn={tool_dyn}")
+        self.logger.debug(f"Setting tool parameters: kine={tool_kine}, dyn={tool_dyn}")
 
         self.robot.clear_set()
         self.robot.set_tool(arm='A', kineParams=tool_kine, dynamicParams=tool_dyn)
@@ -149,7 +149,7 @@ class TianjiArmController:
         time.sleep(0.3)
 
     def _verify_connection(self):
-        """验证机器人连接"""
+        """Verify robot connection"""
         dcss = DCSS()
         motion_tag = 0
         frame_update = None
@@ -162,14 +162,14 @@ class TianjiArmController:
             time.sleep(0.1)
         return motion_tag > 0
 
-    # ==================== 状态获取方法 ====================
+    # ==================== State Retrieval Methods ====================
 
     def get_current_joints(self):
         """
-        获取当前双臂关节角度
+        Get current dual-arm joint angles
 
         Returns:
-            tuple: (left_joints, right_joints) 各为7个关节角度的列表 (度)
+            tuple: (left_joints, right_joints) each is a list of 7 joint angles (degrees)
         """
         dcss = DCSS()
         sub_data = self.robot.subscribe(dcss)
@@ -179,10 +179,10 @@ class TianjiArmController:
 
     def get_current_joint_velocities(self):
         """
-        获取当前双臂关节速度
+        Get current dual-arm joint velocities
 
         Returns:
-            tuple: (left_velocities, right_velocities) 各为7个关节速度的列表 (度/秒)
+            tuple: (left_velocities, right_velocities) each is a list of 7 joint velocities (degrees/second)
         """
         dcss = DCSS()
         sub_data = self.robot.subscribe(dcss)
@@ -192,10 +192,10 @@ class TianjiArmController:
 
     def get_current_joint_torques(self):
         """
-        获取当前双臂关节力矩
+        Get current dual-arm joint torques
 
         Returns:
-            tuple: (left_torques, right_torques) 各为7个关节力矩的列表 (Nm)
+            tuple: (left_torques, right_torques) each is a list of 7 joint torques (Nm)
         """
         dcss = DCSS()
         sub_data = self.robot.subscribe(dcss)
@@ -205,10 +205,10 @@ class TianjiArmController:
 
     def get_full_state(self):
         """
-        获取完整的机器人状态
+        Get full robot state
 
         Returns:
-            dict: 包含双臂关节位置、速度、力矩等信息
+            dict: Contains dual-arm joint position, velocity, torque and other information
         """
         dcss = DCSS()
         sub_data = self.robot.subscribe(dcss)
@@ -225,16 +225,16 @@ class TianjiArmController:
             }
         }
 
-    # ==================== 阻抗模式设置 ====================
+    # ==================== Impedance Mode Setup ====================
 
     def set_impedance_mode(self, mode='joint', K=None, D=None):
         """
-        设置双臂阻抗模式
+        Set dual-arm impedance mode
 
         Args:
-            mode: 'joint' 关节阻抗 或 'cart' 笛卡尔阻抗
-            K: 刚度参数列表 (7个元素)
-            D: 阻尼参数列表 (7个元素)
+            mode: 'joint' joint impedance or 'cart' Cartesian impedance
+            K: Stiffness parameter list (7 elements)
+            D: Damping parameter list (7 elements)
         """
         self.robot.clear_set()
         self.robot.set_state(arm='A', state=3)
@@ -257,7 +257,7 @@ class TianjiArmController:
             self.robot.send_cmd()
             time.sleep(0.5)
 
-            self.logger.info(f"双臂笛卡尔阻抗模式 K={K}")
+            self.logger.info(f"Dual-arm Cartesian impedance mode K={K}")
 
         elif mode == 'joint':
             K = K or [2, 2, 2, 1.6, 1, 1, 1]
@@ -275,23 +275,23 @@ class TianjiArmController:
             self.robot.send_cmd()
             time.sleep(0.5)
 
-            self.logger.info(f"双臂关节阻抗模式 K={K}")
+            self.logger.info(f"Dual-arm joint impedance mode K={K}")
 
-    # ==================== 笛卡尔空间控制方法 ====================
+    # ==================== Cartesian Space Control Methods ====================
 
     def move_to_pose_direct(self, left_pose=None, right_pose=None, unit='mm'):
         """
-        笛卡尔空间控制：双臂同时 IK 解算并发送关节指令（非阻塞，用于实时追踪）
+        Cartesian space control: simultaneous dual-arm IK solving and joint command sending (non-blocking, for real-time tracking)
 
         Args:
-            left_pose: [X, Y, Z, RX, RY, RZ] 左臂目标位姿，None 表示不控制左臂
-            right_pose: [X, Y, Z, RX, RY, RZ] 右臂目标位姿，None 表示不控制右臂
-            unit: 'mm' (毫米) 或 'm' (米)
+            left_pose: [X, Y, Z, RX, RY, RZ] Left arm target pose, None means do not control left arm
+            right_pose: [X, Y, Z, RX, RY, RZ] Right arm target pose, None means do not control right arm
+            unit: 'mm' (millimeters) or 'm' (meters)
 
         Returns:
             tuple: (left_success, right_success, left_joints, right_joints)
         """
-        # 转换单位为 mm
+        # Convert units to mm
         left_mm = None
         right_mm = None
         if left_pose is not None:
@@ -305,7 +305,7 @@ class TianjiArmController:
                 for i in range(3):
                     right_mm[i] *= 1000
 
-        # 获取当前关节作为 IK 参考
+        # Get current joints as IK reference
         ref_left, ref_right = self.get_current_joints()
 
         left_success = False
@@ -313,7 +313,7 @@ class TianjiArmController:
         left_joints = None
         right_joints = None
 
-        # 左臂 IK 解算
+        # Left arm IK solving
         if left_mm is not None:
             try:
                 left_mat = self.kine_left.xyzabc_to_mat4x4(left_mm)
@@ -331,9 +331,9 @@ class TianjiArmController:
                         left_joints = left_ik.m_Output_RetJoint.to_list()
                         left_success = True
             except Exception as e:
-                self.logger.debug(f"左臂 IK 解算异常: {e}")
+                self.logger.debug(f"Left arm IK solving exception: {e}")
 
-        # 右臂 IK 解算
+        # Right arm IK solving
         if right_mm is not None:
             try:
                 right_mat = self.kine_right.xyzabc_to_mat4x4(right_mm)
@@ -351,22 +351,22 @@ class TianjiArmController:
                         right_joints = right_ik.m_Output_RetJoint.to_list()
                         right_success = True
             except Exception as e:
-                self.logger.debug(f"右臂 IK 解算异常: {e}")
+                self.logger.debug(f"Right arm IK solving exception: {e}")
 
-        # IK 调试输出
+        # IK debug output
         if left_joints is not None:
             left_joints_str = ', '.join([f'{j:7.2f}' for j in left_joints])
             self.logger.debug(f"[LEFT_IK]  joints: [{left_joints_str}]")
         else:
-            self.logger.debug(f"[LEFT_IK]  FAILED!")
+            self.logger.debug("[LEFT_IK]  FAILED!")
 
         if right_joints is not None:
             right_joints_str = ', '.join([f'{j:7.2f}' for j in right_joints])
             self.logger.debug(f"[RIGHT_IK] joints: [{right_joints_str}]")
         else:
-            self.logger.debug(f"[RIGHT_IK] FAILED!")
+            self.logger.debug("[RIGHT_IK] FAILED!")
 
-        # 发送双臂关节指令
+        # Send dual-arm joint commands
         self.robot.clear_set()
         if left_joints is not None:
             self.robot.set_joint_cmd_pose(arm='A', joints=left_joints)
@@ -376,15 +376,15 @@ class TianjiArmController:
 
         return left_success, right_success, left_joints, right_joints
 
-    # ==================== 关节空间控制方法 ====================
+    # ==================== Joint Space Control Methods ====================
 
     def move_to_joints_direct(self, left_joints=None, right_joints=None):
         """
-        关节空间控制：双臂同时发送关节角度指令（非阻塞，用于实时追踪）
+        Joint space control: simultaneous dual-arm joint angle command sending (non-blocking, for real-time tracking)
 
         Args:
-            left_joints: [j1, j2, j3, j4, j5, j6, j7] 左臂目标关节角度 (度)，None 表示不控制左臂
-            right_joints: [j1, j2, j3, j4, j5, j6, j7] 右臂目标关节角度 (度)，None 表示不控制右臂
+            left_joints: [j1, j2, j3, j4, j5, j6, j7] left arm target joint angles (degrees), None means do not control left arm
+            right_joints: [j1, j2, j3, j4, j5, j6, j7] right arm target joint angles (degrees), None means do not control right arm
 
         Returns:
             tuple: (left_success, right_success)
@@ -407,16 +407,16 @@ class TianjiArmController:
 
     def move_to_joints_smooth(self, left_target=None, right_target=None, duration=3.0, dt=0.01):
         """
-        双臂平滑移动到目标关节角度（使用五次多项式插值）
+        Smooth dual-arm movement to target joint angles (using quintic polynomial interpolation)
 
         Args:
-            left_target: [j1, j2, j3, j4, j5, j6, j7] 左臂目标关节角度 (度)，None 表示不控制左臂
-            right_target: [j1, j2, j3, j4, j5, j6, j7] 右臂目标关节角度 (度)，None 表示不控制右臂
-            duration: 轨迹总时长（秒），越大越慢越柔顺
-            dt: 插值时间步长（秒）
+            left_target: [j1, j2, j3, j4, j5, j6, j7] left arm target joint angles (degrees), None means do not control left arm
+            right_target: [j1, j2, j3, j4, j5, j6, j7] right arm target joint angles (degrees), None means do not control right arm
+            duration: Total trajectory duration (seconds), larger = slower and smoother
+            dt: Interpolation time step (seconds)
 
         Returns:
-            bool: 是否成功
+            bool: Whether successful
         """
         left_joints, right_joints = self.get_current_joints()
         start_left = list(left_joints)
@@ -429,7 +429,7 @@ class TianjiArmController:
 
         num_points = int(duration / dt)
 
-        self.logger.debug(f"平滑移动到目标位置（{duration}s 柔顺轨迹）...")
+        self.logger.debug(f"Smoothly move to target position({duration}s compliant trajectory)...")
 
         for i in range(num_points + 1):
             t = i / num_points
@@ -453,25 +453,25 @@ class TianjiArmController:
 
         return True
 
-    # ==================== 初始位姿和释放 ====================
+    # ==================== Initial Pose and Release ====================
 
     def move_to_init(self, wait=True, timeout=1, duration=3.0, dt=0.01):
         """
-        双臂同时移动到初始位姿（使用关节空间轨迹插值实现柔顺运动）
+        Move both arms to initial pose simultaneously (using joint space trajectory interpolation for compliant motion)
 
         Args:
-            wait: 是否等待运动完成
-            timeout: 到达后额外等待时间（秒）
-            duration: 轨迹总时长（秒），越大越慢越柔顺
-            dt: 插值时间步长（秒）
+            wait: Whether to wait for motion completion
+            timeout: Additional wait time after reaching (seconds)
+            duration: Total trajectory duration (seconds), larger = slower and smoother
+            dt: Interpolation time step (seconds)
 
         Returns:
-            bool: 是否成功
+            bool: Whether successful
         """
         INIT_JOINTS_LEFT = [56.9, -63.0, -46.8, -87.8, 143.2, -4.1, -45.6]
         INIT_JOINTS_RIGHT = [-50.9, -70.5, 42.6, -80.3, -140.1, -5.5, 38.9]
 
-        self.logger.debug(f"双臂移动到初始位姿（{duration}s 柔顺轨迹）...")
+        self.logger.debug(f"Moving both arms to initial pose({duration}s compliant trajectory)...")
 
         self.move_to_joints_smooth(
             left_target=INIT_JOINTS_LEFT,
@@ -491,28 +491,28 @@ class TianjiArmController:
 
         success = True
         if max_left_error < 5.0:
-            self.logger.debug(f"[A臂] 已到达初始位姿")
+            self.logger.debug("[Arm A] Reached initial pose")
         else:
-            self.logger.warning(f"[A臂] 初始位姿误差较大 ({max_left_error:.1f}°)")
+            self.logger.warning(f"[Arm A] Large initial pose error ({max_left_error:.1f}°)")
             success = False
 
         if max_right_error < 5.0:
-            self.logger.debug(f"[B臂] 已到达初始位姿")
+            self.logger.debug("[Arm B] Reached initial pose")
         else:
-            self.logger.warning(f"[B臂] 初始位姿误差较大 ({max_right_error:.1f}°)")
+            self.logger.warning(f"[Arm B] Large initial pose error ({max_right_error:.1f}°)")
             success = False
 
         return success
 
     def disable_and_release(self):
-        """下使能并释放双臂 / Disable and release both arms"""
-        self.logger.info("双臂下使能 / Disabling arms...")
+        """Disable and release both arms"""
+        self.logger.info("Disabling both arms...")
         self.robot.clear_set()
         self.robot.set_state(arm='A', state=0)
         self.robot.set_state(arm='B', state=0)
         self.robot.send_cmd()
         time.sleep(2)
 
-        self.logger.debug("释放连接...")
+        self.logger.debug("Releasing connection...")
         self.robot.release_robot()
-        self.logger.info("已安全退出 / Safely exited")
+        self.logger.info("Safely exited")

@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-验证 tianji_robot.yaml 中的 TIANJI_INIT_POS/ROT 值
+Verify TIANJI_INIT_POS/ROT values in tianji_robot.yaml
 
-功能：
-  1. 从 INIT_JOINTS 使用 FK 计算位姿
-  2. 与 tianji_robot.yaml 配置值对比
-  3. 显示坐标系说明
+Functions:
+  1. Compute poses from INIT_JOINTS using FK
+  2. Compare with tianji_robot.yaml configuration values
+  3. Display coordinate system description
 
-使用：
+Usage:
   cd /path/to/test && python3 tool/verify_fk_values.py
 """
 
@@ -15,7 +15,7 @@ import sys
 import numpy as np
 from pathlib import Path
 
-# 导入共享模块（使用相对路径）
+# Import shared modules (using relative path)
 _tool_dir = Path(__file__).resolve().parent
 _test_dir = str(_tool_dir.parent)  # tool → test
 _src_dir = _tool_dir.parents[3]    # tool → test → pico_input → input_devices → src
@@ -30,54 +30,54 @@ from common.robot_config import (
     ROBOT_IP,
 )
 
-# 导入机器人控制器
+# Import robot controller
 try:
     from tianji_world_output.cartesian_controller import CartesianController
     HAS_CONTROLLER = True
 except ImportError:
-    print("⚠️  无法导入 CartesianController，将只显示配置值")
+    print("⚠️  Cannot import CartesianController, will only display configuration values")
     HAS_CONTROLLER = False
 
 
 def main():
     print("=" * 70)
-    print("验证 FK 计算值 vs tianji_robot.yaml 配置值")
+    print("Verify FK computed values vs tianji_robot.yaml configuration values")
     print("=" * 70)
 
-    print("\n【1】INIT_JOINTS（初始关节角，度）")
-    print(f"  左臂: {INIT_JOINTS['left']}")
-    print(f"  右臂: {INIT_JOINTS['right']}")
+    print("\n[1]INIT_JOINTS (initial joint angles, degrees)")
+    print(f"  left arm: {INIT_JOINTS['left']}")
+    print(f"  right arm: {INIT_JOINTS['right']}")
 
-    print("\n【2】tianji_robot.yaml 配置值（Chest 坐标系）")
-    print("\n  TIANJI_INIT_POS（末端位置，米）:")
-    print(f"    左臂: {TIANJI_INIT_POS['left']}")
-    print(f"    右臂: {TIANJI_INIT_POS['right']}")
+    print("\n[2]tianji_robot.yaml configuration values (Chest coordinate system)")
+    print("\n  TIANJI_INIT_POS (end-effector position, meters):")
+    print(f"    left arm: {TIANJI_INIT_POS['left']}")
+    print(f"    right arm: {TIANJI_INIT_POS['right']}")
 
-    print("\n  TIANJI_INIT_ROT（末端姿态，旋转矩阵）:")
-    print(f"    左臂:\n{TIANJI_INIT_ROT['left']}")
-    print(f"    右臂:\n{TIANJI_INIT_ROT['right']}")
+    print("\n  TIANJI_INIT_ROT (end-effector orientation, rotation matrix):")
+    print(f"    left arm:\n{TIANJI_INIT_ROT['left']}")
+    print(f"    right arm:\n{TIANJI_INIT_ROT['right']}")
 
     if not HAS_CONTROLLER:
         print("\n" + "=" * 70)
-        print("⚠️  无法连接机器人，跳过 FK 验证")
+        print("Warning: Cannot connect to robot, skipping FK verification")
         print("=" * 70)
         return
 
-    print("\n【3】使用 FK 重新计算...")
+    print("\n[3]Recomputing using FK...")
 
     try:
         controller = CartesianController(robot_ip=ROBOT_IP)
-        print(f"  ✓ 已连接到机器人 {ROBOT_IP}")
+        print(f"  Connected to robot {ROBOT_IP}")
 
-        # 计算 FK
+        # compute FK
         left_fk = controller.kine_left.fk(0, INIT_JOINTS['left'])
         right_fk = controller.kine_right.fk(1, INIT_JOINTS['right'])
 
-        # 提取位置（毫米 → 米）
+        # Extract position (millimeters -> meters)
         left_pos_fk = np.array([left_fk[0][3], left_fk[1][3], left_fk[2][3]]) / 1000.0
         right_pos_fk = np.array([right_fk[0][3], right_fk[1][3], right_fk[2][3]]) / 1000.0
 
-        # 提取旋转矩阵
+        # Extract rotation matrix
         left_rot_fk = np.array([
             [left_fk[0][0], left_fk[0][1], left_fk[0][2]],
             [left_fk[1][0], left_fk[1][1], left_fk[1][2]],
@@ -89,38 +89,38 @@ def main():
             [right_fk[2][0], right_fk[2][1], right_fk[2][2]],
         ])
 
-        print("\n【4】FK 计算结果 vs 配置值对比")
+        print("\n[4]FK computed results vs configuration values comparison")
 
-        print("\n  左臂位置:")
-        print(f"    FK计算:  [{left_pos_fk[0]:.4f}, {left_pos_fk[1]:.4f}, {left_pos_fk[2]:.4f}]")
-        print(f"    配置值:  [{TIANJI_INIT_POS['left'][0]:.4f}, {TIANJI_INIT_POS['left'][1]:.4f}, {TIANJI_INIT_POS['left'][2]:.4f}]")
+        print("\n  Left arm position:")
+        print(f"    FK computed:  [{left_pos_fk[0]:.4f}, {left_pos_fk[1]:.4f}, {left_pos_fk[2]:.4f}]")
+        print(f"    Config value:  [{TIANJI_INIT_POS['left'][0]:.4f}, {TIANJI_INIT_POS['left'][1]:.4f}, {TIANJI_INIT_POS['left'][2]:.4f}]")
         pos_diff_left = np.linalg.norm(left_pos_fk - TIANJI_INIT_POS['left']) * 1000
-        print(f"    差异:    {pos_diff_left:.2f} mm")
+        print(f"    Difference:    {pos_diff_left:.2f} mm")
 
-        print("\n  右臂位置:")
-        print(f"    FK计算:  [{right_pos_fk[0]:.4f}, {right_pos_fk[1]:.4f}, {right_pos_fk[2]:.4f}]")
-        print(f"    配置值:  [{TIANJI_INIT_POS['right'][0]:.4f}, {TIANJI_INIT_POS['right'][1]:.4f}, {TIANJI_INIT_POS['right'][2]:.4f}]")
+        print("\n  Right arm position:")
+        print(f"    FK computed:  [{right_pos_fk[0]:.4f}, {right_pos_fk[1]:.4f}, {right_pos_fk[2]:.4f}]")
+        print(f"    Config value:  [{TIANJI_INIT_POS['right'][0]:.4f}, {TIANJI_INIT_POS['right'][1]:.4f}, {TIANJI_INIT_POS['right'][2]:.4f}]")
         pos_diff_right = np.linalg.norm(right_pos_fk - TIANJI_INIT_POS['right']) * 1000
-        print(f"    差异:    {pos_diff_right:.2f} mm")
+        print(f"    Difference:    {pos_diff_right:.2f} mm")
 
-        print("\n  左臂姿态:")
+        print("\n  Left arm orientation:")
         rot_diff_left = np.linalg.norm(left_rot_fk - TIANJI_INIT_ROT['left'])
-        print(f"    差异范数: {rot_diff_left:.6f}")
+        print(f"    Difference norm: {rot_diff_left:.6f}")
 
-        print("\n  右臂姿态:")
+        print("\n  Right arm orientation:")
         rot_diff_right = np.linalg.norm(right_rot_fk - TIANJI_INIT_ROT['right'])
-        print(f"    差异范数: {rot_diff_right:.6f}")
+        print(f"    Difference norm: {rot_diff_right:.6f}")
 
-        # 验证结果
+        # Verification Results
         print("\n" + "=" * 70)
         if pos_diff_left < 1 and pos_diff_right < 1 and rot_diff_left < 0.01 and rot_diff_right < 0.01:
-            print("✓ 验证通过：FK 计算值与配置值一致")
+            print("Verification passed: FK computed values match configuration values")
         else:
-            print("⚠️  验证失败：FK 计算值与配置值有差异")
-            print("   可能原因：运动学配置文件版本不同")
+            print("⚠️  Verification failed: FK computed values differ from configuration values")
+            print("   Possible cause: different kinematics configuration file version")
 
-        # 如果需要更新配置，打印新值
-        print("\n【5】如需更新 tianji_robot.yaml，使用以下值：")
+        # If configuration needs updating, print new values
+        print("\n[5]If updating tianji_robot.yaml, use the following values:")
         print(f"""
 TIANJI_INIT_POS = {{
     'left': np.array([{left_pos_fk[0]:.4f}, {left_pos_fk[1]:.4f}, {left_pos_fk[2]:.4f}]),
@@ -142,25 +142,25 @@ TIANJI_INIT_ROT = {{
 """)
 
     except Exception as e:
-        print(f"\n❌ 错误: {e}")
+        print(f"\nError: {e}")
         import traceback
         traceback.print_exc()
 
-    print("\n【坐标系说明】")
+    print("\n[Coordinate System Description]")
     print("""
-  TIANJI_INIT_POS/ROT 是在 Chest 坐标系中的值，不是 World 坐标系！
+  TIANJI_INIT_POS/ROT are values in Chest coordinate system, not World coordinate system!
 
-  坐标系关系：
-    World (ROS REP 103)           Chest (机械臂基座)
-    ┌─────────────────┐           ┌─────────────────┐
-    │ X = 前          │           │ Left:  X前 Y下 Z左
-    │ Y = 左          │  ──────>  │ Right: X前 Y上 Z右
-    │ Z = 上          │  绕X轴±90°│
-    └─────────────────┘           └─────────────────┘
+  Coordinate system relationships:
+    World (ROS REP 103)           Chest (robot arm base)
+    +-------------------+           +-------------------+
+    | X = Forward       |           | Left:  X=Forward Y=Down Z=Left
+    | Y = Left          |  ----->>  | Right: X=Forward Y=Up Z=Right
+    | Z = Up            |  Rotate   |
+    +-------------------+  X +/-90  +-------------------+
 
-  转换公式：
-    Left Chest  = World 绕 X 轴旋转 +90°
-    Right Chest = World 绕 X 轴旋转 -90°
+  Conversion formulas:
+    Left Chest  = World rotated around X axis by +90 degrees
+    Right Chest = World rotated around X axis by -90 degrees
 """)
 
 

@@ -1,190 +1,191 @@
+
 # Camera Package
 
-Wuji 遥操作系统相机集成包。
+Wuji teleoperation system camera integration package.
 
-## 硬件配置
+## Hardware Configuration
 
-| 位置 | 默认相机 | 传感器 | 快门 | 接口 | 设备符号链接 |
-|------|----------|--------|------|------|-------------|
-| 头部 | HBVCAM-F2439GS-2 V11 | AR0234CS | 全局快门 | USB UVC | `/dev/stereo_camera` |
-| 左腕 | RealSense D405 | - | 全局快门 | USB | `/dev/cam_left_wrist` |
-| 右腕 | RealSense D405 | - | 全局快门 | USB | `/dev/cam_right_wrist` |
+| Position | Default Camera | Sensor | Shutter | Interface | Device Symlink |
+|----------|---------------|--------|---------|-----------|---------------|
+| Head | HBVCAM-F2439GS-2 V11 | AR0234CS | Global shutter | USB UVC | `/dev/stereo_camera` |
+| Left wrist | RealSense D405 | - | Global shutter | USB | `/dev/cam_left_wrist` |
+| Right wrist | RealSense D405 | - | Global shutter | USB | `/dev/cam_right_wrist` |
 
-> 灵巧手遥操作选用全局快门相机，避免高速运动时的果冻效应。
+> Global shutter cameras are selected for dexterous hand teleoperation to avoid the jello effect during fast motion.
 
-## 架构
+## Architecture
 
-两条数据路径，统一由 `camera_launch.py` 管理：
+Two data paths, managed uniformly by `camera_launch.py`:
 
-### Path 1: 腕部 RealSense → ROS2
-
-```
-camera_launch.py → realsense2_camera 驱动 → /cam_{left,right}_wrist/color/image_rect_raw
-```
-
-配置: `config/camera_config.yaml`
-
-### Path 2: 头部双目 → unified_stereo (ROS2 + PICO)
+### Path 1: Wrist RealSense → ROS2
 
 ```
-camera_launch.py → unified_stereo (单进程, OpenCV 采集)
+camera_launch.py → realsense2_camera driver → /cam_{left,right}_wrist/color/image_rect_raw
+```
+
+Configuration: `config/camera_config.yaml`
+
+### Path 2: Head Stereo → unified_stereo (ROS2 + PICO)
+
+```
+camera_launch.py → unified_stereo (single process, OpenCV capture)
   ├── ROS2: MJPEG→BGR→JPEG → /stereo/{left,right}/compressed (30fps)
   └── PICO: MJPEG→H.264 (FFmpeg) → TCP:12345 → PICO VR (60fps, on-demand)
 ```
 
-- ROS2 发布始终启用 (`enable_head:=true`)
-- PICO H.264 推流按需启用 (`enable_pico:=true`)，PICO 连接时自动握手推流
-- 配置: `config/stereo_head/stereo_head_config.yaml`
+- ROS2 publishing is always enabled (`enable_head:=true`)
+- PICO H.264 streaming is enabled on demand (`enable_pico:=true`), automatically handshakes and streams when PICO connects
+- Configuration: `config/stereo_head/stereo_head_config.yaml`
 
-## 首次配置
+## First-Time Setup
 
 ```bash
-# 安装 udev 规则，创建固定设备符号链接
+# Install udev rules, create fixed device symlinks
 bash src/camera/setup_cameras.sh
 ```
 
-## 启动命令
+## Launch Commands
 
 ```bash
-# 腕部 + 头部双目 → ROS2 (默认)
+# Wrist + head stereo → ROS2 (default)
 ros2 launch camera camera_launch.py
 
-# 仅腕部 RealSense (禁用头部)
+# Wrist RealSense only (disable head)
 ros2 launch camera camera_launch.py enable_head:=false
 
-# 腕部使用 D435 测试
+# Wrist using D435 for testing
 ros2 launch camera camera_launch.py wrist_type:=d435i
 
-# 腕部 + 头部双目 → ROS2 + PICO 串流
+# Wrist + head stereo → ROS2 + PICO streaming
 ros2 launch camera camera_launch.py enable_pico:=true
 
-# D435 测试 + 头部
+# D435 test + head
 ros2 launch camera camera_launch.py wrist_type:=d435i enable_head:=true
 
-# 头部双目独立启动 (向后兼容)
+# Head stereo standalone launch (backward compatible)
 ros2 launch camera stereo_head_launch.py
 
-# 完整遥操作 (含 PICO 串流)
+# Full teleoperation (with PICO streaming)
 ros2 launch wuji_teleop_bringup pico_teleop.launch.py
 ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py
 ```
 
-## ROS2 话题
+## ROS2 Topics
 
-| 话题 | 类型 | 来源 |
-|------|------|------|
-| `/cam_left_wrist/color/image_rect_raw` | sensor_msgs/Image | RealSense D405 驱动 |
-| `/cam_right_wrist/color/image_rect_raw` | sensor_msgs/Image | RealSense D405 驱动 |
+| Topic | Type | Source |
+|-------|------|--------|
+| `/cam_left_wrist/color/image_rect_raw` | sensor_msgs/Image | RealSense D405 driver |
+| `/cam_right_wrist/color/image_rect_raw` | sensor_msgs/Image | RealSense D405 driver |
 | `/stereo/left/compressed` | CompressedImage | unified_stereo |
 | `/stereo/right/compressed` | CompressedImage | unified_stereo |
 
-## 入口点
+## Entry Points
 
-| 名称 | 模块 | 调用方 |
-|------|------|--------|
+| Name | Module | Caller |
+|------|--------|--------|
 | `unified_stereo` | stereocamera.unified_stereo | camera_launch.py (enable_head/enable_pico) |
 
-## 启动参数
+## Launch Parameters
 
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `wrist_type` | (YAML) | 覆盖腕部相机类型 (d435i/d405) |
-| `enable_head` | true | 启用头部双目相机 → ROS2 发布 |
-| `enable_pico` | false | 启用头部双目相机 → PICO H.264 串流 |
-| `head_device` | /dev/stereo_camera | 头部双目相机设备路径 |
-| `head_fps` | 30 | 头部双目相机 ROS2 发布帧率 |
-| `head_quality` | 70 | 头部双目相机 JPEG 压缩质量 |
-| `head_width` | 2560 | 头部双目相机帧宽度 (左+右拼接) |
-| `head_height` | 720 | 头部双目相机帧高度 |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `wrist_type` | (YAML) | Override wrist camera type (d435i/d405) |
+| `enable_head` | true | Enable head stereo camera → ROS2 publishing |
+| `enable_pico` | false | Enable head stereo camera → PICO H.264 streaming |
+| `head_device` | /dev/stereo_camera | Head stereo camera device path |
+| `head_fps` | 30 | Head stereo camera ROS2 publishing frame rate |
+| `head_quality` | 70 | Head stereo camera JPEG compression quality |
+| `head_width` | 2560 | Head stereo camera frame width (left+right stitched) |
+| `head_height` | 720 | Head stereo camera frame height |
 
-## 支持的相机
+## Supported Cameras
 
-### 头部 (双目 RGB, side-by-side)
+### Head (Stereo RGB, side-by-side)
 
-| 相机 | 传感器 | 快门 | 基线 | H-FOV | 分辨率 | 备注 |
-|------|--------|------|------|-------|--------|------|
-| **HBVCAM-F2439GS-2 V11** | AR0234CS | **全局** | 60mm | 125° | 2560x720@60 | **默认**，灵巧手推荐 |
-| ZED Mini | OV4689 | 卷帘 | 63mm | 85° | 2560x720@60 | 备选，USB 3.0 必须 |
-| ZED 2i (4mm) | - | 卷帘 | 120mm | 65° | 2560x720@60 | FOV 较窄 |
-| 其他 USB 双目 | - | - | - | - | 自定义 | 需 side-by-side 输出 |
+| Camera | Sensor | Shutter | Baseline | H-FOV | Resolution | Notes |
+|--------|--------|---------|----------|-------|------------|-------|
+| **HBVCAM-F2439GS-2 V11** | AR0234CS | **Global** | 60mm | 125° | 2560x720@60 | **Default**, recommended for dexterous hand |
+| ZED Mini | OV4689 | Rolling | 63mm | 85° | 2560x720@60 | Alternative, USB 3.0 required |
+| ZED 2i (4mm) | - | Rolling | 120mm | 65° | 2560x720@60 | Narrower FOV |
+| Other USB stereo | - | - | - | - | Custom | Must output side-by-side |
 
-> 头部相机通过 OpenCV UVC 读取，**无需专用 SDK 或 NVIDIA GPU**。
-> 任何输出 side-by-side 双目画面的 USB 相机均可使用。
-> ZED 系列相机**必须接 USB 3.0 端口**，USB 2.0 只暴露 IMU (HID)，无视频。
+> Head camera is read via OpenCV UVC, **no dedicated SDK or NVIDIA GPU required**.
+> Any USB camera that outputs side-by-side stereo can be used.
+> ZED series cameras **must be connected to USB 3.0 ports**; USB 2.0 only exposes IMU (HID), no video.
 
-### 腕部 (RealSense)
+### Wrist (RealSense)
 
-| 相机 | 快门 | 分辨率 | 配置类型 | 备注 |
-|------|------|--------|----------|------|
-| **RealSense D405** | **全局** | 848x480@30 | `d405` | **默认**，近距离，灵巧手推荐 |
-| RealSense D435 | 卷帘 | 848x480@30 | `d435i` | 测试用，launch 参数切换 |
+| Camera | Shutter | Resolution | Config Type | Notes |
+|--------|---------|------------|-------------|-------|
+| **RealSense D405** | **Global** | 848x480@30 | `d405` | **Default**, close range, recommended for dexterous hand |
+| RealSense D435 | Rolling | 848x480@30 | `d435i` | For testing, switch via launch parameter |
 
-## 切换相机
+## Switching Cameras
 
-### 方法 1: 启动参数覆盖 (临时切换腕部相机型号)
+### Method 1: Launch Parameter Override (Temporary wrist camera model switch)
 
-无需修改配置文件，通过 launch 参数临时覆盖腕部相机类型：
+No configuration file changes needed; temporarily override the wrist camera type via launch parameters:
 
 ```bash
-# 默认使用 YAML 中配置的类型 (d405)
+# Default uses type configured in YAML (d405)
 ros2 launch camera camera_launch.py
 
-# 测试阶段使用 D435
+# Use D435 during testing phase
 ros2 launch camera camera_launch.py wrist_type:=d435i
 
-# 显式指定 D405
+# Explicitly specify D405
 ros2 launch camera camera_launch.py wrist_type:=d405
 ```
 
-### 方法 2: 修改配置文件 (永久切换)
+### Method 2: Modify Configuration File (Permanent switch)
 
-编辑 `config/camera_config.yaml`：
+Edit `config/camera_config.yaml`:
 
 ```yaml
-# 切换腕部相机类型: "d405" (默认) 或 "d435i"
+# Switch wrist camera type: "d405" (default) or "d435i"
 left_wrist:
-  type: "d405"    # ← 修改此字段
+  type: "d405"    # ← Modify this field
 right_wrist:
-  type: "d405"    # ← 修改此字段
+  type: "d405"    # ← Modify this field
 ```
 
-头部相机切换只需更改 `video_device` 和 `resolution`（所有 UVC 双目相机使用相同 `type: "usb"`）：
+To switch head cameras, just change `video_device` and `resolution` (all UVC stereo cameras use the same `type: "usb"`):
 
 ```yaml
 head:
   type: "usb"
-  video_device: "/dev/stereo_camera"   # udev 符号链接
+  video_device: "/dev/stereo_camera"   # udev symlink
   resolution:
-    width: 2560       # 双目总宽度 (单眼 1280)
-    height: 720       # 需匹配实际相机规格
+    width: 2560       # Total stereo width (single eye 1280)
+    height: 720       # Must match actual camera specifications
     fps: 60
 ```
 
-### 方法 3: 更换物理相机硬件
+### Method 3: Replace Physical Camera Hardware
 
-**更换腕部 RealSense (同型号 D405):**
+**Replacing wrist RealSense (same model D405):**
 
-只需改序列号。两个 D405 的 vendor/product ID 相同，必须用序列号区分左右。
+Only the serial number needs to be changed. Two D405s have the same vendor/product ID, so serial numbers must be used to distinguish left from right.
 
-1. 查序列号: `rs-enumerate-devices | grep "Serial Number"`
-2. 修改 `config/camera_config.yaml` 中 `serial_number` (**必须**, RealSense SDK 靠此打开相机)
-3. 修改 `config/udev/99-teleop-cameras.rules` 中对应序列号 (Docker 挂载需要 symlink 时)
-4. 重新运行 `bash src/camera/setup_cameras.sh` (仅改了 udev 规则时需要)
+1. Check serial number: `rs-enumerate-devices | grep "Serial Number"`
+2. Modify `serial_number` in `config/camera_config.yaml` (**required**, RealSense SDK uses this to open the camera)
+3. Modify corresponding serial number in `config/udev/99-teleop-cameras.rules` (needed when Docker mount requires symlinks)
+4. Re-run `bash src/camera/setup_cameras.sh` (only needed when udev rules are changed)
 
-> **注意:** 步骤 2 是必须的，步骤 3-4 仅在需要 `/dev/cam_left_wrist` 等符号链接时才需要。
-> 不使用 Docker 时，只做步骤 1-2 即可。
+> **Note:** Step 2 is required. Steps 3-4 are only needed when symlinks like `/dev/cam_left_wrist` are required.
+> When not using Docker, only steps 1-2 are needed.
 
-**更换头部双目相机 (同型号 HBVCAM):**
+**Replacing head stereo camera (same model HBVCAM):**
 
-udev 按 vendor/product ID 匹配，同型号直接换，无需任何配置修改。
+udev matches by vendor/product ID; same model can be swapped directly with no configuration changes needed.
 
-**更换头部双目相机 (不同型号):**
+**Replacing head stereo camera (different model):**
 
-1. 确认新相机支持 UVC side-by-side 输出
-2. 修改 `config/udev/99-teleop-cameras.rules` 中的 vendor/product ID
-3. 修改 `config/camera_config.yaml` 中 `head.resolution` 匹配新相机规格
-4. 修改 `config/stereo_head/stereo_head_config.yaml` 中对应分辨率
-5. 重新运行 `bash src/camera/setup_cameras.sh`
+1. Confirm the new camera supports UVC side-by-side output
+2. Modify vendor/product ID in `config/udev/99-teleop-cameras.rules`
+3. Modify `head.resolution` in `config/camera_config.yaml` to match new camera specifications
+4. Modify corresponding resolution in `config/stereo_head/stereo_head_config.yaml`
+5. Re-run `bash src/camera/setup_cameras.sh`
 
 ## Docker
 
@@ -196,23 +197,23 @@ docker run \
   your-image
 ```
 
-## 目录结构
+## Directory Structure
 
 ```
 camera/
 ├── config/
-│   ├── camera_config.yaml              # 主配置 (相机类型/设备/分辨率/序列号)
-│   ├── stereo_head/stereo_head_config.yaml  # 头部双目运行时参数
-│   └── udev/99-teleop-cameras.rules    # udev 规则 (设备符号链接)
+│   ├── camera_config.yaml              # Main config (camera type/device/resolution/serial number)
+│   ├── stereo_head/stereo_head_config.yaml  # Head stereo runtime parameters
+│   └── udev/99-teleop-cameras.rules    # udev rules (device symlinks)
 ├── launch/
-│   ├── camera_launch.py                # 统一入口 (腕部+头部+PICO)
-│   └── stereo_head_launch.py           # 头部双目独立启动 (向后兼容)
+│   ├── camera_launch.py                # Unified entry point (wrist+head+PICO)
+│   └── stereo_head_launch.py           # Head stereo standalone launch (backward compatible)
 ├── stereocamera/
-│   ├── config_loader.py                # 配置文件加载
-│   ├── unified_stereo.py               # 头部双目入口 (ROS2 + PICO H.264)
-│   └── teleopVision/                   # 核心库
-│       ├── ffmpeg_utils.py             # FFmpeg 编码器检测 + NAL 解析
-│       ├── unified_stereo_node.py      # 主节点 (OpenCV采集 + ROS2发布 + PICO推流)
-│       └── xrobo_protocol.py           # XRoboToolkit 兼容协议
-└── setup_cameras.sh                    # udev 规则安装脚本
+│   ├── config_loader.py                # Configuration file loader
+│   ├── unified_stereo.py               # Head stereo entry point (ROS2 + PICO H.264)
+│   └── teleopVision/                   # Core library
+│       ├── ffmpeg_utils.py             # FFmpeg encoder detection + NAL parsing
+│       ├── unified_stereo_node.py      # Main node (OpenCV capture + ROS2 publish + PICO streaming)
+│       └── xrobo_protocol.py           # XRoboToolkit compatible protocol
+└── setup_cameras.sh                    # udev rules installation script
 ```

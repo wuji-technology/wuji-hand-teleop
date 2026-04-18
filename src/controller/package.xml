@@ -3,7 +3,7 @@
 <package format="3">
   <name>controller</name>
   <version>0.1.0</version>
-  <description>统一控制器节点 - 支持模式切换的状态机</description>
+  <description>Unified controller node - state machine with mode switching support</description>
   <maintainer email="dev@wuji.com">Wuji Robotics</maintainer>
   <license>MIT</license>
 
@@ -17,7 +17,7 @@
   <depend>tf2_ros</depend>
   <depend>geometry_msgs</depend>
 
-  <!-- 硬件接口依赖 -->
+  <!-- Hardware interface dependencies -->
   <exec_depend>tianji_output</exec_depend>
   <exec_depend>wujihand_output</exec_depend>
   <exec_depend>wuji_retargeting</exec_depend>

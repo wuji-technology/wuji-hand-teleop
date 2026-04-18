@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-头部双目相机配置加载工具
+Head stereo camera configuration loader utility
 
-被 unified_stereo_node.py 使用。
+Used by unified_stereo_node.py.
 
-作者: Liang ZHU
+Author: Liang ZHU
 """
 
 import sys
@@ -26,13 +26,13 @@ except ImportError:
 
 def load_stereo_head_config(config_path=None) -> dict:
     """
-    加载头部双目相机配置
+    Load head stereo camera configuration
 
-    参数:
-        config_path: 可选的配置文件路径，为 None 时使用包内默认路径
+    Args:
+        config_path: Optional config file path, uses package default path when None
 
-    返回:
-        stereo_head 配置字典
+    Returns:
+        stereo_head configuration dictionary
     """
     if config_path is None:
         pkg_share = get_package_share_directory('camera')

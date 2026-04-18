@@ -23,7 +23,7 @@ setup(
     zip_safe=True,
     maintainer='wuji',
     maintainer_email='your_email@example.com',
-    description='Wuji 灵巧手硬件接口库 - 提供 JointController 和 IKController 控制接口',
+    description='Wuji dexterous hand hardware interface library - provides JointController and IKController control interfaces',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

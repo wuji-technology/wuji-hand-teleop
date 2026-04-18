@@ -1,67 +1,67 @@
 #!/usr/bin/env python3
 """
-PICO Input Node - 从 XRoboToolkit PC-Service 读取 VR 追踪数据
+PICO Input Node - Reads VR tracking data from XRoboToolkit PC-Service
 
-==================== 设计理念 (增量控制模式) ====================
+==================== Design Philosophy (Incremental Control Mode) ====================
 
-核心思想：
-  - 初始化时记录所有 tracker 的初始位姿
-  - 之后只发布 tracker 相对于初始位姿的"变化量"
-  - 用户可以用任何姿势初始化，机器人不会跳动
+Core idea:
+  - Record initial poses of all trackers during initialization
+  - Subsequently only publish the "delta" of tracker relative to initial pose
+  - User can initialize in any pose, robot will not jump
 
-优点：
-  - 最安全，初始化时不会导致机器人突然移动
-  - 用户可以坐着、站着、任何姿势
-  - 建议用户尽量模仿机器人姿势以获得更好的控制感
+Advantages:
+  - Safest approach, initialization does not cause sudden robot movement
+  - User can be sitting, standing, or in any pose
+  - Users are advised to mimic the robot's pose for better control feel
 
-初始化过程：
-  1. 用户摆好姿势 (建议模仿机器人当前姿势)
-  2. 按下初始化按钮 (或等待自动初始化)
-  3. 系统记录 HMD 初始位姿 (仅用于可视化)
-  4. 系统记录所有 tracker 的初始位姿
-  5. 后续只发布相对于初始位姿的增量
+Initialization process:
+  1. User assumes a pose (recommended to mimic robot's current pose)
+  2. Press initialization button (or wait for auto-initialization)
+  3. System records HMD initial pose (visualization only)
+  4. System records initial poses of all trackers
+  5. Subsequently only publishes increments relative to initial poses
 
-==================== 增量控制原理 ====================
+==================== Incremental Control Principle ====================
 
-    初始化时：
-      - 记录用户手在 PICO 坐标系中的位姿 init_tracker_poses[role]
-      - 机器人初始位姿来自 tianji_robot.yaml (init_pos/init_rot)
+    During initialization:
+      - Record user's hand pose in PICO coordinate system: init_tracker_poses[role]
+      - Robot initial pose comes from tianji_robot.yaml (init_pos/init_rot)
 
-    运行时：
-      - 用户手当前位姿: current_pose
-      - 位置增量: delta_pos = current_pos - init_pos
-      - 姿态增量: delta_rot = current_rot * init_rot.inv()
-      - 发布: 机器人目标 = 机器人初始 + 增量 (经坐标变换)
+    During runtime:
+      - User's current hand pose: current_pose
+      - Position increment: delta_pos = current_pos - init_pos
+      - Orientation increment: delta_rot = current_rot * init_rot.inv()
+      - Publish: robot target = robot initial + increment (with coordinate transform)
 
-==================== TF 树结构 (统一命名规范) ====================
+==================== TF Tree Structure (Unified Naming Convention) ====================
 
-    world (机器人基座, 固定)
-    ├── head (HMD, 仅用于可视化)
-    ├── world_left (左臂 chest 坐标系, 静态, Y=+0.2)
-    │   ├── pico_left_wrist (PICO 左手腕 tracker, 动态)
-    │   └── pico_left_arm (PICO 左前臂 tracker, 动态)
-    └── world_right (右臂 chest 坐标系, 静态, Y=-0.2)
-        ├── pico_right_wrist (PICO 右手腕 tracker, 动态)
-        └── pico_right_arm (PICO 右前臂 tracker, 动态)
+    world (robot base, fixed)
+    +-- head (HMD, visualization only)
+    +-- world_left (left arm chest coordinate system, static, Y=+0.2)
+    |   +-- pico_left_wrist (PICO left wrist tracker, dynamic)
+    |   +-- pico_left_arm (PICO left forearm tracker, dynamic)
+    +-- world_right (right arm chest coordinate system, static, Y=-0.2)
+        +-- pico_right_wrist (PICO right wrist tracker, dynamic)
+        +-- pico_right_arm (PICO right forearm tracker, dynamic)
 
-==================== Topics (统一命名规范) ====================
+==================== Topics (Unified Naming Convention) ====================
 
-    # PICO 数据 (调试/可视化)
+    # PICO data (debug/visualization)
     /pico_hmd, /pico_left_wrist, /pico_right_wrist
     /pico_left_arm, /pico_right_arm
 
-    # 机器人控制 (tianji_world_output 订阅)
+    # Robot control (subscribed by tianji_world_output)
     /left_arm_target_pose, /right_arm_target_pose
     /left_arm_elbow_direction, /right_arm_elbow_direction
 
-==================== 使用方法 ====================
-    # 启动
+==================== Usage ====================
+    # Launch
     ros2 launch wuji_teleop_bringup pico_teleop.launch.py
 
-    # 手动初始化 (用户对准机器人后)
+    # Manual initialization (after user aligns with robot)
     ros2 service call /pico_input/init std_srvs/srv/Trigger
 
-    # 重置初始化
+    # Reset initialization
     ros2 service call /pico_input/reset std_srvs/srv/Trigger
 """
 
@@ -83,7 +83,7 @@ from scipy.spatial.transform import Rotation as R
 from pico_input.data_source import DataSource, LiveDataSource, RecordedDataSource, TrackerData, HeadsetData
 from pico_input.incremental_controller import IncrementalController
 
-# 统一配置加载器 (通过 ROS2 包依赖: package.xml exec_depend)
+# Unified config loader (via ROS2 package dependency: package.xml exec_depend)
 from tianji_world_output.config_loader import get_config as get_tianji_config
 from tianji_world_output.transform_utils import (
     get_tf_quaternion,
@@ -93,60 +93,60 @@ _tianji_config = get_tianji_config(use_ros=False)
 
 class PicoInputNode(Node):
     """
-    PICO 输入节点 (增量控制模式 + TDD 重构)
+    PICO Input Node (Incremental Control Mode + TDD Refactoring)
 
-    架构:
-    - IncrementalController: 纯计算 (增量位姿、肘部方向、One-Euro 自适应平滑)
-    - PicoInputNode: ROS2 薄壳 (数据源、TF、Topic、服务、可视化)
+    Architecture:
+    - IncrementalController: Pure computation (incremental pose, elbow direction, One-Euro adaptive smoothing)
+    - PicoInputNode: ROS2 thin shell (data source, TF, Topics, services, visualization)
 
-    输出:
-    - TF: world → head, pico_*_wrist, pico_*_arm
+    Output:
+    - TF: world -> head, pico_*_wrist, pico_*_arm
     - Topics: /left_arm_target_pose, /right_arm_target_pose
-    - Topics: /pico/* (可选，调试用)
+    - Topics: /pico/* (optional, debug only)
     """
 
     def __init__(self, data_source: Optional[DataSource] = None):
         super().__init__('pico_input_node')
 
-        # 安装 stdlib→ROS2 日志桥接 (使非 Node 类日志进入 /rosout)
+        # Install stdlib->ROS2 logging bridge (routes non-Node class logs to /rosout)
         from pico_input.ros2_logging import setup_ros2_logging_bridge
         setup_ros2_logging_bridge(self.get_logger())
 
-        # ==================== 参数声明 ====================
+        # ==================== Parameter declarations ====================
         self.declare_parameter('publish_rate', 90.0)
 
-        # 数据源配置 (TDD 重构新增)
+        # Data source configuration (TDD refactoring addition)
         self.declare_parameter('data_source_type', 'live')  # 'live' or 'recorded'
         self.declare_parameter('recorded_file_path', 'record/trackingData_sample_static.txt')
         self.declare_parameter('playback_speed', 1.0)
         self.declare_parameter('loop_playback', True)
 
-        # PC-Service 连接 (LiveDataSource 使用)
+        # PC-Service connection (used by LiveDataSource)
         self.declare_parameter('pc_service_host', '127.0.0.1')
         self.declare_parameter('pc_service_port', 60061)
 
-        # Topic 发布配置
-        self.declare_parameter('enable_topic_publishing', True)  # 发布 /left_arm_target_pose 等
-        self.declare_parameter('enable_legacy_topics', False)    # 发布 /pico/* (调试用)
+        # Topic publishing configuration
+        self.declare_parameter('enable_topic_publishing', True)  # Publish /left_arm_target_pose etc.
+        self.declare_parameter('enable_legacy_topics', False)    # Publish /pico/* (debug only)
         self.declare_parameter('topic_prefix', 'pico')
 
-        # One-Euro Filter 自适应滤波参数 (启动时从 pico_input.yaml 加载)
-        self.declare_parameter('one_euro_min_cutoff', 1.0)   # 最小截止频率 (Hz)
-        self.declare_parameter('one_euro_beta', 0.7)         # 速度响应系数
-        self.declare_parameter('elbow_min_cutoff', 0.3)      # 肘部方向最小截止频率 (Hz)
+        # One-Euro Filter adaptive filtering parameters (loaded from pico_input.yaml at startup)
+        self.declare_parameter('one_euro_min_cutoff', 1.0)   # Minimum cutoff frequency (Hz)
+        self.declare_parameter('one_euro_beta', 0.7)         # Speed response coefficient
+        self.declare_parameter('elbow_min_cutoff', 0.3)      # Elbow direction minimum cutoff frequency (Hz)
 
-        # Tracker 序列号映射 (统一命名规范)
-        # 序列号格式: 190058, 190046, 190600, 190023 (6位数字)
-        # pico_* 前缀表示 PICO tracker，与机器人 DH 末端区分
-        self.declare_parameter('tracker_serial_190058', 'pico_left_wrist')   # 左手腕
-        self.declare_parameter('tracker_serial_190046', 'pico_left_arm')     # 左前臂
-        self.declare_parameter('tracker_serial_190600', 'pico_right_wrist')  # 右手腕
-        self.declare_parameter('tracker_serial_190023', 'pico_right_arm')    # 右前臂
+        # Tracker serial number mapping (unified naming convention)
+        # Serial number format: 190058, 190046, 190600, 190023 (6-digit numbers)
+        # pico_* prefix indicates PICO tracker, distinguished from robot DH end-effector
+        self.declare_parameter('tracker_serial_190058', 'pico_left_wrist')   # Left wrist
+        self.declare_parameter('tracker_serial_190046', 'pico_left_arm')     # Left forearm
+        self.declare_parameter('tracker_serial_190600', 'pico_right_wrist')  # Right wrist
+        self.declare_parameter('tracker_serial_190023', 'pico_right_arm')    # Right forearm
 
-        # 初始化相关参数
-        self.declare_parameter('auto_init_delay', 5.0)  # 自动初始化延迟 (秒), 0 禁用
+        # Initialization related parameters
+        self.declare_parameter('auto_init_delay', 5.0)  # Auto-initialization delay (seconds), 0 to disable
 
-        # 获取参数
+        # Get parameters
         self.publish_rate = self.get_parameter('publish_rate').value
         self.data_source_type = self.get_parameter('data_source_type').value
         self.pc_service_host = self.get_parameter('pc_service_host').value
@@ -156,7 +156,7 @@ class PicoInputNode(Node):
         self.topic_prefix = self.get_parameter('topic_prefix').value
         self.auto_init_delay = self.get_parameter('auto_init_delay').value
 
-        # 构建序列号映射表: serial_number -> role
+        # Build serial number mapping table: serial_number -> role
         self.tracker_serial_map = {}
         for serial in ['190058', '190046', '190600', '190023']:
             param_name = f'tracker_serial_{serial}'
@@ -167,8 +167,8 @@ class PicoInputNode(Node):
             except Exception:
                 pass
 
-        # ==================== 增量控制器 (核心计算逻辑) ====================
-        # 纯计算类，无 ROS2 依赖，可独立单元测试
+        # ==================== Incremental controller (core computation logic) ====================
+        # Pure computation class, no ROS2 dependency, can be unit tested independently
         min_cutoff = self.get_parameter('one_euro_min_cutoff').value
         beta = self.get_parameter('one_euro_beta').value
         elbow_min_cutoff = self.get_parameter('elbow_min_cutoff').value
@@ -186,12 +186,12 @@ class PicoInputNode(Node):
         )
         self.init_start_time = None
 
-        # 臂角日志计数器
+        # Arm angle log counter
         self._elbow_log_counter = 0
 
-        # ==================== 臂角诊断日志 ====================
+        # ==================== Arm angle diagnostic log ====================
         self.get_logger().info('=' * 70)
-        self.get_logger().info('[ELBOW DIAG] 臂角初始化参数:')
+        self.get_logger().info('[ELBOW DIAG] Arm angle initialization parameters:')
         for side in ['left', 'right']:
             wrist_pos = self.controller.robot_init_positions[f'pico_{side}_wrist']
             arm_pos = self.controller.robot_init_positions[f'pico_{side}_arm']
@@ -214,21 +214,21 @@ class PicoInputNode(Node):
             self.get_logger().info(f'  [{side}] dot(geom, default): {dot_val:.4f} {"(ALIGNED)" if dot_val > 0 else "(OPPOSITE!)"}')
         self.get_logger().info('=' * 70)
 
-        # ==================== World → Chest 转换参数 ====================
-        # 从统一配置加载 world_to_chest 变换 (用于静态 TF 发布)
+        # ==================== World -> Chest transform parameters ====================
+        # Load world_to_chest transform from unified config (for static TF publishing)
         self.world_to_chest_trans = {
             'left': _tianji_config.world_to_chest_trans.get('left', np.array([0.0, 0.2, 0.0])),
             'right': _tianji_config.world_to_chest_trans.get('right', np.array([0.0, -0.2, 0.0])),
         }
 
-        # ==================== TF 广播器 ====================
+        # ==================== TF broadcasters ====================
         self.tf_broadcaster = TransformBroadcaster(self)
         self.static_tf_broadcaster = StaticTransformBroadcaster(self)
 
-        # 发布静态 TF: world → world_left, world_right
+        # Publish static TF: world -> world_left, world_right
         self._publish_static_chest_frames()
 
-        # ==================== 服务 ====================
+        # ==================== Services ====================
         self.init_service = self.create_service(
             Trigger, 'pico_input/init', self._init_callback
         )
@@ -236,8 +236,8 @@ class PicoInputNode(Node):
             Trigger, 'pico_input/reset', self._reset_callback
         )
 
-        # ==================== Topic 发布器 ====================
-        # 1. 目标位姿发布 (tianji_world_output_node 订阅这些)
+        # ==================== Topic publishers ====================
+        # 1. Target pose publishing (tianji_world_output_node subscribes to these)
         self.left_arm_pose_pub = None
         self.right_arm_pose_pub = None
         self.left_elbow_dir_pub = None
@@ -249,28 +249,28 @@ class PicoInputNode(Node):
             self.right_arm_pose_pub = self.create_publisher(
                 PoseStamped, '/right_arm_target_pose', 10
             )
-            # 肘部方向 (臂角约束)
+            # Elbow direction (arm angle constraint)
             self.left_elbow_dir_pub = self.create_publisher(
                 Vector3Stamped, '/left_arm_elbow_direction', 10
             )
             self.right_elbow_dir_pub = self.create_publisher(
                 Vector3Stamped, '/right_arm_elbow_direction', 10
             )
-            # 臂角可视化 Markers (RViz 中显示肘部方向箭头)
+            # Arm angle visualization Markers (display elbow direction arrows in RViz)
             self.marker_pub = self.create_publisher(
                 MarkerArray, '/elbow_angle_visualization', 10
             )
-            self.get_logger().info('已启用 Topic 发布:')
+            self.get_logger().info('Topic publishing enabled:')
             self.get_logger().info('  - /left_arm_target_pose, /right_arm_target_pose')
             self.get_logger().info('  - /left_arm_elbow_direction, /right_arm_elbow_direction')
             self.get_logger().info('  - /elbow_angle_visualization (RViz Markers)')
 
-        # 2. 遗留 Topic 发布 (调试用，/pico_*)
+        # 2. Legacy topic publishing (debug only, /pico_*)
         self.hmd_pub = None
         self.tracker_pubs = {}
         if self.enable_legacy_topics:
             self.hmd_pub = self.create_publisher(PoseStamped, f'/{self.topic_prefix}_hmd', 10)
-            # 使用统一命名规范: pico_left_wrist, pico_right_wrist, pico_left_arm, pico_right_arm
+            # Use unified naming convention: pico_left_wrist, pico_right_wrist, pico_left_arm, pico_right_arm
             self.tracker_pubs['pico_left_wrist'] = self.create_publisher(
                 PoseStamped, f'/{self.topic_prefix}_left_wrist', 10)
             self.tracker_pubs['pico_right_wrist'] = self.create_publisher(
@@ -279,44 +279,44 @@ class PicoInputNode(Node):
                 PoseStamped, f'/{self.topic_prefix}_left_arm', 10)
             self.tracker_pubs['pico_right_arm'] = self.create_publisher(
                 PoseStamped, f'/{self.topic_prefix}_right_arm', 10)
-            self.get_logger().info(f'已启用遗留 Topic 发布: /{self.topic_prefix}_*')
+            self.get_logger().info(f'Legacy topic publishing enabled: /{self.topic_prefix}_*')
 
-        # ==================== 数据源初始化 (TDD 重构) ====================
-        # 使用依赖注入或工厂模式创建数据源
+        # ==================== Data source initialization (TDD refactoring) ====================
+        # Use dependency injection or factory pattern to create data source
         if data_source is None:
             data_source = self._create_data_source()
 
         self.data_source = data_source
 
-        # 初始化数据源
+        # Initialize data source
         if self.data_source.initialize():
-            self.get_logger().info(f'数据源已初始化: {self.data_source}')
+            self.get_logger().info(f'Data source initialized: {self.data_source}')
         else:
-            self.get_logger().error(f'数据源初始化失败: {self.data_source}')
+            self.get_logger().error(f'Data source initialization failed: {self.data_source}')
 
-        # ==================== 警告节流 ====================
+        # ==================== Warning throttle ====================
         self._last_warn_time = None
-        self._warn_interval = 5.0  # 每 5 秒最多输出一次警告
+        self._warn_interval = 5.0  # Output warning at most once every 5 seconds
         self._no_data_count = 0
-        self._waiting_for_device = True  # 等待 PICO 设备连接
+        self._waiting_for_device = True  # Waiting for PICO device connection
 
-        # ==================== 定时器 ====================
+        # ==================== Timer ====================
         self.timer = self.create_timer(1.0 / self.publish_rate, self._publish_callback)
 
         self._log_startup()
 
     def _create_data_source(self) -> DataSource:
         """
-        工厂方法: 根据参数创建数据源
+        Factory method: Create data source based on parameters
 
         Returns:
-            DataSource 实例 (LiveDataSource 或 RecordedDataSource)
+            DataSource instance (LiveDataSource or RecordedDataSource)
 
         Raises:
-            ValueError: 如果 data_source_type 无效
+            ValueError: If data_source_type is invalid
         """
         if self.data_source_type == 'live':
-            self.get_logger().info('创建 LiveDataSource (真实 PICO SDK)')
+            self.get_logger().info('Creating LiveDataSource (real PICO SDK)')
             return LiveDataSource(self.pc_service_host, self.pc_service_port)
 
         elif self.data_source_type == 'recorded':
@@ -324,54 +324,55 @@ class PicoInputNode(Node):
             playback_speed = self.get_parameter('playback_speed').value
             loop_playback = self.get_parameter('loop_playback').value
 
-            self.get_logger().info(f'创建 RecordedDataSource: {file_path} (速度 {playback_speed}x)')
+            self.get_logger().info(f'Creating RecordedDataSource: {file_path} (speed {playback_speed}x)')
             return RecordedDataSource(file_path, playback_speed, loop_playback)
 
         else:
-            raise ValueError(f'未知的 data_source_type: {self.data_source_type}')
+            raise ValueError(f'Unknown data_source_type: {self.data_source_type}')
 
     def _init_callback(self, request, response):
-        """服务回调: 初始化 (增量模式，使用抽象数据源)"""
+        """Service callback: initialization (incremental mode, using abstract data source)"""
         if not self.data_source.is_available():
             response.success = False
-            response.message = '数据源不可用'
+            response.message = 'Data source not available'
             return response
 
-        # 从数据源获取头显数据
+        # Get headset data from data source
         headset_data = self.data_source.get_headset_pose()
         if headset_data is None or not headset_data.is_valid:
             response.success = False
-            response.message = 'HMD 数据不可用'
+            response.message = 'HMD data not available'
             return response
 
-        # 从数据源获取 tracker 数据
+        # Get tracker data from data source
         tracker_data_list = self.data_source.get_tracker_data()
 
         self._do_init(headset_data, tracker_data_list)
         response.success = True
-        response.message = f'初始化完成! 增量控制模式, 记录了 {len(self.controller.init_tracker_poses)} 个 tracker'
+        response.message = f'Initialization complete! Incremental control mode, recorded {len(self.controller.init_tracker_poses)} trackers'
         return response
 
     def _reset_callback(self, request, response):
-        """服务回调: 重置初始化"""
+        """Service callback: reset initialization"""
         self.controller.reset()
         self.init_start_time = None
         response.success = True
-        response.message = '已重置，等待重新初始化'
-        self.get_logger().warning('初始化已重置!')
+        response.message = 'Reset done, waiting for re-initialization'
+        self.get_logger().warning('Initialization has been reset!')
         return response
 
     def _publish_static_chest_frames(self):
         """
-        发布静态 TF: world → world_left, world_right
+        Publish static TF: world -> world_left, world_right
 
-        这些是机器人左右臂的 chest 坐标系，作为 PICO tracker 的父坐标系。
-        与 step3/step4 保持一致的 TF 树结构。
+        These are the chest coordinate systems for the robot's left and right arms,
+        serving as parent frames for PICO trackers.
+        Maintains consistent TF tree structure with step3/step4.
         """
         now = self.get_clock().now()
         transforms = []
 
-        # world → world_left (左臂 chest, Y=+0.2m)
+        # world -> world_left (left arm chest, Y=+0.2m)
         t_left = TransformStamped()
         t_left.header.stamp = now.to_msg()
         t_left.header.frame_id = 'world'
@@ -379,7 +380,7 @@ class PicoInputNode(Node):
         t_left.transform.translation.x = float(self.world_to_chest_trans['left'][0])
         t_left.transform.translation.y = float(self.world_to_chest_trans['left'][1])
         t_left.transform.translation.z = float(self.world_to_chest_trans['left'][2])
-        # TF 需要 chest→world 方向的四元数（world_to_chest 的共轭）
+        # TF requires chest->world direction quaternion (conjugate of world_to_chest)
         tf_quat_left = get_tf_quaternion('left')
         t_left.transform.rotation.x = float(tf_quat_left[0])
         t_left.transform.rotation.y = float(tf_quat_left[1])
@@ -387,7 +388,7 @@ class PicoInputNode(Node):
         t_left.transform.rotation.w = float(tf_quat_left[3])
         transforms.append(t_left)
 
-        # world → world_right (右臂 chest, Y=-0.2m)
+        # world -> world_right (right arm chest, Y=-0.2m)
         t_right = TransformStamped()
         t_right.header.stamp = now.to_msg()
         t_right.header.frame_id = 'world'
@@ -403,25 +404,25 @@ class PicoInputNode(Node):
         transforms.append(t_right)
 
         self.static_tf_broadcaster.sendTransform(transforms)
-        self.get_logger().info('✓ 静态 TF 已发布: world → world_left, world_right')
+        self.get_logger().info('Static TF published: world -> world_left, world_right')
 
     def _do_init(self, headset_data: HeadsetData, tracker_data_list: list):
-        """执行初始化: 收集 tracker 位姿，委托给增量控制器"""
+        """Execute initialization: collect tracker poses, delegate to incremental controller"""
         hmd_pose_array = headset_data.to_pose_array()
 
         num_trackers = len(tracker_data_list)
 
         self.get_logger().info('=' * 60)
-        self.get_logger().info(f'收到 {num_trackers} 个 tracker 数据')
+        self.get_logger().info(f'Received {num_trackers} tracker data')
 
-        # 记录序列号 (调试用)
+        # Log serial numbers (for debugging)
         serial_numbers = [t.serial_number for t in tracker_data_list]
         if serial_numbers:
-            self.get_logger().info(f'  序列号: {serial_numbers}')
+            self.get_logger().info(f'  Serial numbers: {serial_numbers}')
 
-        # 收集有效 tracker 位姿
+        # Collect valid tracker poses
         tracker_poses = {}
-        self.get_logger().info('  处理 tracker 数据:')
+        self.get_logger().info('  Processing tracker data:')
         for i, tracker_data in enumerate(tracker_data_list):
             role = self._get_role_for_tracker(tracker_data)
 
@@ -430,103 +431,103 @@ class PicoInputNode(Node):
             is_valid = tracker_data.is_valid
 
             self.get_logger().info(
-                f'    [{i}] {sn_display} → {role}: pos=[{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}], valid={is_valid}'
+                f'    [{i}] {sn_display} -> {role}: pos=[{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}], valid={is_valid}'
             )
 
             if is_valid and role:
                 tracker_poses[role] = tracker_data.to_pose_array()
 
-        # 委托给增量控制器
+        # Delegate to incremental controller
         recorded_roles = self.controller.initialize(tracker_poses, hmd_pose_array)
 
         self.get_logger().info('-' * 60)
-        self.get_logger().info('✓ 初始化完成! (增量控制模式)')
-        self.get_logger().info('  坐标变换: PICO (+X右,+Y上,+Z前) → 机器人 (+X前,+Y左,+Z上)')
-        self.get_logger().info(f'  记录了 {len(recorded_roles)} 个 tracker 初始位置:')
+        self.get_logger().info('Initialization complete! (Incremental control mode)')
+        self.get_logger().info('  Coordinate transform: PICO (+X right,+Y up,+Z forward) -> Robot (+X forward,+Y left,+Z up)')
+        self.get_logger().info(f'  Recorded {len(recorded_roles)} tracker initial positions:')
         for role in recorded_roles:
             T = self.controller.init_tracker_poses[role]
             pos = T[:3, 3]
             self.get_logger().info(f'    {role}: [{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]')
 
-        # 检查缺失的 tracker
+        # Check for missing trackers
         expected_roles = set(self.tracker_serial_map.values())
         missing_roles = expected_roles - recorded_roles
         if missing_roles:
-            self.get_logger().warning(f'  缺失的 tracker: {missing_roles}')
-            self.get_logger().warning('  请检查:')
-            self.get_logger().warning('    1. 所有 tracker 是否已开启并配对')
-            self.get_logger().warning('    2. pico_input.yaml 中序列号映射是否正确')
-            self.get_logger().warning('    3. PICO XRoboToolkit App 是否检测到所有 tracker')
+            self.get_logger().warning(f'  Missing trackers: {missing_roles}')
+            self.get_logger().warning('  Please check:')
+            self.get_logger().warning('    1. All trackers are powered on and paired')
+            self.get_logger().warning('    2. Serial number mapping in pico_input.yaml is correct')
+            self.get_logger().warning('    3. PICO XRoboToolkit App detects all trackers')
 
         self.get_logger().info('-' * 60)
-        self.get_logger().info('机器人初始位置 (来自 tianji_robot.yaml):')
+        self.get_logger().info('Robot initial positions (from tianji_robot.yaml):')
         for role, pos in self.controller.robot_init_positions.items():
             self.get_logger().info(f'    {role}: [{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]')
         self.get_logger().info('-' * 60)
-        self.get_logger().info('增量控制模式:')
-        self.get_logger().info('  用户手移动多少 → 机器人手移动多少')
-        self.get_logger().info('  不会因为初始化姿势不同而导致机器人跳动')
+        self.get_logger().info('Incremental control mode:')
+        self.get_logger().info('  User hand moves delta -> Robot hand moves delta')
+        self.get_logger().info('  No jumping due to different initialization poses')
         self.get_logger().info('=' * 60)
 
     def _extract_serial_number(self, full_sn: str) -> str:
-        """从完整序列号中提取 6 位数字 (如 PC2310MLKC190058G -> 190058)"""
+        """Extract 6-digit number from full serial number (e.g. PC2310MLKC190058G -> 190058)"""
         match = re.search(r'(\d{6})', full_sn)
         return match.group(1) if match else None
 
     def _get_role_for_tracker(self, tracker_data: TrackerData) -> str:
         """
-        根据 TrackerData 获取角色
+        Get role based on TrackerData
 
         Args:
-            tracker_data: TrackerData 对象
+            tracker_data: TrackerData object
 
         Returns:
-            角色字符串 (pico_left_wrist, pico_right_wrist, etc.) 或 None
+            Role string (pico_left_wrist, pico_right_wrist, etc.) or None
         """
-        # 提取 6 位数字序列号
+        # Extract 6-digit serial number
         short_sn = self._extract_serial_number(tracker_data.serial_number)
 
-        # 优先使用序列号映射
+        # Prefer serial number mapping
         if short_sn and short_sn in self.tracker_serial_map:
             return self.tracker_serial_map[short_sn]
 
-        # 回退: 无法确定角色
+        # Fallback: cannot determine role
         self.get_logger().warning(
-            f'无法为 tracker {tracker_data.serial_number} 找到角色映射'
+            f'Cannot find role mapping for tracker {tracker_data.serial_number}'
         )
         return None
 
     def _publish_callback(self):
-        """主循环: 从数据源读取数据并发布 TF + Topics"""
+        """Main loop: read data from data source and publish TF + Topics"""
         if not self.data_source.is_available():
             return
 
         now = self.get_clock().now()
 
         try:
-            # 从数据源获取头显数据
+            # Get headset data from data source
             headset_data = self.data_source.get_headset_pose()
 
             if headset_data is None or not headset_data.is_valid:
                 self._handle_no_data(now)
                 return
 
-            # 设备已连接，清除等待状态
+            # Device connected, clear waiting state
             if self._waiting_for_device:
                 self._waiting_for_device = False
                 self._no_data_count = 0
-                self.get_logger().info('✓ 数据源已就绪，正在接收数据...')
+                self.get_logger().info('Data source ready, receiving data...')
 
-            # 从数据源获取 tracker 数据
+            # Get tracker data from data source
             tracker_data_list = self.data_source.get_tracker_data()
 
-            # 自动初始化逻辑
+            # Auto-initialization logic
             if not self.controller.initialized and self.auto_init_delay > 0:
                 if self.init_start_time is None:
                     self.init_start_time = now
-                    self.get_logger().info(f'等待 {self.auto_init_delay:.1f} 秒后自动初始化...')
-                    self.get_logger().info('  建议模仿机器人当前姿势以获得更好的控制感')
-                    self.get_logger().info('  或调用: ros2 service call /pico_input/init std_srvs/srv/Trigger')
+                    self.get_logger().info(f'Waiting {self.auto_init_delay:.1f} seconds before auto-initialization...')
+                    self.get_logger().info('  Recommended to mimic the robot\'s current pose for better control feel')
+                    self.get_logger().info('  Or call: ros2 service call /pico_input/init std_srvs/srv/Trigger')
                 else:
                     elapsed = (now - self.init_start_time).nanoseconds / 1e9
                     if elapsed >= self.auto_init_delay:
@@ -535,116 +536,116 @@ class PicoInputNode(Node):
             if not self.controller.initialized:
                 return
 
-            # 转换 HMD 到世界坐标系并发布 TF (仅用于可视化)
+            # Convert HMD to world coordinate system and publish TF (visualization only)
             hmd_pose_array = headset_data.to_pose_array()
             head_T = self.controller.compute_hmd_world_pose(hmd_pose_array)
             if head_T is not None:
                 pos = head_T[:3, 3]
                 quat = R.from_matrix(head_T[:3, :3]).as_quat()
 
-                # 检查转换后的四元数有效性
+                # Check converted quaternion validity
                 quat_norm = np.linalg.norm(quat)
                 if quat_norm > 0.9 and quat_norm < 1.1:
                     self._broadcast_tf(now, 'world', 'head', pos, quat)
 
-                    # 遗留 Topic (可选，调试用)
+                    # Legacy topic (optional, debug only)
                     if self.enable_legacy_topics and self.hmd_pub:
                         self._publish_pose(self.hmd_pub, now, 'world', pos, quat)
 
-            # 处理 Trackers
+            # Process Trackers
             self._process_trackers(now, tracker_data_list)
 
         except Exception as e:
             self._handle_error(now, str(e))
 
     def _handle_no_data(self, now):
-        """处理无数据情况 (PICO 未连接)"""
+        """Handle no-data situation (PICO not connected)"""
         self._no_data_count += 1
 
-        # 仅在等待设备时，每隔一段时间输出提示
+        # Only output hints periodically while waiting for device
         if self._waiting_for_device:
             current_time = now.nanoseconds / 1e9
             if self._last_warn_time is None or (current_time - self._last_warn_time) >= self._warn_interval:
                 self._last_warn_time = current_time
                 self.get_logger().warning(
-                    f'等待 PICO 设备连接... (已等待 {self._no_data_count} 帧)\n'
-                    '  请确保:\n'
-                    '  1. PICO 头显已开启并运行 XRoboToolkit App\n'
-                    '  2. PICO 与 PC 在同一 WiFi 网络\n'
-                    '  3. App 已连接到 PC IP 地址'
+                    f'Waiting for PICO device connection... (waited {self._no_data_count} frames)\n'
+                    '  Please ensure:\n'
+                    '  1. PICO headset is powered on and running XRoboToolkit App\n'
+                    '  2. PICO and PC are on the same WiFi network\n'
+                    '  3. App is connected to PC IP address'
                 )
 
     def _handle_error(self, now, error_msg: str):
-        """处理错误 (带节流)"""
+        """Handle errors (with throttling)"""
         current_time = now.nanoseconds / 1e9
         if self._last_warn_time is None or (current_time - self._last_warn_time) >= self._warn_interval:
             self._last_warn_time = current_time
-            # 简化错误信息
+            # Simplify error message
             if 'zero norm quaternions' in error_msg:
-                self.get_logger().warning('PICO 数据无效 (四元数为零) - 请检查设备连接')
+                self.get_logger().warning('PICO data invalid (quaternion is zero) - please check device connection')
             else:
-                self.get_logger().warning(f'数据处理异常: {error_msg}')
+                self.get_logger().warning(f'Data processing error: {error_msg}')
 
     def _process_trackers(self, now, tracker_data_list: list):
         """
-        处理 Motion Tracker 数据，计算增量位姿
+        Process Motion Tracker data, compute incremental poses
 
         Args:
-            now: 当前时间戳
-            tracker_data_list: List[TrackerData] 从数据源获取
+            now: Current timestamp
+            tracker_data_list: List[TrackerData] from data source
         """
         if not tracker_data_list:
             return
 
-        # 用于 elbow direction 计算的临时存储
-        tf_data = {}      # role -> (pos, quat) (robot 坐标系)
+        # Temporary storage for elbow direction computation
+        tf_data = {}      # role -> (pos, quat) (robot coordinate system)
 
         for i, tracker_data in enumerate(tracker_data_list):
-            # 获取角色
+            # Get role
             role = self._get_role_for_tracker(tracker_data)
             if not role:
                 continue
 
-            # 检查数据有效性
+            # Check data validity
             if not tracker_data.is_valid:
                 continue
 
-            # 转换为 pose 数组
+            # Convert to pose array
             pose = tracker_data.to_pose_array()
 
-            # 计算增量位姿 (委托给控制器)
+            # Compute incremental pose (delegate to controller)
             pos, quat = self.controller.compute_target_pose(pose, role)
             if pos is None:
                 continue
 
             tf_data[role] = (pos, quat)
 
-            # 确定父 frame (chest 坐标系)
+            # Determine parent frame (chest coordinate system)
             if 'left' in role:
                 parent_frame = 'world_left'
             else:
                 parent_frame = 'world_right'
 
-            # 1. TF 广播: world_left/world_right → pico_left_wrist/pico_left_arm 等
+            # 1. TF broadcast: world_left/world_right -> pico_left_wrist/pico_left_arm etc.
             self._broadcast_tf(now, parent_frame, role, pos, quat)
 
-            # 2. Topic 发布 (tianji_world_output 订阅)
+            # 2. Topic publishing (subscribed by tianji_world_output)
             if self.enable_topic_publishing:
                 if role == 'pico_left_wrist':
                     self._publish_pose(self.left_arm_pose_pub, now, parent_frame, pos, quat)
                 elif role == 'pico_right_wrist':
                     self._publish_pose(self.right_arm_pose_pub, now, parent_frame, pos, quat)
 
-            # 3. 遗留 Topic 发布: /pico_left_wrist, /pico_right_wrist, etc. (调试用)
+            # 3. Legacy topic publishing: /pico_left_wrist, /pico_right_wrist, etc. (debug only)
             if self.enable_legacy_topics and role in self.tracker_pubs:
                 self._publish_pose(self.tracker_pubs[role], now, parent_frame, pos, quat)
 
-        # ==================== 计算并发布 elbow direction ====================
+        # ==================== Compute and publish elbow direction ====================
         if self.enable_topic_publishing:
             self._publish_elbow_directions(now, tf_data)
 
     def _broadcast_tf(self, now, parent: str, child: str, pos, quat):
-        """广播 TF"""
+        """Broadcast TF"""
         t = TransformStamped()
         t.header.stamp = now.to_msg()
         t.header.frame_id = parent
@@ -659,7 +660,7 @@ class PicoInputNode(Node):
         self.tf_broadcaster.sendTransform(t)
 
     def _publish_pose(self, publisher, now, frame_id: str, pos, quat):
-        """发布 PoseStamped (用于 RViz/仿真)"""
+        """Publish PoseStamped (for RViz/simulation)"""
         msg = PoseStamped()
         msg.header.stamp = now.to_msg()
         msg.header.frame_id = frame_id
@@ -674,12 +675,13 @@ class PicoInputNode(Node):
 
     def _publish_elbow_directions(self, now, tf_data: dict):
         """
-        发布肘部方向向量 (臂角约束) + RViz 可视化 Markers
+        Publish elbow direction vectors (arm angle constraint) + RViz visualization Markers
 
-        从 arm tracker 位置计算几何方向(指向重力/下方)，取反后发布给 IK (反重力方向)。
-        RViz Markers 使用物理方向(不取反)，与绿色肩-肘箭头一致。
+        Computes geometric direction from arm tracker position (pointing toward gravity/downward),
+        negates it before publishing to IK (anti-gravity direction).
+        RViz Markers use physical direction (not negated), consistent with green shoulder-elbow arrow.
         """
-        # 收集手腕和前臂位置
+        # Collect wrist and forearm positions
         wrist_positions = {}
         arm_positions = {}
         for role, (pos, quat) in tf_data.items():
@@ -706,11 +708,11 @@ class PicoInputNode(Node):
                     shoulder_pos, wrist_pos, elbow_pos, side
                 )
 
-                # 几何方向(指向重力) → IK方向(反重力): 取反
+                # Geometric direction (toward gravity) -> IK direction (anti-gravity): negate
                 ik_direction = -direction
                 self._publish_vector3(pub, now, parent_frame, ik_direction)
 
-                # 诊断日志 (每 90 帧 ≈ 每秒)
+                # Diagnostic log (every 90 frames ~ once per second)
                 if self._elbow_log_counter % 90 == 0:
                     sw_len = float(np.linalg.norm(wrist_pos))
                     offset_len = float(np.linalg.norm(elbow_pos - proj_point))
@@ -726,7 +728,7 @@ class PicoInputNode(Node):
                         f'dot_default={dot_default:.3f}'
                     )
 
-                # 可视化 Markers (使用物理方向 direction，与绿色肩-肘箭头一致)
+                # Visualization Markers (use physical direction, consistent with green shoulder-elbow arrow)
                 side_markers = self._create_elbow_markers(
                     now, parent_frame, shoulder_pos, wrist_pos, elbow_pos,
                     proj_point, direction, side, marker_id
@@ -736,7 +738,7 @@ class PicoInputNode(Node):
 
         self._elbow_log_counter += 1
 
-        # 发布可视化 markers
+        # Publish visualization markers
         if markers.markers and self.marker_pub:
             self.marker_pub.publish(markers)
 
@@ -746,12 +748,12 @@ class PicoInputNode(Node):
                                direction: np.ndarray, side: str,
                                start_id: int) -> list:
         """
-        创建臂角可视化 RViz Markers (参考 step4)
+        Create arm angle visualization RViz Markers (reference step4)
 
-        - 红色箭头: 肩 → 腕
-        - 绿色箭头: 肩 → 肘
-        - 蓝色箭头: 投影点 → 肘部偏移方向 (elbow_direction)
-        - 黄色小球: 投影点
+        - Red arrow: shoulder -> wrist
+        - Green arrow: shoulder -> elbow
+        - Blue arrow: projection point -> elbow offset direction (elbow_direction)
+        - Yellow sphere: projection point
         """
         markers = []
         timestamp = now.to_msg()
@@ -762,7 +764,7 @@ class PicoInputNode(Node):
             p.x, p.y, p.z = float(arr[0]), float(arr[1]), float(arr[2])
             return p
 
-        # 1. 红色箭头: 肩 → 腕
+        # 1. Red arrow: shoulder -> wrist
         m_sw = Marker()
         m_sw.header.stamp = timestamp
         m_sw.header.frame_id = frame_id
@@ -777,7 +779,7 @@ class PicoInputNode(Node):
         m_sw.lifetime.nanosec = lifetime_ns
         markers.append(m_sw)
 
-        # 2. 绿色箭头: 肩 → 肘
+        # 2. Green arrow: shoulder -> elbow
         m_se = Marker()
         m_se.header.stamp = timestamp
         m_se.header.frame_id = frame_id
@@ -792,7 +794,7 @@ class PicoInputNode(Node):
         m_se.lifetime.nanosec = lifetime_ns
         markers.append(m_se)
 
-        # 3. 蓝色箭头: 投影点 → 肘部偏移方向 (elbow_direction)
+        # 3. Blue arrow: projection point -> elbow offset direction (elbow_direction)
         arrow_length = 0.15
         arrow_end = proj_point + direction * arrow_length
         m_dir = Marker()
@@ -809,7 +811,7 @@ class PicoInputNode(Node):
         m_dir.lifetime.nanosec = lifetime_ns
         markers.append(m_dir)
 
-        # 4. 黄色小球: 投影点
+        # 4. Yellow sphere: projection point
         m_proj = Marker()
         m_proj.header.stamp = timestamp
         m_proj.header.frame_id = frame_id
@@ -827,7 +829,7 @@ class PicoInputNode(Node):
         return markers
 
     def _publish_vector3(self, publisher, now, frame_id: str, vector: np.ndarray):
-        """发布 Vector3Stamped (用于 elbow direction)"""
+        """Publish Vector3Stamped (for elbow direction)"""
         if publisher is None:
             return
 
@@ -840,8 +842,8 @@ class PicoInputNode(Node):
         publisher.publish(msg)
 
     def _log_startup(self):
-        """打印启动信息"""
-        # 获取本机 IP 地址
+        """Print startup information"""
+        # Get local IP address
         local_ip = "127.0.0.1"
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -860,57 +862,57 @@ class PicoInputNode(Node):
         mode = ' + '.join(mode_parts)
 
         self.get_logger().info('=' * 70)
-        self.get_logger().info('PICO Input Node (TDD 重构) - 增量控制模式')
+        self.get_logger().info('PICO Input Node (TDD Refactoring) - Incremental Control Mode')
         self.get_logger().info('=' * 70)
-        self.get_logger().info(f'  数据源: {self.data_source}')
-        self.get_logger().info(f'  状态: {"已就绪" if self.data_source.is_available() else "未就绪"}')
-        self.get_logger().info(f'  频率: {self.publish_rate} Hz')
-        self.get_logger().info(f'  输出模式: {mode}')
-        self.get_logger().info('  臂角控制: 始终开启 (动态 elbow direction, One-Euro 自适应平滑)')
-        self.get_logger().info(f'  滤波: One-Euro Filter (位置+姿态+肘部方向 统一自适应平滑)')
-        self.get_logger().info(f'  Tracker 映射: {self.tracker_serial_map}')
+        self.get_logger().info(f'  Data source: {self.data_source}')
+        self.get_logger().info(f'  Status: {"Ready" if self.data_source.is_available() else "Not ready"}')
+        self.get_logger().info(f'  Rate: {self.publish_rate} Hz')
+        self.get_logger().info(f'  Output mode: {mode}')
+        self.get_logger().info('  Arm angle control: always enabled (dynamic elbow direction, One-Euro adaptive smoothing)')
+        self.get_logger().info(f'  Filtering: One-Euro Filter (position+orientation+elbow direction unified adaptive smoothing)')
+        self.get_logger().info(f'  Tracker mapping: {self.tracker_serial_map}')
         self.get_logger().info('-' * 70)
 
         if self.data_source_type == 'live':
-            self.get_logger().info('Live 模式 - PICO SDK 连接配置:')
-            self.get_logger().info(f'  PC IP 地址: {local_ip}')
-            self.get_logger().info(f'  端口: {self.pc_service_port}')
+            self.get_logger().info('Live mode - PICO SDK connection config:')
+            self.get_logger().info(f'  PC IP address: {local_ip}')
+            self.get_logger().info(f'  Port: {self.pc_service_port}')
             self.get_logger().info('')
-            self.get_logger().info('  在 PICO 头显中打开 XRoboToolkit App，填写:')
-            self.get_logger().info(f'    服务器地址: {local_ip}')
-            self.get_logger().info(f'    端口: {self.pc_service_port}')
+            self.get_logger().info('  In PICO headset, open XRoboToolkit App and enter:')
+            self.get_logger().info(f'    Server address: {local_ip}')
+            self.get_logger().info(f'    Port: {self.pc_service_port}')
             self.get_logger().info('')
-            self.get_logger().info('  ⚠️ 确保 PICO 与 PC 在同一 WiFi 网络!')
+            self.get_logger().info('  Make sure PICO and PC are on the same WiFi network!')
         elif self.data_source_type == 'recorded':
             file_path = self.get_parameter('recorded_file_path').value
             speed = self.get_parameter('playback_speed').value
-            self.get_logger().info('Recorded 模式 - 数据回放:')
-            self.get_logger().info(f'  文件: {file_path}')
-            self.get_logger().info(f'  速度: {speed}x')
+            self.get_logger().info('Recorded mode - Data playback:')
+            self.get_logger().info(f'  File: {file_path}')
+            self.get_logger().info(f'  Speed: {speed}x')
 
         self.get_logger().info('-' * 70)
-        self.get_logger().info('增量控制模式:')
-        self.get_logger().info('  - 初始化时记录四个 tracker 的位置')
-        self.get_logger().info('  - 用户手移动多少 → 机器人手移动多少')
-        self.get_logger().info('  - 坐标变换: PICO(+X右,+Y上,+Z前) → 机器人(+X前,+Y左,+Z上)')
+        self.get_logger().info('Incremental control mode:')
+        self.get_logger().info('  - Record positions of four trackers during initialization')
+        self.get_logger().info('  - User hand moves delta -> Robot hand moves delta')
+        self.get_logger().info('  - Coordinate transform: PICO(+X right,+Y up,+Z forward) -> Robot(+X forward,+Y left,+Z up)')
         self.get_logger().info('-' * 65)
-        self.get_logger().info('机器人初始位置 (来自 tianji_robot.yaml):')
+        self.get_logger().info('Robot initial positions (from tianji_robot.yaml):')
         for role, pos in self.controller.robot_init_positions.items():
             self.get_logger().info(f'  {role}: [{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]')
         self.get_logger().info('-' * 65)
-        self.get_logger().info('服务:')
+        self.get_logger().info('Services:')
         self.get_logger().info('  ros2 service call /pico_input/init std_srvs/srv/Trigger')
         self.get_logger().info('  ros2 service call /pico_input/reset std_srvs/srv/Trigger')
         if self.auto_init_delay > 0:
-            self.get_logger().info(f'  自动初始化: {self.auto_init_delay:.1f} 秒后')
+            self.get_logger().info(f'  Auto-initialization: after {self.auto_init_delay:.1f} seconds')
         self.get_logger().info('=' * 65)
 
     def destroy_node(self):
-        """清理资源"""
-        # 关闭数据源 (替换原有的 SDK 关闭)
+        """Clean up resources"""
+        # Close data source (replaces original SDK close)
         if hasattr(self, 'data_source') and self.data_source:
             self.data_source.close()
-            self.get_logger().info(f'数据源已关闭: {self.data_source}')
+            self.get_logger().info(f'Data source closed: {self.data_source}')
 
         super().destroy_node()
 
@@ -924,12 +926,12 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        # 检查 rclpy 是否已经 shutdown
+        # Check if rclpy has already been shutdown
         try:
             if rclpy.ok():
                 rclpy.shutdown()
         except Exception:
-            pass  # 忽略 shutdown 错误
+            pass  # Ignore shutdown errors
 
 
 if __name__ == '__main__':

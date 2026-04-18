@@ -1,136 +1,136 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-Step 4: 可视化录制的 PICO 数据（离线测试，不需要真实硬件）
+Step 4: Visualize Recorded PICO Data (Offline Test, No Real Hardware Required)
 =============================================================================
 
-功能：读取 PICO 录制数据 → 坐标变换 → 发布 TF/Topics → RViz 可视化
+Function: Read PICO recorded data -> coordinate transform -> publish TF/Topics -> RViz visualization
 
-✅ 优点：
-  - 不需要 PICO 硬件
-  - 不需要机器人硬件
-  - 可重复测试坐标变换逻辑
-  - 验证增量控制算法
-  - 完整的 ROS2 节点，包含静态 TF 发布
+✅ Advantages:
+  - No PICO hardware required
+  - No robot hardware required
+  - Repeatable coordinate transform logic testing
+  - Verify incremental control algorithm
+  - Complete ROS2 node with static TF publishing
 
-⚠️ 与其他 step 的区别：
-  - step3: 从真机器人读取关节角 → FK → 可视化
-  - step4: 从录制文件读取 PICO 数据 → 坐标变换 → 可视化 (本脚本)
-  - step5: 从录制文件读取 PICO 数据 → 坐标变换 → 控制真机器人
+⚠️ Differences from other steps:
+  - step3: Read joint angles from real robot -> FK -> visualization
+  - step4: Read PICO data from recorded file -> coordinate transform -> visualization (this script)
+  - step5: Read PICO data from recorded file -> coordinate transform -> control real robot
 
 
-使用方法
+Usage
 ========
 
-  终端 1: 启动本脚本
+  Terminal 1: Start this script
   ------------------
-  cd /home/wuji-08/Desktop/wuji-teleop-ros2-private/src/input_devices/pico_input/test
+  cd ~/Desktop/wuji-hand-teleop/src/input_devices/pico_input/test
   python3 step4_visualize_recorded_data.py
 
-  # 使用其他录制文件 (record/ 目录下的大数据集)
+  # Use other recorded files (large datasets in record/ directory)
   python3 step4_visualize_recorded_data.py --file ../record/trackingData_head_tracker_static.txt
 
-  # 调整回放速度 (0.5=慢速, 1.0=实时, 2.0=快速)
+  # Adjust playback speed (0.5=slow, 1.0=real-time, 2.0=fast)
   python3 step4_visualize_recorded_data.py --speed 0.5
 
-  # 循环回放
+  # Loop playback
   python3 step4_visualize_recorded_data.py --loop
 
 
-  终端 2: 启动 RViz 可视化
+  Terminal 2: Start RViz visualization
   ------------------------
   rviz2
 
-  手动配置 RViz:
+  Manually configure RViz:
     1. Fixed Frame: world
-    2. Add → TF → 勾选 Show Axes & Show Names
-    3. Add → Axes (可选，显示 world 坐标系)
+    2. Add -> TF -> Check Show Axes & Show Names
+    3. Add -> Axes (optional, shows world coordinate system)
 
 
-测试数据文件（均在 record/ 目录下）
+Test data files (all in record/ directory)
 ============
-  高质量静态数据 (推荐):
-    ../record/trackingData_sample_static.txt (150 帧，平均位移 <0.1mm)
+  High-quality static data (recommended):
+    ../record/trackingData_sample_static.txt (150 frames, avg displacement <0.1mm)
 
-  大数据集:
-    ../record/trackingData_head_tracker_static.txt (8384 帧)
-    ../record/trackingData_head_tracker.txt (5703 帧)
-    ../record/trackingData_whole_data.txt (5780 帧)
+  Large datasets:
+    ../record/trackingData_head_tracker_static.txt (8384 frames)
+    ../record/trackingData_head_tracker.txt (5703 frames)
+    ../record/trackingData_whole_data.txt (5780 frames)
 
 
-坐标变换说明
+Coordinate Transform Description
 ============
-PICO 坐标系 → Robot 坐标系:
-  PICO: +X右, +Y上, +Z前(朝向用户)
-  Robot: +X前, +Y左, +Z上
+PICO coordinate system -> Robot coordinate system:
+  PICO: +XRight, +YUp, +ZForward(toward user)
+  Robot: +XForward, +YLeft, +ZUp
 
-  变换矩阵 pico_to_robot (从 tianji_robot.yaml 加载，详见 transform_utils.py):
-    Robot X = -PICO Z  (用户前移 → 机器人后移，靠近用户)
-    Robot Y = -PICO X  (用户右移 → 机器人右移)
-    Robot Z = +PICO Y  (用户上移 → 机器人上移)
+  Transform matrix pico_to_robot (loaded from tianji_robot.yaml, see transform_utils.py):
+    Robot X = -PICO Z  (User moves forward -> robot moves backward, toward user)
+    Robot Y = -PICO X  (User moves right -> robot moves right)
+    Robot Z = +PICO Y  (User moves up -> robot moves up)
 
 
-Tracker SN 映射
+Tracker SN Mapping
 ===============
-  190058 → pico_left_wrist  (左手腕，控制左臂末端)
-  190600 → pico_right_wrist (右手腕，控制右臂末端)
-  190046 → pico_left_arm    (左前臂，臂角约束)
-  190023 → pico_right_arm   (右前臂，臂角约束)
+  190058 → pico_left_wrist  (Left wrist, controls left arm end-effector)
+  190600 → pico_right_wrist (Right wrist, controls right arm end-effector)
+  190046 → pico_left_arm    (Left forearm, arm angle constraint)
+  190023 → pico_right_arm   (Right forearm, arm angle constraint)
 
 
-TF 树结构
+TF Tree Structure
 =========
   world
-  ├── head (HMD 头显)
-  ├── world_left (左臂 chest 坐标系, Y=+0.2)
-  │   ├── left_dh_ee (机器人左臂末端参考位置，静态)
-  │   ├── pico_left_wrist (PICO 左手腕，动态)
-  │   └── pico_left_arm (PICO 左前臂，动态)
+  ├── head (HMD headset)
+  ├── world_left (left arm chest coordinate system, Y=+0.2)
+  │   ├── left_dh_ee (robotLeft arm end-effector reference position, static)
+  │   ├── pico_left_wrist (PICO left wrist, dynamic)
+  │   └── pico_left_arm (PICO left forearm, dynamic)
   │
-  └── world_right (右臂 chest 坐标系, Y=-0.2)
-      ├── right_dh_ee (机器人右臂末端参考位置，静态)
-      ├── pico_right_wrist (PICO 右手腕，动态)
-      └── pico_right_arm (PICO 右前臂，动态)
+  └── world_right (right arm chest coordinate system, Y=-0.2)
+      ├── right_dh_ee (robotRight arm end-effector reference position, static)
+      ├── pico_right_wrist (PICO right wrist, dynamic)
+      └── pico_right_arm (PICO right forearm, dynamic)
 
 
-发布的 Topics
+Published Topics
 =============
-  /pico_hmd              - HMD 位姿 (PoseStamped)
-  /pico_left_wrist       - 左手腕位姿 (PoseStamped)
-  /pico_right_wrist      - 右手腕位姿 (PoseStamped)
-  /pico_left_arm         - 左前臂位姿 (PoseStamped)
-  /pico_right_arm        - 右前臂位姿 (PoseStamped)
-  /left_arm_target_pose  - 左臂目标位姿 (PoseStamped)
-  /right_arm_target_pose - 右臂目标位姿 (PoseStamped)
-  /left_arm_elbow_direction  - 左臂肘部方向 (Vector3Stamped, 臂角约束)
-  /right_arm_elbow_direction - 右臂肘部方向 (Vector3Stamped, 臂角约束)
+  /pico_hmd              - HMD pose (PoseStamped)
+  /pico_left_wrist       - Left wrist pose (PoseStamped)
+  /pico_right_wrist      - Right wrist pose (PoseStamped)
+  /pico_left_arm         - Left forearm pose (PoseStamped)
+  /pico_right_arm        - Right forearm pose (PoseStamped)
+  /left_arm_target_pose  - Left arm target pose (PoseStamped)
+  /right_arm_target_pose - Right arm target pose (PoseStamped)
+  /left_arm_elbow_direction  - Left arm elbow direction (Vector3Stamped, arm angle constraint)
+  /right_arm_elbow_direction - Right arm elbow direction (Vector3Stamped, arm angle constraint)
 
 
-调试命令
+Debug Commands
 ========
-  # 查看所有 PICO topics
+  # View all PICO topics
   ros2 topic list | grep pico
 
-  # 查看 tracker 数据
+  # View tracker data
   ros2 topic echo /pico_left_wrist --once
   ros2 topic echo /left_arm_elbow_direction --once
 
-  # 查看 TF 树
+  # View TF tree
   ros2 run tf2_tools view_frames && evince frames.pdf
 
 
-验证标准
+Verification Criteria
 ========
-  ✓ 4 个 tracker 正确初始化 (pico_left_wrist, pico_right_wrist, pico_left_arm, pico_right_arm)
-  ✓ Topics 正常发布，数据有效
-  ✓ TF frames 在 RViz 中正确显示
-  ✓ 坐标轴方向正确 (红X前, 绿Y左, 蓝Z上)
-  ✓ 臂角方向 /left_arm_elbow_direction 正常发布
+  ✓ 4 trackers correctly initialized (pico_left_wrist, pico_right_wrist, pico_left_arm, pico_right_arm)
+  ✓ Topics publishing normally, data valid
+  ✓ TF frames displaying correctly in RViz
+  ✓ Axis directions correct (red-X-forward, green-Y-left, blue-Z-up)
+  ✓ Arm angle direction /left_arm_elbow_direction publishing normally
 
 
-下一步
+Next Step
 ======
-测试通过后，进入 step5:
+After passing tests, proceed to step5:
   python3 step5_incremental_control_with_robot.py --dry-run
 
 =============================================================================
@@ -145,43 +145,43 @@ from pathlib import Path
 import rclpy
 from rclpy.node import Node
 
-# 全局变量用于信号处理清理
+# Global variables for signal handling cleanup
 _node = None
 _shutdown_requested = False
 
 
 def _signal_handler(signum, frame):
-    """信号处理器，确保 Ctrl+C 和 kill 时能正确清理"""
+    """Signal handler to ensure proper cleanup on Ctrl+C and kill"""
     global _shutdown_requested
     if not _shutdown_requested:
         _shutdown_requested = True
-        print("\n收到退出信号，正在清理...")
+        print("\nReceived exit signal, cleaning up...")
         _cleanup()
         sys.exit(0)
 
 
 def _cleanup():
-    """清理函数，确保节点正确销毁"""
+    """Cleanup function to ensure node is properly destroyed"""
     global _node
     if _node is not None:
         try:
             _node.destroy_node()
             _node = None
-            print("✓ ROS2 节点已销毁")
+            print("ROS2 node destroyed")
         except Exception:
             pass
     try:
         if rclpy.ok():
             rclpy.shutdown()
-            print("✓ ROS2 已关闭")
+            print("ROS2 shutdown")
     except Exception:
         pass
 
 
-# 注册退出时清理
+# Register cleanup on exit
 atexit.register(_cleanup)
 
-# 注册信号处理
+# Register signal handlers
 signal.signal(signal.SIGINT, _signal_handler)
 signal.signal(signal.SIGTERM, _signal_handler)
 from geometry_msgs.msg import TransformStamped, PoseStamped, Vector3Stamped
@@ -191,7 +191,7 @@ from tf2_ros import TransformBroadcaster, StaticTransformBroadcaster
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-# 导入共享模块（使用相对路径）
+# Import shared modules (using relative path)
 _test_dir = str(Path(__file__).resolve().parent)
 _pico_input_dir = str(Path(__file__).resolve().parent.parent)
 if _test_dir not in sys.path:
@@ -211,120 +211,120 @@ from common.transform_utils import (
     apply_world_rotation_to_chest_pose,
 )
 
-# 导入数据源
+# Import data source
 from pico_input.data_source import RecordedDataSource
 
 
-# PICO → 机器人坐标变换 (从共享配置加载)
-# 详见 tianji_world_output/transform_utils.py 和 PICO_TELEOP_GUIDE.md §3.1
+# PICO -> Robot coordinate transform (loaded from shared config)
+# See tianji_world_output/transform_utils.py and PICO_TELEOP_GUIDE.md §3.1
 
-# World → Chest 转换: 使用 transform_utils 中的共享函数
-# (transform_world_to_chest, apply_world_rotation_to_chest_pose 等)
+# World -> Chest conversion: using shared functions from transform_utils
+# (transform_world_to_chest, apply_world_rotation_to_chest_pose etc.)
 
 
 class RecordedDataVisualizer(Node):
     """
-    录制数据可视化节点（双骨骼层级可视化）
+    Recorded data visualization node (dual skeleton hierarchical visualization)
 
-    功能：
-    - 发布静态 TF: world → world_left, world_right (chest 坐标系)
-    - 发布静态 TF: world_left/right → 机器人 DH 关节 (left_dh_ee, left_dh_elbow) - 固定参数
-    - 读取录制数据 (RecordedDataSource)
-    - 计算 PICO tracker 增量位姿
-    - 发布动态 TF: world_left/right → PICO trackers (pico_left_wrist, left_arm)
-    - 发布 Topics: /pico_*, /left_arm_target_pose, /right_arm_target_pose
+    Functions:
+    - Publish static TF: world -> world_left, world_right (chest coordinate system)
+    - Publish static TF: world_left/right -> robot DH joints (left_dh_ee, left_dh_elbow) - fixed parameters
+    - Read recorded data (RecordedDataSource)
+    - Compute PICO tracker incremental poses
+    - Publish dynamic TF: world_left/right -> PICO trackers (pico_left_wrist, left_arm)
+    - Publish topics: /pico_*, /left_arm_target_pose, /right_arm_target_pose
 
-    关键设计（两个骨骼一起运动）：
-    - 机器人 DH 骨骼：world_left → left_dh_ee, left_dh_elbow（静态，TIANJI_INIT_POS/ELBOW_POS）
-    - PICO 骨骼：world_left → pico_left_wrist, left_arm（动态，增量控制）
-    - 共享父坐标系（chest），轴向自然对齐，便于对比验证
+    Key design (two skeletons moving together):
+    - Robot DH skeleton: world_left -> left_dh_ee, left_dh_elbow (static, TIANJI_INIT_POS/ELBOW_POS)
+    - PICO skeleton: world_left -> pico_left_wrist, left_arm (dynamic, incremental control)
+    - Shared parent frame (chest), axes naturally aligned for easy comparison and verification
     """
 
     def __init__(self, data_file: str, playback_speed: float = 1.0, loop_playback: bool = False):
         super().__init__('recorded_data_visualizer')
 
-        # 参数
+        # Parameters
         self.playback_speed = playback_speed
         self.loop_playback = loop_playback
 
-        # TF 广播器
+        # TF broadcaster
         self.tf_broadcaster = TransformBroadcaster(self)
         self.static_broadcaster = StaticTransformBroadcaster(self)
 
-        # Topic 发布器
+        # Topic publishers
         self.left_arm_pose_pub = self.create_publisher(PoseStamped, '/left_arm_target_pose', 10)
         self.right_arm_pose_pub = self.create_publisher(PoseStamped, '/right_arm_target_pose', 10)
 
-        # PICO tracker topics (所有 topic 统一使用 pico_ 前缀)
+        # PICO tracker topics (all topics use unified pico_ prefix)
         self.pico_hmd_pub = self.create_publisher(PoseStamped, '/pico_hmd', 10)
         self.pico_left_wrist_pub = self.create_publisher(PoseStamped, '/pico_left_wrist', 10)
         self.pico_right_wrist_pub = self.create_publisher(PoseStamped, '/pico_right_wrist', 10)
         self.pico_left_arm_pub = self.create_publisher(PoseStamped, '/pico_left_arm', 10)
         self.pico_right_arm_pub = self.create_publisher(PoseStamped, '/pico_right_arm', 10)
 
-        # 臂角控制 topics (用于 tianji_world_output 的零空间 IK 约束)
-        # 发布肘部偏移方向向量: 肘部相对于肩-腕平面的法向量
+        # Arm angle control topics (for tianji_world_output nullspace IK constraints)
+        # Publish elbow offset direction vector: normal vector of elbow relative to shoulder-wrist plane
         self.left_elbow_dir_pub = self.create_publisher(Vector3Stamped, '/left_arm_elbow_direction', 10)
         self.right_elbow_dir_pub = self.create_publisher(Vector3Stamped, '/right_arm_elbow_direction', 10)
 
-        # RViz Marker 可视化 (用于理解臂角计算原理)
+        # RViz Marker visualization (for understanding arm angle calculation principles)
         self.marker_pub = self.create_publisher(MarkerArray, '/elbow_angle_visualization', 10)
 
-        # 缓存手腕位置用于计算肩-腕连线
+        # Cache wrist positions for computing shoulder-wrist line
         self.wrist_positions = {'left': None, 'right': None}
 
-        # 初始化状态
+        # Initialization state
         self.initialized = False
         self.init_tracker_poses = {}
         self.init_hmd_pose = None
 
-        # 缓存：用于静止数据优化（减少 RViz 抖动）
+        # Cache: for static data optimization (reduce RViz jitter)
         self.cached_poses = {}  # {role: (pos, quat)}
-        self.debug_counter = 0  # 用于限制日志输出
+        self.debug_counter = 0  # For limiting log output
 
-        # 数据源
-        self.get_logger().info(f'加载录制数据: {data_file}')
+        # Data source
+        self.get_logger().info(f'Loading recorded data: {data_file}')
         self.data_source = RecordedDataSource(data_file, playback_speed, loop_playback)
 
         if not self.data_source.initialize():
-            self.get_logger().error('数据源初始化失败')
+            self.get_logger().error('Data source initialization failed')
             raise RuntimeError('Failed to initialize data source')
 
         total_frames = len(self.data_source.data_frames) if hasattr(self.data_source, 'data_frames') else 0
-        self.get_logger().info(f'✓ 数据加载成功，共 {total_frames} 帧')
+        self.get_logger().info(f'Data loaded successfully, total {total_frames} frames')
 
-        # 发布静态 TF
+        # Publish static TF
         self.publish_static_frames()
 
-        # 自动初始化（使用第一帧数据）
+        # Auto-initialize (using first frame data)
         self.create_timer(0.1, self.auto_init_once)
 
-        # 定时器：发布 TF 和 Topics
+        # Timer: publish TF and Topics
         self.timer = self.create_timer(1.0 / 90.0, self.publish_callback)  # 90 Hz
 
         self.get_logger().info('=' * 70)
-        self.get_logger().info('Step 4: 录制数据可视化节点已启动')
+        self.get_logger().info('Step 4: Recorded data visualization node started')
         self.get_logger().info('=' * 70)
-        self.get_logger().info(f'  数据文件: {data_file}')
-        self.get_logger().info(f'  回放速度: {playback_speed}x')
-        self.get_logger().info(f'  循环回放: {loop_playback}')
-        self.get_logger().info(f'  总帧数: {total_frames}')
+        self.get_logger().info(f'  Data file: {data_file}')
+        self.get_logger().info(f'  Playback speed: {playback_speed}x')
+        self.get_logger().info(f'  Loop playback: {loop_playback}')
+        self.get_logger().info(f'  Total frames: {total_frames}')
         self.get_logger().info('-' * 70)
-        self.get_logger().info('在另一个终端启动 RViz:')
+        self.get_logger().info('In another terminal, start RViz:')
         self.get_logger().info('  rviz2 -d $(ros2 pkg prefix pico_input)/share/pico_input/rviz/pico_simulation.rviz')
         self.get_logger().info('-' * 70)
-        self.get_logger().info('验证要点:')
-        self.get_logger().info('  ✓ 机器人 DH 和 PICO tracker 都连接到 world_left/right (chest)')
-        self.get_logger().info('  ✓ 轴向自然对齐（共享父坐标系）')
-        self.get_logger().info('  ✓ 像两个骨骼一起运动：机器人固定 + PICO 跟随')
+        self.get_logger().info('Verification points:')
+        self.get_logger().info('  ✓ Robot DH and PICO tracker both connected to world_left/right (chest)')
+        self.get_logger().info('  ✓ Axes naturally aligned (shared parent frame)')
+        self.get_logger().info('  ✓ Like two skeletons moving together: robot fixed + PICO following')
         self.get_logger().info('=' * 70)
 
     def publish_static_frames(self):
-        """发布静态 TF: world → world_left, world_right, 以及机器人 DH 关节位置"""
+        """Publish static TF: world -> world_left, world_right, and robot DH joint positions"""
         now = self.get_clock().now()
         transforms = []
 
-        # 获取 TF 用四元数 (chest→world 方向)
+        # Get quaternions for TF (chest->world direction)
         left_tf_quat = get_tf_quaternion('left')
         right_tf_quat = get_tf_quaternion('right')
 
@@ -356,17 +356,17 @@ class RecordedDataVisualizer(Node):
         t_right.transform.rotation.w = float(right_tf_quat[3])
         transforms.append(t_right)
 
-        # ========== 机器人 DH 末端位置（仅用于 RViz 可视化参考）==========
-        # 注意: dh_elbow 已移除，因为零空间 IK 约束使用 PICO arm tracker 的方向向量
-        # 而不是固定的肘部位置。肘部约束由 /left_arm_elbow_direction topic 提供。
+        # ========== Robot DH end-effector positions (only for RViz visualization reference)==========
+        # Note: dh_elbow has been removed, because nullspace IK constraints use PICO arm tracker direction vectors
+        # instead of fixed elbow positions. Elbow constraints are provided by /left_arm_elbow_direction topic.
 
-        # 左臂旋转矩阵
+        # Left arm rotation matrix
         left_ee_quat = R.from_matrix(TIANJI_INIT_ROT['left']).as_quat()
 
-        # 右臂旋转矩阵
+        # Right arm rotation matrix
         right_ee_quat = R.from_matrix(TIANJI_INIT_ROT['right']).as_quat()
 
-        # world_left → left_dh_ee (左臂末端参考位置)
+        # world_left → left_dh_ee (Left arm end-effector reference position)
         t_left_ee = TransformStamped()
         t_left_ee.header.stamp = now.to_msg()
         t_left_ee.header.frame_id = 'world_left'
@@ -380,7 +380,7 @@ class RecordedDataVisualizer(Node):
         t_left_ee.transform.rotation.w = float(left_ee_quat[3])
         transforms.append(t_left_ee)
 
-        # world_right → right_dh_ee (右臂末端参考位置)
+        # world_right → right_dh_ee (Right arm end-effector reference position)
         t_right_ee = TransformStamped()
         t_right_ee.header.stamp = now.to_msg()
         t_right_ee.header.frame_id = 'world_right'
@@ -395,15 +395,15 @@ class RecordedDataVisualizer(Node):
         transforms.append(t_right_ee)
 
         self.static_broadcaster.sendTransform(transforms)
-        self.get_logger().info('✓ 静态 TF 已发布: world → world_left, world_right')
-        self.get_logger().info('✓ 机器人末端参考已发布: left_dh_ee, right_dh_ee')
+        self.get_logger().info('Static TF published: world -> world_left, world_right')
+        self.get_logger().info('Robot end-effector references published: left_dh_ee, right_dh_ee')
 
     def auto_init_once(self):
-        """自动初始化（仅执行一次）"""
+        """Auto-initialize (executed only once)"""
         if self.initialized:
             return
 
-        # 获取第一帧数据
+        # Get first frame data
         headset_data = self.data_source.get_headset_pose()
         tracker_data_list = self.data_source.get_tracker_data()
 
@@ -411,23 +411,23 @@ class RecordedDataVisualizer(Node):
             self.do_init(headset_data, tracker_data_list)
 
     def do_init(self, headset_data, tracker_data_list):
-        """执行初始化：记录 HMD 和 tracker 初始位姿"""
-        # 记录 HMD 初始位姿
+        """Execute initialization: record HMD and tracker initial poses"""
+        # Record HMD initial pose
         hmd_pose = headset_data.to_pose_array()
         self.init_hmd_pose = self._pose_to_matrix(hmd_pose)
 
-        # 记录 tracker 初始位姿
+        # Record tracker initial poses
         self.init_tracker_poses = {}
         tracker_map = {
-            '190058': 'pico_left_wrist',   # PICO 左手腕 tracker
-            '190600': 'pico_right_wrist',  # PICO 右手腕 tracker
-            '190046': 'pico_left_arm',     # PICO 左前臂 tracker (统一 pico_ 前缀)
-            '190023': 'pico_right_arm',    # PICO 右前臂 tracker (统一 pico_ 前缀)
+            '190058': 'pico_left_wrist',  # PICO left wrist tracker
+            '190600': 'pico_right_wrist', # PICO right wrist tracker
+            '190046': 'pico_left_arm',    # PICO left forearm tracker (unified pico_ prefix)
+            '190023': 'pico_right_arm',   # PICO right forearm tracker (unified pico_ prefix)
         }
 
-        self.get_logger().info('初始化中...')
+        self.get_logger().info('Initializing...')
         for tracker in tracker_data_list:
-            # 提取序列号中的 6 位数字
+            # Extract 6-digit serial number
             import re
             match = re.search(r'(\d{6})', tracker.serial_number)
             if not match:
@@ -442,10 +442,10 @@ class RecordedDataVisualizer(Node):
                 self.get_logger().info(f'  {role}: pos={tracker.position}')
 
         self.initialized = True
-        self.get_logger().info(f'✓ 初始化完成！记录了 {len(self.init_tracker_poses)} 个 tracker')
+        self.get_logger().info(f'Initialization complete! Recorded {len(self.init_tracker_poses)} trackers')
 
     def publish_callback(self):
-        """主循环：读取数据并发布 TF + Topics"""
+        """Main loop: read data and publish TF + Topics"""
         if not self.data_source.is_available():
             return
 
@@ -454,22 +454,22 @@ class RecordedDataVisualizer(Node):
 
         now = self.get_clock().now()
 
-        # 获取数据
+        # Get data
         headset_data = self.data_source.get_headset_pose()
         tracker_data_list = self.data_source.get_tracker_data()
 
         if not headset_data or not headset_data.is_valid:
             return
 
-        # 发布 HMD TF
+        # Publish HMD TF
         self.publish_hmd_tf(now, headset_data)
 
-        # 发布 Tracker TF
+        # Publish Tracker TF
         if tracker_data_list:
             self.publish_tracker_tfs(now, tracker_data_list)
 
     def publish_hmd_tf(self, now, headset_data):
-        """发布 HMD 的 TF"""
+        """Publish HMD TF"""
         hmd_pose = headset_data.to_pose_array()
         head_T = self._transform_hmd_to_world(hmd_pose)
 
@@ -477,79 +477,79 @@ class RecordedDataVisualizer(Node):
             pos = head_T[:3, 3]
             quat = R.from_matrix(head_T[:3, :3]).as_quat()
 
-            # 发布 TF
+            # Publish TF
             self._broadcast_tf(now, 'world', 'head', pos, quat)
 
-            # 发布 Topic
+            # Publish topic
             self._publish_pose(self.pico_hmd_pub, now, 'world', pos, quat)
 
     def publish_tracker_tfs(self, now, tracker_data_list):
         """
-        发布 Tracker 的 TF 和 Topics，包括臂角控制的 elbow direction
+        Publish Tracker TF and Topics, including elbow direction for arm angle control
 
         ============================================================================
-        臂角 (Arm Angle) 计算原理说明
+        Arm Angle Calculation Principle
         ============================================================================
 
-        什么是臂角？
+        What is arm angle?
         -----------
-        臂角是描述肘部相对于"肩-腕平面"偏移方向的角度。
-        想象一下：当你伸直手臂指向前方，肘部可以朝不同方向弯曲：
-          - 肘部朝下 = 沉肘（自然放松姿态）
-          - 肘部朝外 = 抬肘（像鸡翅膀一样）
-          - 肘部朝上 = 反肘（杂技动作）
+        Arm angle describes the angle of elbow offset relative to the "shoulder-wrist plane".
+        Imagine: when you extend your arm forward, the elbow can bend in different directions:
+          - Elbow pointing down = relaxed elbow (natural relaxed posture)
+          - Elbow pointing outward = raised elbow (like chicken wings)
+          - Elbow pointing up = inverted elbow (acrobatic posture)
 
-        为什么需要臂角控制？
+        Why is arm angle control needed?
         -------------------
-        7自由度机械臂有"冗余自由度"，即末端位姿相同时，关节角有无穷多解。
-        臂角约束可以指定肘部的期望方向，让机器人选择特定的姿态。
+        A 7-DOF robot arm has "redundant degrees of freedom", meaning there are infinitely many joint solutions for the same end-effector pose.
+        Arm angle constraints can specify the desired elbow direction, letting the robot choose a specific posture.
 
-        零空间 (Nullspace) 是什么？
+        What is the nullspace?
         --------------------------
-        对于7自由度机械臂，要到达一个6自由度末端位姿，有1个自由度是"多余"的。
-        这个多余的自由度形成一个"零空间"——在这个空间内运动不改变末端位置。
+        For a 7-DOF robot arm, to reach a 6-DOF end-effector pose, 1 DOF is "redundant".
+        This redundant DOF forms a "nullspace" -- motion within this space does not change the end-effector position.
 
-        想象这样一个场景：
-        - 你用手握住门把手（末端位姿固定）
-        - 你可以通过移动肘部来调整手臂姿态，但手始终握在门把手上
-        - 肘部能移动的轨迹就是"零空间"
+        Imagine this scenario:
+        - You grip a door handle with your hand (end-effector pose is fixed)
+        - You can adjust your arm posture by moving your elbow, but your hand stays on the door handle
+        - The trajectory the elbow can follow is the "nullspace"
 
-        臂角控制就是在零空间内选择一个特定的肘部位置。
+        Arm angle control is selecting a specific elbow position within the nullspace.
 
-        计算方法
+        Computation Method
         --------
-        1. 肩膀位置: shoulder = [0, 0, 0] (chest 坐标系原点)
-        2. 手腕位置: wrist = pico_left_wrist 的位置
-        3. 肘部位置: elbow = pico_left_arm 的位置 (近似)
+        1. Shoulder position: shoulder = [0, 0, 0] (chest coordinate system origin)
+        2. Wrist position: wrist = position of pico_left_wrist
+        3. Elbow position: elbow = position of pico_left_arm (approximate)
 
-        4. 肩-腕向量: shoulder_to_wrist = wrist - shoulder
-        5. 肩-肘向量: shoulder_to_elbow = elbow - shoulder
+        4. Shoulder-wrist vector: shoulder_to_wrist = wrist - shoulder
+        5. Shoulder-elbow vector: shoulder_to_elbow = elbow - shoulder
 
-        6. 投影: 肘部在肩-腕连线上的投影点
+        6. Projection: elbow's projection point on shoulder-wrist line
            proj = (shoulder_to_elbow · shoulder_to_wrist_unit) * shoulder_to_wrist_unit
 
-        7. 肘部偏移向量: elbow_offset = shoulder_to_elbow - proj
-           这就是肘部偏离肩-腕平面的方向！
+        7. Elbow offset vector: elbow_offset = shoulder_to_elbow - proj
+           This is the direction of elbow deviation from the shoulder-wrist plane!
 
-        8. 归一化: elbow_direction = elbow_offset / |elbow_offset|
+        8. Normalize: elbow_direction = elbow_offset / |elbow_offset|
 
-        可视化说明 (在 RViz 中)
+        Visualization Notes (in RViz)
         ----------------------
-        - 红色箭头: 肩-腕连线
-        - 绿色箭头: 肩-肘连线
-        - 蓝色箭头: 肘部偏移方向 (elbow_direction) ← 这是发送给 IK 的
-        - 黄色点: 肘部在肩-腕连线上的投影点
+        - Red arrow: shoulder-wrist line
+        - Green arrow: shoulder-elbow line
+        - Blue arrow: elbow offset direction (elbow_direction) -- this is sent to IK
+        - Yellow dot: elbow projection point on shoulder-wrist line
 
         ============================================================================
         """
         tracker_map = {
-            '190058': ('pico_left_wrist', self.pico_left_wrist_pub, self.left_arm_pose_pub, 'left'),     # PICO 左手腕
-            '190600': ('pico_right_wrist', self.pico_right_wrist_pub, self.right_arm_pose_pub, 'right'), # PICO 右手腕
-            '190046': ('pico_left_arm', self.pico_left_arm_pub, None, 'left'),                           # PICO 左前臂
-            '190023': ('pico_right_arm', self.pico_right_arm_pub, None, 'right'),                        # PICO 右前臂
+            '190058': ('pico_left_wrist', self.pico_left_wrist_pub, self.left_arm_pose_pub, 'left'),    # PICO left wrist
+            '190600': ('pico_right_wrist', self.pico_right_wrist_pub, self.right_arm_pose_pub, 'right'), # PICO right wrist
+            '190046': ('pico_left_arm', self.pico_left_arm_pub, None, 'left'),                          # PICO left forearm
+            '190023': ('pico_right_arm', self.pico_right_arm_pub, None, 'right'),                       # PICO right forearm
         }
 
-        # 收集手腕和前臂位置用于计算 elbow direction
+        # Collect wrist and forearm positions for computing elbow direction
         wrist_positions = {}
         arm_positions = {}
 
@@ -557,7 +557,7 @@ class RecordedDataVisualizer(Node):
             if not tracker.is_valid:
                 continue
 
-            # 提取序列号
+            # Extract serial number
             import re
             match = re.search(r'(\d{6})', tracker.serial_number)
             if not match:
@@ -572,36 +572,36 @@ class RecordedDataVisualizer(Node):
             if pico_frame_name not in self.init_tracker_poses:
                 continue
 
-            # 计算增量位姿
+            # Compute incremental pose
             pose = tracker.to_pose_array()
             pos, quat = self._compute_incremental_pose(pose, pico_frame_name, side)
 
             if pos is None:
                 continue
 
-            # 确定父 frame（chest 坐标系）
+            # Determine parent frame (chest coordinate system)
             parent_frame = 'world_left' if side == 'left' else 'world_right'
 
-            # 发布 TF (PICO tracker 位置，父 frame 为 chest)
+            # Publish TF (PICO tracker position, parent frame is chest)
             self._broadcast_tf(now, parent_frame, pico_frame_name, pos, quat)
 
-            # 发布 PICO Topic
+            # Publish PICO topic
             self._publish_pose(legacy_pub, now, parent_frame, pos, quat)
 
-            # 发布目标位姿 Topic (仅手腕)
+            # Publish target pose topic (wrist only)
             if target_pub:
                 self._publish_pose(target_pub, now, parent_frame, pos, quat)
 
-            # 收集手腕和前臂位置用于 elbow direction 计算
+            # Collect wrist and forearm positions for elbow direction computation
             if 'wrist' in pico_frame_name:
                 wrist_positions[side] = pos.copy()
             elif 'arm' in pico_frame_name:
                 arm_positions[side] = pos.copy()
 
-        # ============== 计算并发布 elbow direction ==============
-        # 从 arm tracker 位置计算几何方向(指向重力/下方)，取反后发布给 IK (反重力方向)
-        # arm_init_pos 物理值 [0.2, ±0.3, +0.1] 使 arm 在肩下方，几何方向指向下方
-        # 无 tracker 数据时使用 DEFAULT_ZSP_DIRECTION 作为 fallback (已是 IK 约定)
+        # ============== Compute and publish elbow direction ==============
+        # Compute geometric direction from arm tracker position (pointing toward gravity/down), negate before publishing to IK (anti-gravity direction)
+        # arm_init_pos Physical value [0.2, ±0.3, +0.1] places arm below shoulder, geometric direction points downward
+        # Use DEFAULT_ZSP_DIRECTION as fallback when no tracker data available (already follows IK convention)
 
         markers = MarkerArray()
         marker_id = 0
@@ -614,17 +614,17 @@ class RecordedDataVisualizer(Node):
             elbow_pos = arm_positions.get(side)
 
             if wrist_pos is not None and elbow_pos is not None:
-                shoulder_pos = np.array([0.0, 0.0, 0.0])  # chest 坐标系原点
+                shoulder_pos = np.array([0.0, 0.0, 0.0])  # Chest coordinate system origin
 
                 direction, proj_point = self._compute_elbow_direction(
                     shoulder_pos, wrist_pos, elbow_pos, side
                 )
 
-                # 几何方向(指向重力) → IK方向(反重力): 取反
+                # Geometric direction (toward gravity) -> IK direction (anti-gravity): negate
                 ik_direction = -direction
                 self._publish_vector3(pub, now, parent_frame, ik_direction)
 
-                # 创建可视化 Markers (使用物理方向 direction，与绿色肩-肘箭头一致)
+                # Create visualization markers (using physical direction, consistent with green shoulder-elbow arrow)
                 side_markers = self._create_elbow_visualization_markers(
                     now, parent_frame, shoulder_pos, wrist_pos, elbow_pos,
                     proj_point, direction, side, marker_id
@@ -632,97 +632,97 @@ class RecordedDataVisualizer(Node):
                 markers.markers.extend(side_markers)
                 marker_id += len(side_markers)
             else:
-                # 无 tracker 数据时不发布，output_node 保持使用上一次收到的方向
+                # Do not publish when no tracker data, output_node keeps using last received direction
                 pass
 
-        # 发布可视化 markers
+        # Publish visualization markers
         if markers.markers:
             self.marker_pub.publish(markers)
 
     def _compute_elbow_direction(self, shoulder: np.ndarray, wrist: np.ndarray,
                                   elbow: np.ndarray, side: str) -> tuple:
         """
-        计算肘部相对于肩-腕平面的偏移方向
+        Compute elbow offset direction relative to shoulder-wrist plane
 
-        这是臂角控制的核心算法：
-        1. 计算肩-腕向量 (手臂主轴)
-        2. 计算肩-肘向量
-        3. 将肘部投影到肩-腕连线上
-        4. 肘部偏移 = 实际肘部位置 - 投影点
-        5. 归一化得到方向向量
+        This is the core algorithm for arm angle control:
+        1. Compute shoulder-wrist vector (arm main axis)
+        2. Compute shoulder-elbow vector
+        3. Project elbow onto shoulder-wrist line
+        4. Elbow offset = actual elbow position - projection point
+        5. Normalize to get direction vector
 
         ============================================================================
-        几何原理图解
+        Geometric Principle Diagram
         ============================================================================
 
-                    肩膀 (shoulder)
+                    Shoulder
                       ●
                      /|\\
                     / | \\
                    /  |  \\
                   /   |   \\
-           肩-肘 /    |    \\ 肩-腕
+           shoulder-elbow /    |    \\ shoulder-wrist
                 /     |     \\
                /      |      \\
               ●-------●-------●
-           肘部    投影点    手腕
+           Elbow   Projection  Wrist
           (elbow) (proj)   (wrist)
 
               ←─────→
-            肘部偏移向量
+            Elbow offset vector
           (elbow_direction)
 
-        肘部偏移向量 = 肘部位置 - 投影点
-        这个向量是肘部偏离肩-腕连线的物理方向(指向肘部/重力方向)。
-        发布给 IK 前需取反: ik_direction = -direction (IK 要求反重力方向)。
+        Elbow offset vector = elbow position - projection point
+        This vector is the physical direction of elbow deviation from shoulder-wrist line (pointing toward elbow/gravity direction).
+        Negate before publishing to IK: ik_direction = -direction (IK requires anti-gravity direction).
 
         ============================================================================
-        关于左右臂的处理
+        Left/Right Arm Handling
         ============================================================================
 
-        arm tracker 的初始参考位置 (arm_init_pos, 来自 tianji_robot.yaml) 为物理正确值:
-          - 左臂: [0.2, +0.3, +0.1]  (Left Chest: Y+=下, Z+=左/外侧)
-          - 右臂: [0.2, -0.3, +0.1]  (Right Chest: Y-=下, Z+=右/外侧)
+        The initial reference positions of arm trackers (arm_init_pos, from tianji_robot.yaml) are physically correct values:
+          - left arm: [0.2, +0.3, +0.1]  (Left Chest: Y+=Down, Z+=Left/outer side)
+          - right arm: [0.2, -0.3, +0.1]  (Right Chest: Y-=Down, Z+=Right/outer side)
 
-        计算出的 direction 是物理方向(指向肘部)，发布前取反为 IK 方向。
-        左右臂的差异已经在位置变换阶段处理好了。
+        The computed direction is the physical direction (pointing to elbow), negated to IK direction before publishing.
+        Differences between left and right arms have been handled in the position transform stage.
 
-        返回:
-            direction: 肘部偏移方向 (单位向量，物理方向，指向肘部)
-            proj_point: 肘部在肩-腕连线上的投影点 (用于可视化)
+        Returns:
+            direction: elbow offset direction (unit vector, physical direction, pointing to elbow)
+            proj_point: elbow projection point on shoulder-wrist line (for visualization)
         """
-        # 默认臂角参考平面参数 (从统一配置加载)
+        # Default arm angle reference plane parameters (loaded from unified config)
         default_direction = DEFAULT_ZSP_DIRECTION[side]
 
-        # 肩-腕向量
+        # Shoulder-wrist vector
         shoulder_to_wrist = wrist - shoulder
         sw_length = np.linalg.norm(shoulder_to_wrist)
 
         if sw_length < 1e-6:
-            # 手腕太靠近肩膀，使用默认沉肘方向
+            # Wrist too close to shoulder, using default relaxed elbow direction
             return default_direction, shoulder
 
         sw_unit = shoulder_to_wrist / sw_length
 
-        # 肩-肘向量
+        # Shoulder-elbow vector
         shoulder_to_elbow = elbow - shoulder
 
-        # 肘部在肩-腕连线上的投影长度
+        # Projection length of elbow on shoulder-wrist line
         proj_length = np.dot(shoulder_to_elbow, sw_unit)
 
-        # 投影点
+        # Projection point
         proj_point = shoulder + proj_length * sw_unit
 
-        # 肘部偏移向量 (肘部偏离肩-腕连线的方向)
+        # Elbow offset vector (direction of elbow deviation from shoulder-wrist line)
         elbow_offset = elbow - proj_point
         offset_length = np.linalg.norm(elbow_offset)
 
         if offset_length < 1e-6:
-            # 肘部正好在肩-腕连线上，使用默认沉肘方向
-            # 这种情况在人体姿态中几乎不会发生
+            # Elbow is exactly on shoulder-wrist line, using default relaxed elbow direction
+            # This case almost never occurs in human postures
             return default_direction, proj_point
 
-        # 归一化得到方向向量
+        # Normalize to get direction vector
         direction = elbow_offset / offset_length
 
         return direction, proj_point
@@ -733,19 +733,19 @@ class RecordedDataVisualizer(Node):
                                              direction: np.ndarray, side: str,
                                              start_id: int) -> list:
         """
-        创建臂角可视化的 RViz Markers
+        Create RViz Markers for arm angle visualization
 
-        显示内容:
-        - 红色箭头: 肩-腕连线 (手臂主轴)
-        - 绿色箭头: 肩-肘连线 (实际肘部位置)
-        - 蓝色箭头: 肘部偏移方向 (发送给 IK 的 elbow_direction)
-        - 黄色小球: 投影点 (肘部在肩-腕线上的投影)
-        - 紫色虚线: 肘部到投影点的连线 (偏移距离)
+        Display contents:
+        - Red arrow: shoulder-wrist line (arm main axis)
+        - Green arrow: shoulder-elbow line (actual elbow position)
+        - Blue arrow: elbow offset direction (elbow_direction sent to IK)
+        - Yellow sphere: projection point (elbow projection on shoulder-wrist line)
+        - Purple dashed line: connection from elbow to projection point (offset distance)
         """
         markers = []
         timestamp = now.to_msg()
 
-        # 1. 红色箭头: 肩 → 腕 (手臂主轴)
+        # 1. Red arrow: shoulder -> wrist (arm main axis)
         m_sw = Marker()
         m_sw.header.stamp = timestamp
         m_sw.header.frame_id = frame_id
@@ -757,15 +757,15 @@ class RecordedDataVisualizer(Node):
             self._to_point(shoulder),
             self._to_point(wrist)
         ]
-        m_sw.scale.x = 0.01  # 箭杆直径
-        m_sw.scale.y = 0.02  # 箭头直径
+        m_sw.scale.x = 0.01  # Shaft diameter
+        m_sw.scale.y = 0.02  # Arrow head diameter
         m_sw.scale.z = 0.0
-        m_sw.color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.8)  # 红色
+        m_sw.color = ColorRGBA(r=1.0, g=0.0, b=0.0, a=0.8)  # red
         m_sw.lifetime.sec = 0
         m_sw.lifetime.nanosec = int(0.1 * 1e9)
         markers.append(m_sw)
 
-        # 2. 绿色箭头: 肩 → 肘 (实际肘部)
+        # 2. Green arrow: shoulder -> elbow (actual elbow)
         m_se = Marker()
         m_se.header.stamp = timestamp
         m_se.header.frame_id = frame_id
@@ -780,14 +780,14 @@ class RecordedDataVisualizer(Node):
         m_se.scale.x = 0.01
         m_se.scale.y = 0.02
         m_se.scale.z = 0.0
-        m_se.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)  # 绿色
+        m_se.color = ColorRGBA(r=0.0, g=1.0, b=0.0, a=0.8)  # green
         m_se.lifetime.sec = 0
         m_se.lifetime.nanosec = int(0.1 * 1e9)
         markers.append(m_se)
 
-        # 3. 蓝色箭头: 从投影点指向肘部 (elbow_direction)
-        # 这个向量就是发送给 IK 的臂角约束方向
-        arrow_length = 0.15  # 固定长度便于观察
+        # 3. Blue arrow: from projection point to elbow (elbow_direction)
+        # This vector is the arm angle constraint direction sent to IK
+        arrow_length = 0.15  # Fixed length for easy observation
         arrow_end = proj_point + direction * arrow_length
         m_dir = Marker()
         m_dir.header.stamp = timestamp
@@ -800,15 +800,15 @@ class RecordedDataVisualizer(Node):
             self._to_point(proj_point),
             self._to_point(arrow_end)
         ]
-        m_dir.scale.x = 0.015  # 稍粗一些突出显示
+        m_dir.scale.x = 0.015  # Slightly thicker for emphasis
         m_dir.scale.y = 0.025
         m_dir.scale.z = 0.0
-        m_dir.color = ColorRGBA(r=0.0, g=0.5, b=1.0, a=1.0)  # 亮蓝色
+        m_dir.color = ColorRGBA(r=0.0, g=0.5, b=1.0, a=1.0)  # bright blue
         m_dir.lifetime.sec = 0
         m_dir.lifetime.nanosec = int(0.1 * 1e9)
         markers.append(m_dir)
 
-        # 4. 黄色小球: 投影点
+        # 4. Yellow sphere: projection point
         m_proj = Marker()
         m_proj.header.stamp = timestamp
         m_proj.header.frame_id = frame_id
@@ -821,12 +821,12 @@ class RecordedDataVisualizer(Node):
         m_proj.scale.x = 0.02
         m_proj.scale.y = 0.02
         m_proj.scale.z = 0.02
-        m_proj.color = ColorRGBA(r=1.0, g=1.0, b=0.0, a=1.0)  # 黄色
+        m_proj.color = ColorRGBA(r=1.0, g=1.0, b=0.0, a=1.0)  # yellow
         m_proj.lifetime.sec = 0
         m_proj.lifetime.nanosec = int(0.1 * 1e9)
         markers.append(m_proj)
 
-        # 5. 紫色线: 投影点 → 肘部 (显示偏移距离)
+        # 5. Purple line: projection point -> elbow (shows offset distance)
         m_offset = Marker()
         m_offset.header.stamp = timestamp
         m_offset.header.frame_id = frame_id
@@ -838,13 +838,13 @@ class RecordedDataVisualizer(Node):
             self._to_point(proj_point),
             self._to_point(elbow)
         ]
-        m_offset.scale.x = 0.008  # 线宽
-        m_offset.color = ColorRGBA(r=1.0, g=0.0, b=1.0, a=0.8)  # 紫色
+        m_offset.scale.x = 0.008  # Line width
+        m_offset.color = ColorRGBA(r=1.0, g=0.0, b=1.0, a=0.8)  # purple
         m_offset.lifetime.sec = 0
         m_offset.lifetime.nanosec = int(0.1 * 1e9)
         markers.append(m_offset)
 
-        # 6. 文字标签: 显示 side 名称
+        # 6. Text label: shows side name
         m_text = Marker()
         m_text.header.stamp = timestamp
         m_text.header.frame_id = frame_id
@@ -854,8 +854,8 @@ class RecordedDataVisualizer(Node):
         m_text.action = Marker.ADD
         m_text.pose.position = self._to_point(elbow + np.array([0, 0, 0.05]))
         m_text.pose.orientation.w = 1.0
-        m_text.scale.z = 0.03  # 文字大小
-        m_text.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)  # 白色
+        m_text.scale.z = 0.03  # Text size
+        m_text.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)  # white
         m_text.text = f'{side.upper()} elbow'
         m_text.lifetime.sec = 0
         m_text.lifetime.nanosec = int(0.1 * 1e9)
@@ -869,63 +869,63 @@ class RecordedDataVisualizer(Node):
         return Point(x=float(arr[0]), y=float(arr[1]), z=float(arr[2]))
 
     def _compute_incremental_pose(self, current_pose, pico_frame_name: str, side: str):
-        """计算 PICO tracker 的增量位姿（用于对比验证）"""
+        """Compute PICO tracker incremental pose (for comparison and verification)"""
         if pico_frame_name not in self.init_tracker_poses:
             return None, None
 
         current_T = self._pose_to_matrix(current_pose)
         init_T = self.init_tracker_poses[pico_frame_name]
 
-        # 位置增量
+        # Position increment
         delta_pos_pico = current_T[:3, 3] - init_T[:3, 3]
         delta_pos_norm = np.linalg.norm(delta_pos_pico)
 
-        # 姿态增量
+        # Orientation increment
         init_rot = R.from_matrix(init_T[:3, :3])
         current_rot = R.from_matrix(current_T[:3, :3])
         delta_rot_pico = current_rot * init_rot.inv()
         delta_angle = np.linalg.norm(delta_rot_pico.as_rotvec())
 
-        # 调试输出：前 10 次调用显示增量大小
+        # Debug output: show increment magnitude for first 10 calls
         if self.debug_counter < 10:
             self.get_logger().info(
                 f'[DEBUG] {pico_frame_name}: delta_pos={delta_pos_norm:.10f}m, delta_angle={delta_angle:.10f}rad'
             )
             self.debug_counter += 1
 
-        # 静止检测：如果增量极小（< 1e-6），使用缓存位姿
-        # 这可以避免浮点误差导致的 RViz 抖动
+        # Stationary detection: if increment is very small (< 1e-6), use cached pose
+        # This avoids RViz jitter caused by floating point errors
         POSITION_THRESHOLD = 1e-6  # 0.001mm
-        ROTATION_THRESHOLD = 1e-6  # ~0.00006 度
+        ROTATION_THRESHOLD = 1e-6  # ~0.00006 degrees
 
         is_static = (delta_pos_norm < POSITION_THRESHOLD and delta_angle < ROTATION_THRESHOLD)
 
         if is_static and pico_frame_name in self.cached_poses:
-            # 使用缓存的位姿（完全静止）
+            # Use cached pose (completely stationary)
             return self.cached_poses[pico_frame_name]
 
-        # 计算新位姿
+        # Compute new pose
         delta_pos_world = get_pico_to_robot() @ delta_pos_pico
 
-        # 转换到 chest 坐标系（使用共享库）
+        # Convert to chest coordinate system (using shared library)
         delta_pos_chest = transform_world_to_chest(delta_pos_world, side)
 
-        # 获取机器人初始位置
-        # 对于 wrist tracker: 映射到机器人末端初始位置
-        # 对于 arm tracker: 保持在原点附近，用于计算臂角方向向量
+        # Get robot initial position
+        # For wrist tracker: mapped to robot end-effector initial position
+        # For arm tracker: kept near origin, for computing arm angle direction vector
         if 'arm' in pico_frame_name and 'wrist' not in pico_frame_name:
-            # 前臂 tracker: 位置用于计算臂角方向 (从配置加载)
+            # Forearm tracker: position used for arm angle direction computation (loaded from config)
             robot_init_pos = ARM_INIT_POS[side]
         else:
-            # 手腕（pico_left_wrist, pico_right_wrist）使用 TIANJI_INIT_POS
+            # Wrist (pico_left_wrist, pico_right_wrist) uses TIANJI_INIT_POS
             robot_init_pos = TIANJI_INIT_POS.get(side, np.zeros(3))
 
         target_pos = robot_init_pos + delta_pos_chest
 
-        # 转换到 world (使用共享库，轴角方法)
+        # Convert to world (using shared library, axis-angle method)
         delta_rot_world = transform_pico_rotation_to_world(delta_rot_pico, get_pico_to_robot())
 
-        # 使用共享库 4 步算法: target_chest = R_w2c @ delta_world @ R_c2w @ init_chest
+        # Using shared library 4-step algorithm: target_chest = R_w2c @ delta_world @ R_c2w @ init_chest
         robot_init_rot_mat = TIANJI_INIT_ROT.get(side, np.eye(3))
         target_rot_in_chest = apply_world_rotation_to_chest_pose(
             robot_init_rot_mat, delta_rot_world, side
@@ -934,26 +934,26 @@ class RecordedDataVisualizer(Node):
         target_rot = R.from_matrix(target_rot_in_chest)
         target_quat = target_rot.as_quat()
 
-        # 缓存位姿
+        # Cache pose
         self.cached_poses[pico_frame_name] = (target_pos, target_quat)
 
         return target_pos, target_quat
 
     def _transform_hmd_to_world(self, pico_pose) -> np.ndarray:
-        """将 HMD 位姿转换到世界坐标系"""
+        """Convert HMD pose to world coordinate system"""
         if self.init_hmd_pose is None:
             return None
 
         current_T = self._pose_to_matrix(pico_pose)
 
-        # 位置增量
+        # Position increment
         delta_pos_pico = current_T[:3, 3] - self.init_hmd_pose[:3, 3]
         delta_pos_robot = get_pico_to_robot() @ delta_pos_pico
 
-        # HMD 初始位置设为原点上方
+        # HMD initial position set above origin
         target_pos = np.array([0.0, 0.0, 1.6]) + delta_pos_robot
 
-        # 姿态增量
+        # Orientation increment
         current_rot = R.from_matrix(current_T[:3, :3])
         init_rot = R.from_matrix(self.init_hmd_pose[:3, :3])
         delta_rot_pico = current_rot * init_rot.inv()
@@ -967,14 +967,14 @@ class RecordedDataVisualizer(Node):
         return result_T
 
     def _pose_to_matrix(self, pose) -> np.ndarray:
-        """[x,y,z,qx,qy,qz,qw] → 4x4 变换矩阵"""
+        """[x,y,z,qx,qy,qz,qw] -> 4x4 transformation matrix"""
         T = np.eye(4)
         T[:3, 3] = pose[:3]
         T[:3, :3] = R.from_quat(pose[3:7]).as_matrix()
         return T
 
     def _broadcast_tf(self, now, parent: str, child: str, pos, quat):
-        """广播 TF"""
+        """Broadcast TF"""
         t = TransformStamped()
         t.header.stamp = now.to_msg()
         t.header.frame_id = parent
@@ -989,7 +989,7 @@ class RecordedDataVisualizer(Node):
         self.tf_broadcaster.sendTransform(t)
 
     def _publish_pose(self, publisher, now, frame_id: str, pos, quat):
-        """发布 PoseStamped"""
+        """Publish PoseStamped"""
         if publisher is None:
             return
 
@@ -1006,7 +1006,7 @@ class RecordedDataVisualizer(Node):
         publisher.publish(msg)
 
     def _publish_vector3(self, publisher, now, frame_id: str, vector):
-        """发布 Vector3Stamped (用于 elbow direction)"""
+        """Publish Vector3Stamped (for elbow direction)"""
         if publisher is None:
             return
 
@@ -1019,50 +1019,50 @@ class RecordedDataVisualizer(Node):
         publisher.publish(msg)
 
     def destroy_node(self):
-        """清理资源"""
+        """Clean up resources"""
         if hasattr(self, 'data_source'):
             self.data_source.close()
-            self.get_logger().info('数据源已关闭')
+            self.get_logger().info('Data source closed')
         super().destroy_node()
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Step 4: 可视化录制的 PICO 数据')
+    parser = argparse.ArgumentParser(description='Step 4: Visualize recorded PICO data')
     parser.add_argument('--file', type=str,
                         default='../record/trackingData_sample_static.txt',
-                        help='录制数据文件路径（相对于 test/ 目录）')
+                        help='Recorded data file path (relative to test/ directory)')
     parser.add_argument('--speed', type=float, default=1.0,
-                        help='回放速度倍率 (0.5=慢速, 1.0=实时, 2.0=快速)')
+                        help='Playback speed multiplier (0.5=slow, 1.0=real-time, 2.0=fast)')
     parser.add_argument('--loop', action='store_true',
-                        help='循环回放')
+                        help='Loop playback')
     args = parser.parse_args()
 
-    # 确定数据文件路径
+    # Determine data file path
+    test_dir = Path(__file__).parent
     data_file = Path(args.file)
     if not data_file.is_absolute():
-        # 相对路径，从 test/ 目录查找
-        test_dir = Path(__file__).parent
+        # Relative path, search from test/ directory
         data_file = test_dir / args.file
 
     if not data_file.exists():
-        print(f"❌ 错误: 找不到数据文件 {data_file}")
-        print(f"   请检查文件是否存在于: {test_dir}")
+        print(f"Error: data file not found {data_file}")
+        print(f"   Please check if the file exists at: {test_dir}")
         return
 
     print("=" * 70)
-    print("Step 4: 可视化录制的 PICO 数据")
+    print("Step 4: Visualize recorded PICO data")
     print("=" * 70)
-    print(f"  数据文件: {data_file}")
-    print(f"  回放速度: {args.speed}x")
-    print(f"  循环回放: {args.loop}")
+    print(f"  Data file: {data_file}")
+    print(f"  Playback speed: {args.speed}x")
+    print(f"  Loop playback: {args.loop}")
     print("=" * 70)
     print("")
-    print("在另一个终端启动 RViz:")
+    print("In another terminal, start RViz:")
     print("  rviz2 -d $(ros2 pkg prefix pico_input)/share/pico_input/rviz/pico_simulation.rviz")
     print("")
-    print("或手动配置 RViz:")
+    print("Or manually configure RViz:")
     print("  1. Fixed Frame: world")
-    print("  2. Add → TF → 勾选 Show Axes & Show Names")
+    print("  2. Add -> TF -> Check Show Axes & Show Names")
     print("=" * 70)
     print("")
 
@@ -1074,7 +1074,7 @@ def main():
     try:
         rclpy.spin(_node)
     except KeyboardInterrupt:
-        print("\n✓ 用户中断")
+        print("\nUser interrupted")
     finally:
         if not _shutdown_requested:
             _cleanup()

@@ -1,13 +1,12 @@
 """
-Wuji Hand-Only Teleoperation Launch File / Wuji 仅手部遥操作启动文件
+Wuji Hand-Only Teleoperation Launch File
 
 Launches hand teleoperation components with configurable input device.
-启动手部遥操作组件，支持配置不同的输入设备。
 
-Supported input devices / 支持的输入设备:
+Supported input devices:
   - manus: Manus Gloves
 
-Usage / 使用方式:
+Usage:
     # Using Manus Gloves
     ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
 """
@@ -50,7 +49,7 @@ def generate_launch_description() -> LaunchDescription:
         description="Path to wujihand_ik config file",
     )
 
-    # ===== wujihandros2 驱动参数 =====
+    # ===== wujihandros2 driver parameters =====
     left_serial_arg = DeclareLaunchArgument(
         "left_serial",
         default_value=LEFT_HAND_SERIAL,
@@ -125,14 +124,13 @@ def generate_launch_description() -> LaunchDescription:
         ),
 
         # ==================== HAND INPUT: Manus ====================
-        # Manus ROS2 Driver (needs root for USB dongle access)
+        # Manus ROS2 Driver (USB access via udev rule, no sudo needed)
         Node(
             package="manus_ros2",
             executable="manus_data_publisher",
             name="manus_data_publisher",
             output="screen",
             emulate_tty=True,
-            prefix="sudo -E",
             condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
         # Manus Input Node (convert to MediaPipe format)

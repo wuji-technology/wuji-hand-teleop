@@ -1,10 +1,10 @@
-"""天机臂控制器节点
+"""Tianji arm controller node
 
-两种控制模式：
-1. TELEOP 模式：TF → IK → 机器人
-2. INFERENCE 模式：joint_command → 机器人
+Two control modes:
+1. TELEOP mode: TF → IK → robot
+2. INFERENCE mode: joint_command → robot
 
-模式切换服务：/tianji_arm/switch_mode
+Mode switching service: /tianji_arm/switch_mode
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from .common import (
     get_package_config_path,
 )
 
-# 话题名称
+# Topic names
 LEFT_ARM_CMD_TOPIC = "/tianji_arm/left/joint_command"
 RIGHT_ARM_CMD_TOPIC = "/tianji_arm/right/joint_command"
 LEFT_ARM_STATE_TOPIC = "/tianji_arm/left/joint_state"
@@ -40,7 +40,7 @@ RIGHT_ARM_STATE_TOPIC = "/tianji_arm/right/joint_state"
 
 
 class TianjiArmControllerNode(Node):
-    """天机臂控制器节点"""
+    """Tianji arm controller node"""
 
     def __init__(self, robot_ip: str = '192.168.1.190'):
         super().__init__("tianji_arm_controller")
@@ -49,21 +49,21 @@ class TianjiArmControllerNode(Node):
         self._logger_adapter = ROS2LoggerAdapter(self.get_logger())
         self._log_counter = 0
 
-        # 初始化控制器
-        self.get_logger().info(f"正在连接机器人 {robot_ip}...")
+        # Initialize controller
+        self.get_logger().info(f"Connecting to robot {robot_ip}...")
         self.controller = TianjiArmController(robot_ip=robot_ip, logger=self._logger_adapter)
         self.controller.set_impedance_mode(mode='joint')
 
-        # 移动到初始位置
-        self.get_logger().info("机械臂移动到初始位置...")
+        # Move to initial position
+        self.get_logger().info("Moving arm to initial position...")
         self.controller.move_to_init(wait=True, timeout=1)
-        self.get_logger().info("控制器初始化完成")
+        self.get_logger().info("Controller initialization complete")
 
-        # TF 监听器
+        # TF listener
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
-        # 位姿和关节缓存
+        # Pose and joint cache
         self.left_pose = None
         self.right_pose = None
         self.left_y_axis = None
@@ -73,46 +73,46 @@ class TianjiArmControllerNode(Node):
 
         qos = get_default_qos()
 
-        # 发布者
+        # Publishers
         self.left_cmd_pub = self.create_publisher(JointState, LEFT_ARM_CMD_TOPIC, qos)
         self.right_cmd_pub = self.create_publisher(JointState, RIGHT_ARM_CMD_TOPIC, qos)
         self.left_state_pub = self.create_publisher(JointState, LEFT_ARM_STATE_TOPIC, qos)
         self.right_state_pub = self.create_publisher(JointState, RIGHT_ARM_STATE_TOPIC, qos)
 
-        # zsp_para 和 pose 发布者
+        # zsp_para and pose publishers
         self.left_zsp_para_pub = self.create_publisher(Float64MultiArray, '/tianji_arm/left/left_zsp_para', qos)
         self.right_zsp_para_pub = self.create_publisher(Float64MultiArray, '/tianji_arm/right/right_zsp_para', qos)
         self.left_ee_pose_pub = self.create_publisher(Float64MultiArray, '/tianji_arm/left/left_ee_pose', qos)
         self.right_ee_pose_pub = self.create_publisher(Float64MultiArray, '/tianji_arm/right/right_ee_pose', qos)
 
-        # 订阅者
+        # Subscribers
         self.left_cmd_sub = self.create_subscription(
             JointState, LEFT_ARM_CMD_TOPIC, self._left_cmd_callback, qos)
         self.right_cmd_sub = self.create_subscription(
             JointState, RIGHT_ARM_CMD_TOPIC, self._right_cmd_callback, qos)
 
-        # 服务
+        # Services
         self.create_service(SetBool, '/tianji_arm/switch_mode', self._switch_mode_callback)
         self.create_service(Trigger, '/tianji_arm/get_mode', self._get_mode_callback)
 
-        # 定时器 (100Hz)
+        # Timer (100Hz)
         self.create_timer(0.01, self._control_loop)
 
-        self.get_logger().info(f"初始化完成，模式: {self._mode.value.upper()}")
+        self.get_logger().info(f"Initialization complete, mode: {self._mode.value.upper()}")
 
     @property
     def mode(self) -> ControlMode:
         return self._mode
 
-    # -------------------- 服务回调 --------------------
+    # -------------------- Service Callbacks --------------------
 
     def _switch_mode_callback(self, request: SetBool.Request, response: SetBool.Response):
         new_mode = ControlMode.INFERENCE if request.data else ControlMode.TELEOP
         if self._mode != new_mode:
             self._mode = new_mode
-            self.get_logger().info(f"切换到 {new_mode.value} 模式")
+            self.get_logger().info(f"Switched to {new_mode.value} mode")
         response.success = True
-        response.message = f"当前模式: {new_mode.value}"
+        response.message = f"Current mode: {new_mode.value}"
         return response
 
     def _get_mode_callback(self, request: Trigger.Request, response: Trigger.Response):
@@ -120,7 +120,7 @@ class TianjiArmControllerNode(Node):
         response.message = self._mode.value
         return response
 
-    # -------------------- 订阅回调 --------------------
+    # -------------------- Subscription Callbacks --------------------
 
     def _left_cmd_callback(self, msg: JointState):
         if self._mode == ControlMode.INFERENCE and msg.position:
@@ -130,7 +130,7 @@ class TianjiArmControllerNode(Node):
         if self._mode == ControlMode.INFERENCE and msg.position:
             self.right_inference_joints = list(msg.position)
 
-    # -------------------- 控制循环 --------------------
+    # -------------------- Control Loop --------------------
 
     def _control_loop(self):
         self._publish_state()
@@ -141,8 +141,8 @@ class TianjiArmControllerNode(Node):
             self._inference_control()
 
     def _teleop_control(self):
-        """遥操作控制：TF → IK → 机器人"""
-        # 查询 TF
+        """Teleoperation control: TF → IK → robot"""
+        # Query TF
         left_tf = self._lookup_transform("left_chest", "tianji_left")
         if left_tf is not None:
             self.left_pose = self._matrix_to_pose(left_tf)
@@ -151,7 +151,7 @@ class TianjiArmControllerNode(Node):
         if right_tf is not None:
             self.right_pose = self._matrix_to_pose(right_tf)
 
-        # 查询大臂方向
+        # Query upper arm direction
         left_arm_tf = self._lookup_transform("left_chest", "left_arm")
         if left_arm_tf is not None:
             self.left_y_axis = left_arm_tf[:3, 1]
@@ -160,7 +160,7 @@ class TianjiArmControllerNode(Node):
         if right_arm_tf is not None:
             self.right_y_axis = right_arm_tf[:3, 1]
 
-        # 日志（每3秒）
+        # Log (every 3 seconds)
         self._log_counter += 1
         if self._log_counter >= 300:
             self._log_counter = 0
@@ -168,9 +168,9 @@ class TianjiArmControllerNode(Node):
                 f"TF: left={'OK' if self.left_pose is not None else 'None'}, "
                 f"right={'OK' if self.right_pose is not None else 'None'}")
 
-        # 执行 IK 控制
+        # Execute IK control
         if self.left_pose is not None or self.right_pose is not None:
-            # 更新零空间参数
+            # Update null-space parameters
             if self.left_y_axis is not None:
                 self.controller.left_zsp_para = [*self.left_y_axis, 0, 0, 0]
             if self.right_y_axis is not None:
@@ -180,17 +180,17 @@ class TianjiArmControllerNode(Node):
                 left_pose=self.left_pose, right_pose=self.right_pose, unit='m')
             self._publish_command(l_joints, r_joints)
 
-        # 发布零空间参数和末端位姿
+        # Publish null-space parameters and end-effector poses
         if self.left_pose is not None and self.right_pose is not None and self.controller.left_zsp_para is not None and self.controller.right_zsp_para is not None: 
             self._publish_zsp_para_and_pose()
 
     def _inference_control(self):
-        """推理控制：joint_command → 机器人"""
+        """Inference control: joint_command → robot"""
         left, right = self.left_inference_joints, self.right_inference_joints
         if left is not None or right is not None:
             self.controller.move_to_joints_direct(left_joints=left, right_joints=right)
 
-    # -------------------- 发布 --------------------
+    # -------------------- Publishing --------------------
 
     def _publish_command(self, left: Optional[list], right: Optional[list]):
         stamp = self.get_clock().now().to_msg()
@@ -230,26 +230,26 @@ class TianjiArmControllerNode(Node):
                 msg.position = list(right_joints)
                 self.right_state_pub.publish(msg)
         except Exception as e:
-            self.get_logger().debug(f"发布状态异常: {e}")
+            self.get_logger().debug(f"State publishing error: {e}")
 
     def _publish_zsp_para_and_pose(self):
-        """发布零空间参数和末端位姿"""
-        # 这一行其实没用到 stamp，如果 msg 不需要 header 可以删掉，或者给 pose 加上 header
+        """Publish null-space parameters and end-effector poses"""
+        # This line doesn't actually use stamp; can be removed if msg doesn't need header, or add header to pose
         # stamp = self.get_clock().now().to_msg() 
 
         try:
-            # --- 发布 left_zsp_para ---
-            # 增加 try-except 是为了防止在读取属性的一瞬间 controller 被销毁
+            # --- Publish left_zsp_para ---
+            # try-except added to prevent errors when controller is destroyed while reading attributes
             if hasattr(self.controller, 'left_zsp_para') and self.controller.left_zsp_para is not None:
                 raw_data = self.controller.left_zsp_para
-                # 确保数据非空
+                # Ensure data is non-empty
                 if len(raw_data) > 0:
                     msg = Float64MultiArray()
-                    # 强制转换为 list 且元素为 float，确保兼容性
+                    # Force convert to list with float elements for compatibility
                     msg.data = [float(x) for x in raw_data]
                     self.left_zsp_para_pub.publish(msg)
 
-            # --- 发布 right_zsp_para ---
+            # --- Publish right_zsp_para ---
             if hasattr(self.controller, 'right_zsp_para') and self.controller.right_zsp_para is not None:
                 raw_data = self.controller.right_zsp_para
                 if len(raw_data) > 0:
@@ -257,24 +257,24 @@ class TianjiArmControllerNode(Node):
                     msg.data = [float(x) for x in raw_data]
                     self.right_zsp_para_pub.publish(msg)
 
-            # --- 发布 left_pose ---
+            # --- Publish left_pose ---
             if self.left_pose is not None:
                 msg = Float64MultiArray()
-                # 同理，确保 pose 数据也是纯 float 列表
+                # Similarly, ensure pose data is also a pure float list
                 msg.data = [float(x) for x in self.left_pose]
                 self.left_ee_pose_pub.publish(msg)
 
-            # --- 发布 right_pose ---
+            # --- Publish right_pose ---
             if self.right_pose is not None:
                 msg = Float64MultiArray()
                 msg.data = [float(x) for x in self.right_pose]
                 self.right_ee_pose_pub.publish(msg)
 
         except Exception as e:
-            # 如果在关闭过程中发生任何奇怪的错误（如 C++ 对象已释放），仅打印日志而不让节点崩溃
+            # If any unexpected error occurs during shutdown (e.g., C++ object already released), only log without crashing the node
             self.get_logger().warn(f"Failed to publish debug info during shutdown: {e}")
 
-    # -------------------- TF 工具 --------------------
+    # -------------------- TF Utilities --------------------
 
     def _lookup_transform(self, from_frame: str, to_frame: str) -> Optional[np.ndarray]:
         try:
@@ -295,22 +295,22 @@ class TianjiArmControllerNode(Node):
 
     @staticmethod
     def _matrix_to_pose(matrix: np.ndarray) -> np.ndarray:
-        """4x4 矩阵 → [x, y, z, RX, RY, RZ]（度）"""
+        """4x4 matrix → [x, y, z, RX, RY, RZ] (degrees)"""
         xyz = matrix[:3, 3]
         rpy = R.from_matrix(matrix[:3, :3]).as_euler('ZYX', degrees=True)[::-1]
         return np.array([xyz[0], xyz[1], xyz[2], rpy[0], rpy[1], rpy[2]])
 
     def shutdown(self):
-        self.get_logger().info("正在关闭...")
+        self.get_logger().info("Shutting down...")
         self.controller.disable_and_release()
-        self.get_logger().info("已安全退出")
+        self.get_logger().info("Safely exited")
 
 
-# -------------------- 入口函数 --------------------
+# -------------------- Entry Function --------------------
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="天机臂控制器")
-    parser.add_argument("-c", "--config", help="配置文件路径")
+    parser = argparse.ArgumentParser(description="Tianji arm controller")
+    parser.add_argument("-c", "--config", help="Configuration file path")
     return parser.parse_args(argv)
 
 
@@ -320,7 +320,7 @@ def main(argv: Optional[list[str]] = None):
     cli_argv = remove_ros_args(raw_argv)[1:]
     args = _parse_args(cli_argv)
 
-    # 加载配置
+    # Load configuration
     config_path = args.config or get_package_config_path("tianji_output", "tianji_output.yaml")
     config = load_yaml_config(config_path)
 

@@ -1,7 +1,7 @@
-"""灵巧手硬件默认参数 — 从 wujihand_ik.yaml 统一加载
+"""Dexterous hand hardware default parameters — loaded uniformly from wujihand_ik.yaml
 
-所有 launch 文件通过此模块读取灵巧手配置。
-实际参数定义在: wujihand_output/config/wujihand_ik.yaml
+All launch files read dexterous hand config through this module.
+Actual parameter definitions are in: wujihand_output/config/wujihand_ik.yaml
 
 Usage:
     from wuji_teleop_bringup.hand_defaults import (
@@ -30,7 +30,7 @@ def _load_hand_config() -> dict:
 
 _config = _load_hand_config()
 
-# ===== 导出常量 (向后兼容, launch 文件无需修改) =====
+# ===== Exported constants (backward compatible, launch files need no changes) =====
 
 LEFT_HAND_SERIAL: str = _config["left_hand"]["serial_number"]
 RIGHT_HAND_SERIAL: str = _config["right_hand"]["serial_number"]

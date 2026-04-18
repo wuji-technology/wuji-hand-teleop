@@ -1,15 +1,14 @@
 """
-Wuji Single-Side Teleoperation Launch File / Wuji 单侧遥操作启动文件
+Wuji Single-Side Teleoperation Launch File
 
 Launches single arm + single hand teleoperation with configurable input devices.
-启动单臂+单手遥操作，支持配置不同的输入设备和选择左/右侧。
 
-Supported combinations / 支持的组合:
-  - side: left or right (选择左侧或右侧)
+Supported combinations:
+  - side: left or right (select left or right side)
   - hand_input: manus (Manus Gloves)
   - arm_input: tracker (HTC Vive Trackers)
 
-Usage / 使用方式:
+Usage:
     # Right side with Manus + Tracker
     ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=right hand_input:=manus arm_input:=tracker
 
@@ -20,7 +19,6 @@ Usage / 使用方式:
     ros2 launch wuji_teleop_bringup wuji_teleop_single.launch.py side:=right enable_rviz:=true
 
 Note: Make sure your config files (wujihand_ik.yaml, manus_input.yaml) are configured for the correct side.
-注意：请确保配置文件中设置了正确的单侧配置（序列号、hand selection 等）。
 """
 
 from __future__ import annotations
@@ -89,7 +87,7 @@ def generate_launch_description() -> LaunchDescription:
         description="Path to wujihand_ik config file",
     )
 
-    # ===== wujihandros2 驱动参数 =====
+    # ===== wujihandros2 driver parameters =====
     left_serial_arg = DeclareLaunchArgument(
         "left_serial",
         default_value=LEFT_HAND_SERIAL,
@@ -195,13 +193,13 @@ def generate_launch_description() -> LaunchDescription:
         ),
 
         # ==================== HAND INPUT: Manus ====================
+        # Manus ROS2 Driver (USB access via udev rule, no sudo needed)
         Node(
             package="manus_ros2",
             executable="manus_data_publisher",
             name="manus_data_publisher",
             output="screen",
             emulate_tty=True,
-            prefix="sudo -E",
             condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
         Node(

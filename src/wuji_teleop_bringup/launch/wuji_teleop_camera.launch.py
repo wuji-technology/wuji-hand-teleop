@@ -1,10 +1,9 @@
 """
-Wuji Teleoperation with Camera Launch File / Wuji 遥操作+相机启动文件
+Wuji Teleoperation with Camera Launch File
 
 Launches all teleoperation components plus camera system.
-启动所有遥操作组件以及相机系统。
 
-Usage / 使用方式:
+Usage:
     # Basic usage with default camera config
     ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py
 
@@ -53,9 +52,7 @@ def _get_rviz_path() -> str:
     return str(share_dir / "rviz" / "openvr_visualization.rviz")
 
 
-# 头部双目相机现在通过 camera_launch.py 的 enable_head 参数集成
 # Stereo head camera is now integrated via camera_launch.py enable_head parameter
-# 通过 IncludeLaunchDescription 集成
 # Integrated via IncludeLaunchDescription
 
 
@@ -83,7 +80,7 @@ def generate_launch_description() -> LaunchDescription:
         description="Path to wujihand_ik config file",
     )
 
-    # ===== wujihandros2 驱动参数 =====
+    # ===== wujihandros2 driver parameters =====
     left_serial_arg = DeclareLaunchArgument(
         "left_serial",
         default_value=LEFT_HAND_SERIAL,
@@ -208,8 +205,8 @@ def generate_launch_description() -> LaunchDescription:
             emulate_tty=True,
         ),
 
-        # ==================== CAMERAS (统一入口: camera_launch.py) ====================
-        # 头部双目 + 腕部 D405, enable_pico 不传 (SteamVR 方案无 PICO H.264)
+        # ==================== CAMERAS (unified entry: camera_launch.py) ====================
+        # Head stereo + wrist D405, enable_pico not passed (SteamVR scheme has no PICO H.264)
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
@@ -224,7 +221,7 @@ def generate_launch_description() -> LaunchDescription:
                 "head_device": head_device,
                 "head_fps": head_fps,
                 "head_quality": head_quality,
-                # enable_pico 不传, 默认 false (SteamVR 方案无 PICO H.264 推流)
+                # enable_pico not passed, defaults to false (SteamVR scheme has no PICO H.264 streaming)
             }.items(),
             condition=IfCondition(enable_camera),
         ),
@@ -252,13 +249,13 @@ def generate_launch_description() -> LaunchDescription:
         ),
 
         # ==================== HAND INPUT: Manus ====================
+        # Manus ROS2 Driver (USB access via udev rule, no sudo needed)
         Node(
             package="manus_ros2",
             executable="manus_data_publisher",
             name="manus_data_publisher",
             output="screen",
             emulate_tty=True,
-            prefix="sudo -E",
             condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
         Node(

@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-统一双目相机节点入口
 Unified Stereo Camera Node Entry Point
 
-替代 stereo_pico_server + stereo_publisher 的两进程架构。
-单进程处理 ROS2 发布 + PICO H.264 串流，无需 v4l2loopback。
+Replaces the two-process architecture of stereo_pico_server + stereo_publisher.
+Single process handles ROS2 publishing + PICO H.264 streaming, no v4l2loopback needed.
 
 Usage:
     ros2 run camera unified_stereo

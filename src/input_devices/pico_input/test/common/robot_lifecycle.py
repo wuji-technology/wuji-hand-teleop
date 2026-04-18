@@ -1,34 +1,34 @@
 #!/usr/bin/env python3
 """
-机器人生命周期管理工具（统一上电/下电流程）
+Robot lifecycle management utility (unified power-on/power-off workflow)
 """
 
 import time
 
 
 class RobotLifecycleManager:
-    """机器人生命周期管理"""
+    """Robot lifecycle management"""
 
     @staticmethod
     def enable_robot(robot, state=3, vel_ratio=60, acc_ratio=60, verbose=True):
-        """统一的上电流程
+        """Unified power-on workflow
 
         Args:
-            robot: Marvin_Robot 实例
-            state: 机器人状态 (0=下电, 1=位置跟随, 3=阻抗模式)
-            vel_ratio: 速度比例 (0-100)
-            acc_ratio: 加速度比例 (0-100)
-            verbose: 是否打印日志
+            robot: Marvin_Robot instance
+            state: Robot state (0=power-off, 1=position follow, 3=impedance mode)
+            vel_ratio: Velocity ratio (0-100)
+            acc_ratio: Acceleration ratio (0-100)
+            verbose: Whether to print logs
 
-        状态说明:
-            state=0: 下电/禁用
-            state=1: 位置跟随模式
-            state=3: 阻抗模式（推荐，允许力控）
+        State descriptions:
+            state=0: Power-off/disabled
+            state=1: Position follow mode
+            state=3: Impedance mode (recommended, allows force control)
         """
         if verbose:
-            print("使能机器人...")
+            print("Enabling robot...")
 
-        # 1. 清除错误（重要！）
+        # 1. Clear errors (important!)
         robot.clear_set()
         robot.clear_error('A')
         robot.clear_error('B')
@@ -36,9 +36,9 @@ class RobotLifecycleManager:
         time.sleep(0.5)
 
         if verbose:
-            print("  ✓ 已清除错误")
+            print("  Errors cleared")
 
-        # 2. 上电并设置模式
+        # 2. Power on and set mode
         robot.clear_set()
         robot.set_state(arm='A', state=state)
         robot.set_state(arm='B', state=state)
@@ -48,41 +48,41 @@ class RobotLifecycleManager:
         time.sleep(0.5)
 
         if verbose:
-            state_name = {0: "下电", 1: "位置跟随", 3: "阻抗模式"}.get(state, f"状态{state}")
-            print(f"  ✓ 机器人已使能（{state_name}，速度{vel_ratio}%）")
+            state_name = {0: "power-off", 1: "position follow", 3: "impedance mode"}.get(state, f"state {state}")
+            print(f"  Robot enabled ({state_name}, velocity {vel_ratio}%)")
 
     @staticmethod
     def disable_robot(robot, verbose=True):
-        """统一的下电流程
+        """Unified power-off workflow
 
         Args:
-            robot: Marvin_Robot 实例
-            verbose: 是否打印日志
+            robot: Marvin_Robot instance
+            verbose: Whether to print logs
         """
         if verbose:
-            print("下电机器人...")
+            print("Disabling robot...")
 
         try:
             robot.clear_set()
-            robot.set_state(arm='A', state=0)  # 下电左臂
-            robot.set_state(arm='B', state=0)  # 下电右臂
+            robot.set_state(arm='A', state=0)  # Power off left arm
+            robot.set_state(arm='B', state=0)  # Power off right arm
             robot.send_cmd()
             time.sleep(0.5)
 
             if verbose:
-                print("  ✓ 机器人已下电")
+                print("  Robot disabled")
         except Exception as e:
             if verbose:
-                print(f"  ⚠ 下电失败: {e}")
+                print(f"  Power-off failed: {e}")
 
     @staticmethod
     def send_joint_command(robot, left_joints, right_joints):
-        """统一的关节指令发送
+        """Unified joint command sending
 
         Args:
-            robot: Marvin_Robot 实例
-            left_joints: 左臂关节角 (list/array)
-            right_joints: 右臂关节角 (list/array)
+            robot: Marvin_Robot instance
+            left_joints: Left arm joint angles (list/array)
+            right_joints: Right arm joint angles (list/array)
         """
         robot.clear_set()
         robot.set_joint_cmd_pose(arm='A', joints=left_joints)
@@ -90,17 +90,17 @@ class RobotLifecycleManager:
         robot.send_cmd()
 
 
-# 便捷函数
+# Convenience functions
 def enable_robot(robot, **kwargs):
-    """便捷函数：上电"""
+    """Convenience function: power on"""
     RobotLifecycleManager.enable_robot(robot, **kwargs)
 
 
 def disable_robot(robot, **kwargs):
-    """便捷函数：下电"""
+    """Convenience function: power off"""
     RobotLifecycleManager.disable_robot(robot, **kwargs)
 
 
 def send_joint_command(robot, left_joints, right_joints):
-    """便捷函数：发送关节指令"""
+    """Convenience function: send joint command"""
     RobotLifecycleManager.send_joint_command(robot, left_joints, right_joints)

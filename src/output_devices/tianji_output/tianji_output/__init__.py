@@ -1,62 +1,62 @@
 """
-tianji_output 包 - 天机臂硬件接口
+tianji_output package - Tianji arm hardware interface
 
-文件结构：
-├── __init__.py                    # 公共 API 导出
-├── tianji_arm_controller.py       # 推荐 - 统一控制器（整合笛卡尔和关节空间）
-├── cartesian_controller.py        # 笛卡尔空间控制器（向后兼容）
-├── joint_controller.py            # 关节空间控制器（向后兼容）
-├── _internal/                     # 内部实现（不建议直接导入）
-│   ├── fx_robot.py                # 底层机器人通信接口
-│   ├── fx_kine.py                 # 运动学解算接口
-│   ├── structure_data.py          # C 接口数据结构
-│   └── robot_structures.py        # 运动学相关结构体
-└── tools/                         # 独立工具脚本
-    ├── analyze_recording.py       # 分析机器人记录数据
-    ├── debug_arm_axis.py          # 调试坐标轴 ROS2 节点
-    └── ankle_angle_plot.py        # 交互式可视化
+File structure:
+├── __init__.py                    # Public API exports
+├── tianji_arm_controller.py       # Recommended - unified controller (integrates Cartesian and joint space)
+├── cartesian_controller.py        # Cartesian space controller (backward compatible)
+├── joint_controller.py            # Joint space controller (backward compatible)
+├── _internal/                     # Internal implementation (not recommended for direct import)
+│   ├── fx_robot.py                # Low-level robot communication interface
+│   ├── fx_kine.py                 # Kinematics solver interface
+│   ├── structure_data.py          # C interface data structures
+│   └── robot_structures.py        # Kinematics-related structures
+└── tools/                         # Standalone tool scripts
+    ├── analyze_recording.py       # Analyze robot recorded data
+    ├── debug_arm_axis.py          # Debug coordinate axes ROS2 node
+    └── ankle_angle_plot.py        # Interactive visualization
 
-公共接口：
-- TianjiArmController: 统一控制器（推荐，同时支持笛卡尔和关节空间控制）
-- CartesianController: 笛卡尔空间控制器（向后兼容）
-- JointController: 关节空间控制器（向后兼容）
-- Marvin_Robot: 底层机器人通信接口（高级用户）
-- Marvin_Kine: 运动学解算接口（高级用户）
+Public interface:
+- TianjiArmController: Unified controller (recommended, supports both Cartesian and joint space control)
+- CartesianController: Cartesian space controller (backward compatible)
+- JointController: Joint space controller (backward compatible)
+- Marvin_Robot: Low-level robot communication interface (advanced users)
+- Marvin_Kine: Kinematics solver interface (advanced users)
 
-使用示例:
-    # 统一控制器（推荐）
+Usage example:
+    # Unified controller (recommended)
     from tianji_output import TianjiArmController
     controller = TianjiArmController(robot_ip='192.168.1.190')
     controller.set_impedance_mode(mode='joint')
 
-    # 笛卡尔空间控制（Teleop 模式）
+    # Cartesian space control (Teleop mode)
     controller.move_to_pose_direct(left_pose=[...], right_pose=[...], unit='m')
 
-    # 关节空间控制（Inference 模式）
+    # Joint space control (Inference mode)
     controller.move_to_joints_direct(left_joints=[...], right_joints=[...])
 
-    # 释放
+    # Release
     controller.disable_and_release()
 """
 
-# 推荐使用的统一控制器
+# Recommended unified controller
 from .tianji_arm_controller import TianjiArmController
 
-# # 向后兼容的接口（不推荐新代码使用）
+# # Backward-compatible interfaces (not recommended for new code)
 # from .cartesian_controller import CartesianController
 # from .joint_controller import JointController
 
-# 底层接口（高级用户）
+# Low-level interfaces (advanced users)
 from ._internal.fx_robot import Marvin_Robot
 from ._internal.fx_kine import Marvin_Kine
 
 __all__ = [
-    # 推荐使用的统一控制器
+    # Recommended unified controller
     'TianjiArmController',
-    # 向后兼容接口
+    # Backward-compatible interfaces
     # 'CartesianController',
     # 'JointController',
-    # 底层接口（高级用户）
+    # Low-level interfaces (advanced users)
     'Marvin_Robot',
     'Marvin_Kine',
 ]

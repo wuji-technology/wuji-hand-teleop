@@ -183,7 +183,7 @@ class OpenVRInputNode(Node):
                 current_time
             )
 
-        # Process left arm tracker (大臂)
+        # Process left arm tracker (upper arm)
         left_arm_pose = poses.get('left_arm')
         if left_arm_pose is not None:
             self._broadcast_tf(
@@ -193,7 +193,7 @@ class OpenVRInputNode(Node):
                 current_time
             )
 
-        # Process right arm tracker (大臂)
+        # Process right arm tracker (upper arm)
         right_arm_pose = poses.get('right_arm')
         if right_arm_pose is not None:
             self._broadcast_tf(

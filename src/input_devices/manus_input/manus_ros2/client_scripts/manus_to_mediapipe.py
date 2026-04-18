@@ -93,7 +93,7 @@ MANUS_TO_MEDIAPIPE = {
 
     # Thumb: MANUS has 4 nodes (21-24), MediaPipe needs 4 (CMC,MCP,IP,TIP)
     # Perfect 1:1 mapping
-    21: THUMB_CMC,  # Hidden - 离掌根最近，不动
+    21: THUMB_CMC,  # Hidden - closest to palm base, stationary
     22: THUMB_MCP,
     23: THUMB_IP,
     24: THUMB_TIP,

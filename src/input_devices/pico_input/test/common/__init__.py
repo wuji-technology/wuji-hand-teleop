@@ -1,5 +1,5 @@
 """
-共享配置和工具函数模块
+Shared configuration and utility functions module
 """
 
 from .robot_config import *
