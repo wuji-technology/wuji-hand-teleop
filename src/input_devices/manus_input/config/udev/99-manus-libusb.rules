@@ -19,3 +19,10 @@
 # =============================================================================
 
 SUBSYSTEM=="usb", ATTR{idVendor}=="3325", MODE="0666"
+
+# Manus Wireless Transceiver (Nordic Semiconductor nRF, vendor 1915:83fd)
+# BLE bridge between glove dongles and gloves — SDK reads skeleton stream
+# through the receiver's hidraw node, so both the USB side and the hidraw
+# side need 0666 or the gloves enumerate fine but no skeleton data flows.
+SUBSYSTEM=="usb", ATTR{idVendor}=="1915", ATTR{idProduct}=="83fd", MODE="0666"
+KERNEL=="hidraw*", ATTRS{idVendor}=="1915", ATTRS{idProduct}=="83fd", MODE="0666"

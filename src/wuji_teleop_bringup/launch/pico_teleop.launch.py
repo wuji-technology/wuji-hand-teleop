@@ -190,21 +190,30 @@ def generate_launch_description() -> LaunchDescription:
         emulate_tty=True,
         condition=IfCondition(enable_hand),
     )
-    manus_input = Node(
-        package="manus_input_py",
-        executable="manus_input",
-        name="manus_input",
-        output="screen",
-        condition=IfCondition(enable_hand),
-    )
-
     # ==================== HAND OUTPUT (enable_hand) ====================
-    wujihand_retargeting = Node(
+    # Per-hand controller processes (multi-core parallel, no shared GIL)
+    wujihand_retargeting_left = Node(
         package="controller",
         executable="wujihand_controller",
-        name="wujihand_controller",
+        name="wujihand_controller_left",
         output="screen",
-        arguments=["-c", hand_config, "-i", "manus"],
+        emulate_tty=True,
+        arguments=[
+            "--side", "left",
+            "--hand-name", LaunchConfiguration("left_hand_name"),
+        ],
+        condition=IfCondition(enable_hand),
+    )
+    wujihand_retargeting_right = Node(
+        package="controller",
+        executable="wujihand_controller",
+        name="wujihand_controller_right",
+        output="screen",
+        emulate_tty=True,
+        arguments=[
+            "--side", "right",
+            "--hand-name", LaunchConfiguration("right_hand_name"),
+        ],
         condition=IfCondition(enable_hand),
     )
 
@@ -275,8 +284,8 @@ def generate_launch_description() -> LaunchDescription:
 
         # Hand input + output (conditional)
         manus_data_publisher,
-        manus_input,
-        wujihand_retargeting,
+        wujihand_retargeting_left,
+        wujihand_retargeting_right,
 
         # RViz (conditional)
         rviz_node,

@@ -123,10 +123,13 @@ ros2 topic hz /right_hand/joint_commands
 ros2 topic hz /left_hand/joint_states     # should be ~1000Hz
 ros2 topic hz /right_hand/joint_states
 
-# 5. Switch TELEOP/INFERENCE mode
-ros2 service call /wuji_hand/switch_mode std_srvs/srv/SetBool "{data: true}"   # INFERENCE
-ros2 service call /wuji_hand/switch_mode std_srvs/srv/SetBool "{data: false}"  # TELEOP
-ros2 service call /wuji_hand/get_mode std_srvs/srv/Trigger {}
+# 5. Switch TELEOP/INFERENCE mode (per-side; left/right have independent services)
+ros2 service call /wuji_hand/left/switch_mode std_srvs/srv/SetBool "{data: true}"   # INFERENCE
+ros2 service call /wuji_hand/left/switch_mode std_srvs/srv/SetBool "{data: false}"  # TELEOP
+ros2 service call /wuji_hand/left/get_mode std_srvs/srv/Trigger {}
+ros2 service call /wuji_hand/right/switch_mode std_srvs/srv/SetBool "{data: true}"  # INFERENCE
+ros2 service call /wuji_hand/right/switch_mode std_srvs/srv/SetBool "{data: false}" # TELEOP
+ros2 service call /wuji_hand/right/get_mode std_srvs/srv/Trigger {}
 ```
 
 > **Connecting a new glove**: See the glove integration protocol description in `src/output_devices/wujihand_output/config/wujihand_ik.yaml`

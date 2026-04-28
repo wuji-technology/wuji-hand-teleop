@@ -49,6 +49,11 @@ class TianjiArmControllerNode(Node):
         self._logger_adapter = ROS2LoggerAdapter(self.get_logger())
         self._log_counter = 0
 
+        self.declare_parameter('control_rate', 120.0)
+        control_rate = float(self.get_parameter('control_rate').value)
+        if control_rate <= 0.0:
+            raise ValueError("control_rate must be > 0")
+
         # Initialize controller
         self.get_logger().info(f"Connecting to robot {robot_ip}...")
         self.controller = TianjiArmController(robot_ip=robot_ip, logger=self._logger_adapter)
@@ -95,10 +100,12 @@ class TianjiArmControllerNode(Node):
         self.create_service(SetBool, '/tianji_arm/switch_mode', self._switch_mode_callback)
         self.create_service(Trigger, '/tianji_arm/get_mode', self._get_mode_callback)
 
-        # Timer (100Hz)
-        self.create_timer(0.01, self._control_loop)
+        self.create_timer(1.0 / control_rate, self._control_loop)
 
-        self.get_logger().info(f"Initialization complete, mode: {self._mode.value.upper()}")
+        self.get_logger().info(
+            f"Initialization complete, rate={control_rate}Hz, "
+            f"mode: {self._mode.value.upper()}"
+        )
 
     @property
     def mode(self) -> ControlMode:

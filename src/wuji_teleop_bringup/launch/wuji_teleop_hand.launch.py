@@ -13,12 +13,9 @@ Usage:
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition, LaunchConfigurationEquals
+from launch.conditions import LaunchConfigurationEquals
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -30,12 +27,6 @@ from wuji_teleop_bringup.hand_defaults import (
 )
 
 
-def _get_config_path(package: str, config_file: str) -> str:
-    """Get the path to a config file in a package's share directory."""
-    share_dir = Path(get_package_share_directory(package))
-    return str(share_dir / "config" / config_file)
-
-
 def generate_launch_description() -> LaunchDescription:
     # ==================== Launch Arguments ====================
     hand_input_arg = DeclareLaunchArgument(
@@ -43,12 +34,6 @@ def generate_launch_description() -> LaunchDescription:
         default_value="manus",
         description="Hand input device: 'manus' (Manus Gloves)",
     )
-    hand_config_arg = DeclareLaunchArgument(
-        "hand_config",
-        default_value=_get_config_path("wujihand_output", "wujihand_ik.yaml"),
-        description="Path to wujihand_ik config file",
-    )
-
     # ===== wujihandros2 driver parameters =====
     left_serial_arg = DeclareLaunchArgument(
         "left_serial",
@@ -70,10 +55,6 @@ def generate_launch_description() -> LaunchDescription:
         default_value=RIGHT_HAND_NAME,
         description="Right hand wujihandros2 namespace",
     )
-
-    hand_config = LaunchConfiguration("hand_config")
-    hand_input = LaunchConfiguration("hand_input")
-
     # Force serial_number to string type (workaround for ROS2 type inference)
     left_serial_str = ParameterValue(
         LaunchConfiguration("left_serial"), value_type=str
@@ -85,7 +66,6 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription([
         # Arguments
         hand_input_arg,
-        hand_config_arg,
         left_serial_arg,
         right_serial_arg,
         left_hand_name_arg,
@@ -133,30 +113,32 @@ def generate_launch_description() -> LaunchDescription:
             emulate_tty=True,
             condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
-        # Manus Input Node (convert to MediaPipe format)
-        Node(
-            package="manus_input_py",
-            executable="manus_input",
-            name="manus_input",
-            output="screen",
-            emulate_tty=True,
-            condition=LaunchConfigurationEquals("hand_input", "manus"),
-        ),
 
-        # ==================== HAND OUTPUT: Wuji Hand ====================
-        # Wuji Hand Controller
-        # Also publishes state: /wuji_hand/left/joint_state, /wuji_hand/right/joint_state
+        # ==================== HAND OUTPUT: Wuji Hand (per-hand process, multi-core parallel) ====================
+        # One controller process per hand, subscribing directly to /manus_glove_* (no Python wrapper).
+        # Each runs on its own GIL: measured 58Hz → 120Hz, end-to-end latency 28ms → 8ms.
         Node(
             package="controller",
             executable="wujihand_controller",
-            name="wujihand_controller",
+            name="wujihand_controller_left",
             output="screen",
             emulate_tty=True,
             arguments=[
-                "-c", hand_config,
-                "-i", hand_input,
-                "--left-hand", LaunchConfiguration("left_hand_name"),
-                "--right-hand", LaunchConfiguration("right_hand_name"),
+                "--side", "left",
+                "--hand-name", LaunchConfiguration("left_hand_name"),
             ],
+            condition=LaunchConfigurationEquals("hand_input", "manus"),
+        ),
+        Node(
+            package="controller",
+            executable="wujihand_controller",
+            name="wujihand_controller_right",
+            output="screen",
+            emulate_tty=True,
+            arguments=[
+                "--side", "right",
+                "--hand-name", LaunchConfiguration("right_hand_name"),
+            ],
+            condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
     ])

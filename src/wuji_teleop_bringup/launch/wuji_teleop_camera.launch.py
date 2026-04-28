@@ -74,12 +74,6 @@ def generate_launch_description() -> LaunchDescription:
         default_value="false",
         description="Enable RViz visualization",
     )
-    hand_config_arg = DeclareLaunchArgument(
-        "hand_config",
-        default_value=_get_config_path("wujihand_output", "wujihand_ik.yaml"),
-        description="Path to wujihand_ik config file",
-    )
-
     # ===== wujihandros2 driver parameters =====
     left_serial_arg = DeclareLaunchArgument(
         "left_serial",
@@ -137,10 +131,8 @@ def generate_launch_description() -> LaunchDescription:
     )
 
     # Get configurations
-    hand_input = LaunchConfiguration("hand_input")
     arm_input = LaunchConfiguration("arm_input")
     enable_rviz = LaunchConfiguration("enable_rviz")
-    hand_config = LaunchConfiguration("hand_config")
     enable_camera = LaunchConfiguration("enable_camera")
     camera_config = LaunchConfiguration("camera_config")
     enable_head = LaunchConfiguration("enable_head")
@@ -161,7 +153,6 @@ def generate_launch_description() -> LaunchDescription:
         hand_input_arg,
         arm_input_arg,
         enable_rviz_arg,
-        hand_config_arg,
         left_serial_arg,
         right_serial_arg,
         left_hand_name_arg,
@@ -258,28 +249,32 @@ def generate_launch_description() -> LaunchDescription:
             emulate_tty=True,
             condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
-        Node(
-            package="manus_input_py",
-            executable="manus_input",
-            name="manus_input",
-            output="screen",
-            emulate_tty=True,
-            condition=LaunchConfigurationEquals("hand_input", "manus"),
-        ),
-
-        # ==================== HAND OUTPUT: Wuji Hand ====================
+        # ==================== HAND OUTPUT: Wuji Hand (per-hand process, multi-core parallel) ====================
+        # One controller process per hand, subscribing directly to /manus_glove_* (no Python wrapper).
+        # Each runs on its own GIL: measured 58Hz → 120Hz, end-to-end latency 28ms → 8ms.
         Node(
             package="controller",
             executable="wujihand_controller",
-            name="wujihand_controller",
+            name="wujihand_controller_left",
             output="screen",
             emulate_tty=True,
             arguments=[
-                "-c", hand_config,
-                "-i", hand_input,
-                "--left-hand", LaunchConfiguration("left_hand_name"),
-                "--right-hand", LaunchConfiguration("right_hand_name"),
+                "--side", "left",
+                "--hand-name", LaunchConfiguration("left_hand_name"),
             ],
+            condition=LaunchConfigurationEquals("hand_input", "manus"),
+        ),
+        Node(
+            package="controller",
+            executable="wujihand_controller",
+            name="wujihand_controller_right",
+            output="screen",
+            emulate_tty=True,
+            arguments=[
+                "--side", "right",
+                "--hand-name", LaunchConfiguration("right_hand_name"),
+            ],
+            condition=LaunchConfigurationEquals("hand_input", "manus"),
         ),
 
         # ==================== VISUALIZATION ====================

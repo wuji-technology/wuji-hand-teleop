@@ -6,6 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2026.04.28] - 2026-04-28
+
+### Changed
+
+- Hand controller now runs as one process per side (no shared GIL/timer).
+- **Breaking**: custom hand input now publishes `manus_ros2_msgs/ManusGlove` on `/manus_glove_{0,1}` (was `Float32MultiArray` on `/hand_input`).
+- **Breaking**: hand mode services are now per-side at `/wuji_hand/{left,right}/{switch_mode,get_mode}`.
+- Hand and HTC/Tianji arm controllers now default to 120 Hz (PICO arm stays at 90 Hz).
+- New launch params `control_rate` and `nlopt_max_eval` (`0` keeps library default).
+
+### Fixed
+
+- Manus udev rule now also covers the wireless transceiver (`1915:83fd`) — without it the BLE skeleton stream was silently empty.
+- Incomplete Manus frames are now dropped instead of substituted with the origin — the hand no longer snaps to `(0, 0, 0)`.
+
+### Removed
+
+- Removed the `manus_input` Python wrapper; controllers subscribe to MANUS topics directly.
+
 ## [2026.04.18] - 2026-04-18
 
 ### Added
@@ -44,6 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Input support for MANUS data glove, HTC Vive Tracker, and PICO VR controller/tracker
 - Output support for Wuji Hand retargeting and Tianji Arm IK
 
-[Unreleased]: https://github.com/wuji-technology/wuji-hand-teleop/compare/v2026.04.18...HEAD
+[Unreleased]: https://github.com/wuji-technology/wuji-hand-teleop/compare/v2026.04.28...HEAD
+[2026.04.28]: https://github.com/wuji-technology/wuji-hand-teleop/compare/v2026.04.18...v2026.04.28
 [2026.04.18]: https://github.com/wuji-technology/wuji-hand-teleop/compare/v0.1.0...v2026.04.18
 [0.1.0]: https://github.com/wuji-technology/wuji-hand-teleop/releases/tag/v0.1.0

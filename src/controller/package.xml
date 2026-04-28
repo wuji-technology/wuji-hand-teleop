@@ -16,6 +16,7 @@
   <depend>std_srvs</depend>
   <depend>tf2_ros</depend>
   <depend>geometry_msgs</depend>
+  <depend>manus_ros2_msgs</depend>
 
   <!-- Hardware interface dependencies -->
   <exec_depend>tianji_output</exec_depend>

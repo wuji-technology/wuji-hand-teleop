@@ -103,8 +103,11 @@ source install/setup.bash
 # 5. Launch
 ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
 # Expected: "Calibration loaded successfully for Left/Right glove"
-#           "Publishing hand data on '/hand_input' at 120.0 Hz"
-# Verify:   ros2 topic hz /hand_input  (should show ~120 Hz)
+#           "wujihand_controller_left ... rate=120.0Hz"
+#           "wujihand_controller_right ... rate=120.0Hz"
+# Verify:   ros2 topic hz /manus_glove_0           (raw glove ~120 Hz)
+#           ros2 topic hz /left_hand/joint_commands  (retargeted ~120 Hz)
+#           ros2 topic hz /right_hand/joint_commands (retargeted ~120 Hz)
 ```
 
 > **Using Docker?** See the [Docker Setup Guide](docker/README.md) — no manual dependency installation required.
@@ -123,7 +126,7 @@ ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
 |----------|--------|-------------|
 | Hand input | MANUS Glove | Data glove |
 | Hand input | Wuji Glove | Data glove (coming soon) |
-| Hand input | Custom device | Publish to `/hand_input` topic |
+| Hand input | Custom device | Publish `manus_ros2_msgs/ManusGlove` to `/manus_glove_0` and `/manus_glove_1`, set `msg.side` to `"left"`/`"right"` |
 | Arm input | HTC Vive Tracker | External tracker |
 | Arm input | PICO 4 + Tracker | VR headset + wrist/arm tracking |
 | Arm input | Custom device | Publish TF to `left_wrist`/`right_wrist` (SteamVR mode), or `PoseStamped` to `/left_arm_target_pose`/`right_arm_target_pose` (PICO mode, see [Custom Input Device](#custom-input-device)) |
@@ -434,9 +437,27 @@ retarget:
 
 > **Note**: MANUS left and right hands use separate config files due to coordinate system differences. The only difference is `mediapipe_rotation.z` (-15 for right, +15 for left). All other parameters (including `pinch_thresholds`, `segment_scaling`, `lp_alpha`) are identical. When modifying shared parameters, update both files.
 
+###### Tunable ROS2 parameters
+
+| Node | Parameter | Default | Notes |
+|------|-----------|---------|-------|
+| `wujihand_controller` | `control_rate` | 120 Hz | Match Manus hardware refresh |
+| `wujihand_controller` | `nlopt_max_eval` | 25 | Override the wuji_retargeting NLOPT cap (library default 50). Lower = faster; raise toward 50 if pinch / extreme-pose accuracy regresses. `0` keeps the library default. |
+| `tianji_arm_controller` | `control_rate` | 120 Hz | Match `openvr_input.publish_rate_hz` |
+| `tianji_world_output_node` | `control_rate` | 90 Hz | Match `pico_input.publish_rate` |
+
+Override at launch/startup (parameters are read once at node initialization):
+
+```bash
+ros2 run controller wujihand_controller --side left --hand-name left_hand \
+  --ros-args -p control_rate:=100.0 -p nlopt_max_eval:=30   # raise for accuracy
+```
+
+The control loop pulls the latest input each tick via zero-stamp `lookup_transform`; rates below the input rate drop `(1 - loop_rate/input_rate)` of frames and add up to one period of latency. Match the loop rate to your input device.
+
 ### Running
 
-> **Note**: MANUS gloves require a udev rule for USB dongle access (installed in Step 2). If you see `LIBUSB_ERROR_ACCESS` or no `/hand_input` data, the udev rule is missing — see [Troubleshooting](#troubleshooting).
+> **Note**: MANUS gloves require a udev rule for USB dongle access (installed in Step 2). If you see `LIBUSB_ERROR_ACCESS` or no `/manus_glove_*` data, the udev rule is missing — see [Troubleshooting](#troubleshooting).
 
 #### Hand-Only Control (MANUS + Wuji Hand)
 
@@ -444,7 +465,21 @@ retarget:
 ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
 ```
 
-**Verify**: In a new terminal, run `ros2 topic hz /hand_input` — should show ~50-120 Hz if MANUS glove is connected and streaming. To inspect the actual data, use `ros2 topic echo /hand_input --qos-reliability best_effort` (the topic uses BEST_EFFORT QoS).
+This spawns **two independent controller processes** (`wujihand_controller_left` / `wujihand_controller_right`) that each subscribe to `/manus_glove_0` + `/manus_glove_1` and filter by `msg.side`. Each runs its own retargeting + IK on its own GIL — left and right hands no longer share a Python timer or block on each other.
+
+**Verify**:
+
+```bash
+# Glove input from C++ Manus driver (target ~120 Hz hardware refresh)
+ros2 topic hz /manus_glove_0
+ros2 topic hz /manus_glove_1
+
+# Retargeted joint commands to drivers (target ~120 Hz, matches hardware)
+ros2 topic hz /left_hand/joint_commands
+ros2 topic hz /right_hand/joint_commands
+```
+
+> **Note**: in earlier single-process versions the controller subscribed to a unified `/hand_input` topic produced by an intermediate `manus_input` Python wrapper. That wrapper has been removed; controllers consume the C++ driver's per-glove topics directly, removing one DDS hop and the dual-hand GIL contention.
 
 #### Full Teleoperation (Hand + Arm)
 
@@ -532,31 +567,39 @@ ros2 run wuji_teleop_monitor monitor
 ```mermaid
 graph TD
     subgraph Input["Input Devices"]
-        MANUS["MANUS Glove"]
+        MANUS["MANUS Gloves<br/>(left + right)"]
         HTC["HTC Vive Tracker (OpenVR)"]
         PICO["PICO VR"]
     end
 
-    MANUS --> MI["manus_input<br/>(hand only)"]
+    MANUS --> MD["manus_data_publisher<br/>(C++)"]
     HTC --> OI["openvr_input"]
     PICO --> PI["pico_input"]
 
-    MI --> HI
-    OI --> WRIST
-    PI --> WRIST
-
     subgraph Topics["Standard Topic Interface"]
-        HI["/hand_input<br/>(keypoints)"]
+        G0["/manus_glove_0<br/>(side='left' or 'right')"]
+        G1["/manus_glove_1<br/>(side='left' or 'right')"]
         WRIST["/left_wrist, /right_wrist<br/>TF: world->chest, world->wrist"]
     end
 
-    HI --> IK["wujihand_ik<br/>(retargeting)"]
+    MD --> G0
+    MD --> G1
+    OI --> WRIST
+    PI --> WRIST
+
+    G0 --> CL["wujihand_controller_left<br/>(filter side=left)"]
+    G1 --> CL
+    G0 --> CR["wujihand_controller_right<br/>(filter side=right)"]
+    G1 --> CR
     WRIST --> TFN["tf"]
 
-    IK --> WH["Wuji Hand<br/>(Hardware)"]
+    CL --> WH_L["Wuji Hand left<br/>(Hardware)"]
+    CR --> WH_R["Wuji Hand right<br/>(Hardware)"]
     TFN -->|"lookup_transform()"| TO["tianji_output<br/>(TF query)"]
     TO --> TA["Tianji Arm<br/>(Hardware)"]
 ```
+
+**Hand controllers run as two independent processes** (one per side) for multi-core parallelism — each consumes the per-glove topic with `msg.side` filtering and runs its own retarget + IK on its own GIL.
 
 </details>
 
@@ -576,17 +619,21 @@ Summary: 18 packages finished [xx.xs]
 ```text
 Calibration loaded successfully for Left glove
 Calibration loaded successfully for Right glove
-Publishing hand data on '/hand_input' at 120.0 Hz
+[wujihand_controller_left]  ... NLOPT max_eval = 25 (library default: 50)
+[wujihand_controller_left]  ... Ready: side=left,  rate=120.0Hz, ... -> /left_hand/joint_commands
+[wujihand_controller_right] ... Ready: side=right, rate=120.0Hz, ... -> /right_hand/joint_commands
 ```
 
 **Topic verification (in a new terminal):**
 
 ```bash
-ros2 topic hz /hand_input
-# Expected: ~50-120 Hz if MANUS glove is connected and streaming
+# C++ Manus driver output (target ~120 Hz, hardware rate)
+ros2 topic hz /manus_glove_0
+ros2 topic hz /manus_glove_1
 
-ros2 topic echo /hand_input --qos-reliability best_effort
-# Inspects actual keypoint data (topic uses BEST_EFFORT QoS)
+# Per-hand retargeted joint commands (target ~120 Hz, matches hardware refresh)
+ros2 topic hz /left_hand/joint_commands
+ros2 topic hz /right_hand/joint_commands
 ```
 
 If the verifications above do not show the expected values, see [Troubleshooting](#troubleshooting).
@@ -611,7 +658,7 @@ If the verifications above do not show the expected values, see [Troubleshooting
 | Camera not recognized | Check USB connection, run `lsusb` or `v4l2-ctl --list-devices` |
 | RealSense launch failure | Verify librealsense installation, test with `realsense-viewer` |
 | StereoVR no image | Check v4l2loopback module: `lsmod \| grep v4l2loopback` |
-| `ros2 topic echo` shows no data | The `/hand_input` topic uses BEST_EFFORT QoS. Use `ros2 topic echo /hand_input --qos-reliability best_effort` |
+| `ros2 topic echo` shows no data | The `/manus_glove_0` and `/manus_glove_1` topics use BEST_EFFORT QoS. Use `ros2 topic echo /manus_glove_0 --qos-reliability best_effort` |
 | Calibration drift after applying | Verify correct `.mcal` file for each hand, rebuild and re-source |
 | Forgot `--recurse-submodules` | Run `git submodule update --init --recursive` |
 
@@ -646,43 +693,31 @@ If you find this project useful, please consider citing it:
 
 | Node | Package | Description |
 |------|---------|-------------|
-| `manus_data_publisher` | manus_ros2 | MANUS Glove C++ driver, publishes raw data |
-| `manus_input` | manus_input_py | MANUS data processor, converts to MediaPipe format |
+| `manus_data_publisher` | manus_ros2 | MANUS Glove C++ driver, publishes per-glove raw data |
 | `openvr_input` | openvr_input | HTC Vive Tracker data collection |
 | `pico_input` | pico_input | PICO VR hand and wrist tracking |
-| `wujihand_controller` | controller | Wuji Hand control node |
+| `wujihand_controller` | controller | Wuji Hand control node (one process per hand) |
 | `tianji_arm_controller` | controller | Tianji Arm control node |
 
 ### Topic Interface
 
 | Topic | Type | Publisher | Description |
 |-------|------|-----------|-------------|
-| `/hand_input` | `Float32MultiArray` | manus_input, pico_input | MediaPipe hand keypoints (63 values per hand, 126 = 2 x 21 x 3 for both) |
-| `/manus_glove_0` | `MANUSGlove` | manus_data_publisher | Left hand MANUS raw data |
-| `/manus_glove_1` | `MANUSGlove` | manus_data_publisher | Right hand MANUS raw data |
+| `/manus_glove_0` | `manus_ros2_msgs/ManusGlove` | manus_data_publisher | Per-glove MANUS data (`msg.side` indicates `left`/`right`) |
+| `/manus_glove_1` | `manus_ros2_msgs/ManusGlove` | manus_data_publisher | Per-glove MANUS data (`msg.side` indicates `left`/`right`) |
 | `/tf` | `TFMessage` | tf_broadcaster | TF transforms |
 
-> For a complete list of all active topics, run `ros2 topic list` after launch.
+> Glove index (`_0` / `_1`) is non-deterministic. Each `wujihand_controller` subscribes to both topics and filters by `msg.side`. For a complete list of all active topics, run `ros2 topic list` after launch.
 
 ### Custom Input Device
 
 Publish to the following interface to integrate a custom input device:
 
-**Hand control** — publish to `/hand_input` (`std_msgs/Float32MultiArray`):
+**Hand control** — publish `manus_ros2_msgs/ManusGlove` to `/manus_glove_0` and `/manus_glove_1`:
 
-- Single hand: 63 values (21 keypoints x 3 coordinates)
-- Dual hands: 126 values (right hand first, then left)
-
-**Keypoint order (21 points per hand, MediaPipe format):**
-
-```text
-0: WRIST
-1-4: THUMB (CMC, MCP, IP, TIP)
-5-8: INDEX (MCP, PIP, DIP, TIP)
-9-12: MIDDLE (MCP, PIP, DIP, TIP)
-13-16: RING (MCP, PIP, DIP, TIP)
-17-20: PINKY (MCP, PIP, DIP, TIP)
-```
+- Each message must set `msg.side` to `"left"` or `"right"` so controllers can route by hand
+- Glove index in the topic name is non-deterministic — what matters is `msg.side`
+- See `manus_ros2_msgs/msg/ManusGlove.msg` for the full field definition
 
 **Arm control** — two options depending on which output package you use:
 
