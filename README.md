@@ -62,9 +62,9 @@ wuji-hand-teleop/
 ## Usage
 
 <details>
-<summary>⚡ Quick Start — MANUS Glove + Wuji Hand (copy-paste one-liner)</summary>
+<summary>Quick Start - WG110 fast teleoperation (first-generation hand)</summary>
 
-The fastest path from zero to a running hand teleoperation — MANUS Glove controlling Wuji Hand. For arm control, cameras, and tracker setup, follow the structured guide below.
+This is the fastest path from zero to moving a WG110 first-generation Wuji Hand. The default input path uses MANUS gloves. For MANUS calibration, glove ID setup, and package-specific troubleshooting, see the [MANUS Input README](src/input_devices/manus_input/README.md).
 
 ```bash
 # 1. Clone
@@ -73,7 +73,7 @@ git clone --recurse-submodules https://github.com/wuji-technology/wuji-hand-tele
 cd wuji-hand-teleop
 git lfs install && git lfs pull
 
-# 2. Install dependencies
+# 2. Install repo dependencies
 sudo apt install ros-humble-desktop ros-humble-ament-cmake ros-humble-rclpy ros-humble-std-msgs ros-humble-tf2-ros libncurses-dev python3-pip
 python3 -m pip install numpy scipy pyyaml PyQt5 openvr
 wget https://github.com/wuji-technology/wujihandpy/releases/download/v1.5.1/wujihandcpp-1.5.1-amd64.deb
@@ -82,32 +82,33 @@ cd ~/ros2_ws/src
 git clone --recurse-submodules https://github.com/wuji-technology/wuji-retargeting.git
 cd wuji-retargeting && python3 -m pip install .
 touch COLCON_IGNORE    # Prevent "Duplicate package names" with wujihandros2
+
+# 3. Configure WG110 hand serial numbers
 cd ~/ros2_ws/src/wuji-hand-teleop
-sudo cp src/input_devices/manus_input/config/udev/99-manus-libusb.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
+# Find your serials:
+#   lsusb -v -d 0483:2000 | grep iSerial
+# Then edit:
+#   src/output_devices/wujihand_output/config/wujihand_ik.yaml
+#   left_hand:  serial_number: "YOUR_LEFT_HAND_SERIAL"   (or null to disable)
+#   right_hand: serial_number: "YOUR_RIGHT_HAND_SERIAL"  (or null to disable)
 
-# 3. Configure Wuji Hand serial numbers
-#    Find your serials:
-#      lsusb -v -d 0483:2000 | grep iSerial
-#    Then edit:
-#      ~/ros2_ws/src/wuji-hand-teleop/src/output_devices/wujihand_output/config/wujihand_ik.yaml
-#      left_hand:  serial_number: "YOUR_LEFT_HAND_SERIAL"   (or null to disable)
-#      right_hand: serial_number: "YOUR_RIGHT_HAND_SERIAL"  (or null to disable)
+# 4. Finish MANUS glove setup
+#    Follow: src/input_devices/manus_input/README.md
+#    - install the MANUS udev rule
+#    - copy left/right .mcal calibration files
+#    - confirm glove IDs in manus_input.yaml
 
-# 4. Build
+# 5. Build
 cd ~/ros2_ws
 colcon build --symlink-install
 source install/setup.bash
-# Expected: "Summary: 18 packages finished [xx.xs]" with 0 failed
 
-# 5. Launch
+# 6. Launch WG110 teleoperation
 ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py hand_input:=manus
-# Expected: "Calibration loaded successfully for Left/Right glove"
-#           "Publishing hand data on '/hand_input' at 120.0 Hz"
-# Verify:   ros2 topic hz /hand_input  (should show ~120 Hz)
+# Verify: ros2 topic hz /hand_input  (should show ~50-120 Hz)
 ```
 
-> **Using Docker?** See the [Docker Setup Guide](docker/README.md) — no manual dependency installation required.
+> **Using Docker?** See the [Docker Setup Guide](docker/README.md) - no manual dependency installation required.
 
 </details>
 
@@ -263,6 +264,8 @@ right_hand:
 > **Tip**: If you only have one hand, set the other's `serial_number` to `null` to disable it.
 
 ##### 3.2 MANUS Glove
+
+For the MANUS package quick start, launch checklist, and package-specific setup notes, see the [MANUS Input README](src/input_devices/manus_input/README.md).
 
 ###### Calibration (required per user)
 
@@ -714,6 +717,7 @@ For a complete list of hardware components, see the **[Hardware Bill of Material
 | [PICO Guide](docker/PICO.md) | PICO VR setup in Docker |
 | [Tracker Wearing Guide](docs/tracker-wearing-guide.md) | HTC Vive Tracker placement |
 | [MANUS Calibration](src/input_devices/manus_input/manus_ros2/CALIBRATION_GUIDE.md) | MANUS glove calibration |
+| [MANUS Input README](src/input_devices/manus_input/README.md) | MANUS glove quick start, udev, and package notes |
 | [PICO Input Module](src/input_devices/pico_input/README.md) | PICO input device technical details |
 | [Camera System](src/camera/README.md) | Camera configuration and setup |
 | [Tianji World Output](src/output_devices/tianji_world_output/README.md) | Tianji Arm controller (PICO / world coordinate) |
