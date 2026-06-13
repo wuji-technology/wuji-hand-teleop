@@ -3,60 +3,46 @@ tianji_output package - Tianji arm hardware interface
 
 File structure:
 ├── __init__.py                    # Public API exports
-├── tianji_arm_controller.py       # Recommended - unified controller (integrates Cartesian and joint space)
-├── cartesian_controller.py        # Cartesian space controller (backward compatible)
-├── joint_controller.py            # Joint space controller (backward compatible)
-├── _internal/                     # Internal implementation (not recommended for direct import)
-│   ├── fx_robot.py                # Low-level robot communication interface
+├── tianji_arm_controller.py       # Unified controller (integrates Cartesian and joint space)
+├── tianji_chest_driver.py         # Chest-frame driver used by HTC/Tracker teleop
+├── fault_codes.py                 # 115-entry CN/EN servo fault-code dictionaries
+├── _internal/                     # Internal implementation (not for direct import)
+│   ├── fx_robot.py                # Low-level robot communication
 │   ├── fx_kine.py                 # Kinematics solver interface
 │   ├── structure_data.py          # C interface data structures
 │   └── robot_structures.py        # Kinematics-related structures
-└── tools/                         # Standalone tool scripts
-    ├── analyze_recording.py       # Analyze robot recorded data
-    ├── debug_arm_axis.py          # Debug coordinate axes ROS2 node
-    └── ankle_angle_plot.py        # Interactive visualization
+└── tools/                         # Standalone debugging tools
+    └── debug_arm_axis.py          # ROS2 node for debugging coordinate axes
 
 Public interface:
-- TianjiArmController: Unified controller (recommended, supports both Cartesian and joint space control)
-- CartesianController: Cartesian space controller (backward compatible)
-- JointController: Joint space controller (backward compatible)
+- TianjiArmController: Unified controller (supports both Cartesian and joint space)
+- TianjiChestDriver: Chest-frame driver with state-machine extras used by tianji_arm_node
 - Marvin_Robot: Low-level robot communication interface (advanced users)
 - Marvin_Kine: Kinematics solver interface (advanced users)
 
 Usage example:
-    # Unified controller (recommended)
-    from tianji_output import TianjiArmController
-    controller = TianjiArmController(robot_ip='192.168.1.190')
-    controller.set_impedance_mode(mode='joint')
-
-    # Cartesian space control (Teleop mode)
+    from tianji_output import TianjiChestDriver
+    controller = TianjiChestDriver(robot_ip='192.168.1.190')
+    controller.set_active(mode='joint')
     controller.move_to_pose_direct(left_pose=[...], right_pose=[...], unit='m')
-
-    # Joint space control (Inference mode)
-    controller.move_to_joints_direct(left_joints=[...], right_joints=[...])
-
-    # Release
     controller.disable_and_release()
 """
 
-# Recommended unified controller
+# Unified controller
 from .tianji_arm_controller import TianjiArmController
 
-# # Backward-compatible interfaces (not recommended for new code)
-# from .cartesian_controller import CartesianController
-# from .joint_controller import JointController
+# Chest-frame driver — used by tianji_arm_node for HTC/Tracker teleop.
+# Has the state-machine extras (set_standby/set_active/brake control,
+# clear_arm_error) that the controller node needs.
+from .tianji_chest_driver import TianjiChestDriver
 
 # Low-level interfaces (advanced users)
 from ._internal.fx_robot import Marvin_Robot
 from ._internal.fx_kine import Marvin_Kine
 
 __all__ = [
-    # Recommended unified controller
     'TianjiArmController',
-    # Backward-compatible interfaces
-    # 'CartesianController',
-    # 'JointController',
-    # Low-level interfaces (advanced users)
+    'TianjiChestDriver',
     'Marvin_Robot',
     'Marvin_Kine',
 ]

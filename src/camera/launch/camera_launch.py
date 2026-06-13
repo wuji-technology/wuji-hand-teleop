@@ -11,11 +11,11 @@ Usage:
     # Default: wrist RealSense + head stereo camera
     ros2 launch camera camera_launch.py
 
-    # Wrist RealSense only (disable head)
+    # Wrist RealSense only (disable head stereo)
     ros2 launch camera camera_launch.py enable_head:=false
 
-    # D435 testing + head
-    ros2 launch camera camera_launch.py wrist_type:=d435i enable_head:=true
+    # Head/PICO stereo only (skip wrist cameras)
+    ros2 launch camera camera_launch.py enable_wrist:=false enable_pico:=true
 """
 
 import os
@@ -57,12 +57,15 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
 
 def get_default_config_path() -> str:
-    """Get default configuration file path"""
+    """Get default configuration file path. Empty string only when the
+    `camera` package isn't installed (a launch-time misconfiguration the
+    caller must surface)."""
+    from ament_index_python.packages import PackageNotFoundError
     try:
         pkg_share = get_package_share_directory('camera')
-        return os.path.join(pkg_share, 'config', 'camera_config.yaml')
-    except Exception:
+    except PackageNotFoundError:
         return ""
+    return os.path.join(pkg_share, 'config', 'camera_config.yaml')
 
 
 # =============================================================================
@@ -121,8 +124,12 @@ def create_realsense_camera(
     print(f"       Resolution: {width}x{height}@{fps}fps")
     print(f"       Sync mode: {'Master' if sync_mode == '1' else 'Slave' if sync_mode == '2' else 'None'}")
 
-    # Start camera
+    # Start camera. scoped + forwarding=False keeps the outer launch's
+    # configurations (enable_hand, enable_arm, arm_input, …) from leaking into
+    # rs_launch.py, which would otherwise warn "X is not supported" for each.
     cam_launch = GroupAction(
+        scoped=True,
+        forwarding=False,
         actions=[
             SetEnvironmentVariable(
                 'ROS_IMAGE_TRANSPORT_PLUGINS',
@@ -284,6 +291,7 @@ def launch_cameras(context):
     # Head camera parameters
     enable_head = LaunchConfiguration('enable_head').perform(context).lower() == 'true'
     enable_pico = LaunchConfiguration('enable_pico').perform(context).lower() == 'true'
+    enable_wrist = LaunchConfiguration('enable_wrist').perform(context).lower() == 'true'
     head_device = LaunchConfiguration('head_device').perform(context)
     head_fps = LaunchConfiguration('head_fps').perform(context)
     head_quality = LaunchConfiguration('head_quality').perform(context)
@@ -313,6 +321,7 @@ def launch_cameras(context):
     print(f"RealSense sync: {enable_sync}")
     print(f"Head stereo → ROS2: {'Enabled' if enable_head else 'Disabled'}")
     print(f"Head stereo → PICO: {'Enabled' if enable_pico else 'Disabled'}")
+    print(f"Wrist cameras:      {'Enabled' if enable_wrist else 'Disabled'}")
     print("-" * 60)
 
     # Count enabled RealSense cameras (for sync)
@@ -327,6 +336,12 @@ def launch_cameras(context):
     # Launch in fixed order: head -> left_wrist -> right_wrist
     for cam_key in ['head', 'left_wrist', 'right_wrist']:
         if cam_key not in cameras_config:
+            continue
+
+        # Honour the enable_wrist launch arg before YAML — lets you keep
+        # `enabled: true` in the yaml and still skip wrists from CLI.
+        if cam_key in ('left_wrist', 'right_wrist') and not enable_wrist:
+            print(f"[Skip] {cam_key}: enable_wrist=false")
             continue
 
         cam_config = cameras_config[cam_key]
@@ -436,6 +451,12 @@ def generate_launch_description():
         description='Enable head stereo PICO H.264 (unified_stereo handles automatically, no v4l2loopback needed)'
     )
 
+    enable_wrist_arg = DeclareLaunchArgument(
+        'enable_wrist',
+        default_value='true',
+        description='Enable wrist RealSense cameras (set false for head-only / PICO-only stereo)'
+    )
+
     head_device_arg = DeclareLaunchArgument(
         'head_device',
         default_value='/dev/stereo_camera',
@@ -472,6 +493,7 @@ def generate_launch_description():
         wrist_type_arg,
         enable_head_arg,
         enable_pico_arg,
+        enable_wrist_arg,
         head_device_arg,
         head_fps_arg,
         head_quality_arg,

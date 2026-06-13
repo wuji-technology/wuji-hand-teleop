@@ -8,7 +8,7 @@ This directory contains low-level implementations for use by high-level controll
 - robot_structures: Kinematics-related structures
 
 Recommended to use top-level interfaces:
-    from tianji_output import CartesianController, JointController
+    from tianji_output import TianjiArmController, TianjiChestDriver
 """
 
 from .fx_robot import Marvin_Robot

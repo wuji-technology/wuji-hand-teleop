@@ -8,7 +8,7 @@ from tianji_world_output.config_loader import TianjiConfig, get_config, reload_c
 @pytest.fixture
 def cfg():
     """Load config without ROS (uses file-relative path)"""
-    return TianjiConfig.load(use_ros=False)
+    return TianjiConfig.load()
 
 
 # =============================================================================
@@ -23,14 +23,14 @@ class TestLoading:
 
     def test_get_config_singleton(self):
         """get_config() should return the same instance"""
-        c1 = get_config(use_ros=False)
-        c2 = get_config(use_ros=False)
+        c1 = get_config()
+        c2 = get_config()
         assert c1 is c2
 
     def test_reload_config_returns_new(self):
         """reload_config() should return a fresh instance"""
-        c1 = get_config(use_ros=False)
-        c2 = reload_config(use_ros=False)
+        c1 = get_config()
+        c2 = reload_config()
         assert c1 is not c2
 
     def test_raw_is_dict(self, cfg):

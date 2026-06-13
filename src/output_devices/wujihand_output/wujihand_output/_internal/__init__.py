@@ -1,11 +1,11 @@
 """
-wujihand_output internal module - not recommended for direct import
+wujihand_output internal modules — direct import is discouraged.
 
-This directory contains low-level implementations used by high-level controllers:
-- hand_interface: Dexterous hand hardware interface wrapper
+This directory holds low-level implementation used by the high-level controller:
+- hand_interface: dexterous-hand hardware-interface wrapper
 
-Recommended to use top-level interfaces:
-    from wujihand_output import JointController, IKController
+Prefer the top-level interface:
+    from wujihand_output import WujiHandController
 """
 
 from .hand_interface import WujiHand

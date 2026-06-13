@@ -13,7 +13,7 @@ Functions:
   6. Find zsp_para that best reproduces init_joints
 
 Usage:
-  cd ~/Desktop/wuji-hand-teleop/src/input_devices/pico_input/test
+  cd ~/ros2_ws/src/wuji-hand-teleop/src/input_devices/pico_input/test
   python3 tool/diagnose_zsp_para.py
 
 Notes:
@@ -286,7 +286,7 @@ def main():
     print("=" * 70)
 
     # Load configuration
-    config = TianjiConfig.load(use_ros=False)
+    config = TianjiConfig.load()
     config_path = config.get_kine_config_path()
     print(f"\nKinematics configuration: {config_path}")
 

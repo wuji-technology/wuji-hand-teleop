@@ -2,14 +2,18 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>wuji_teleop_monitor</name>
-  <version>0.1.0</version>
-  <description>Qt-based status monitor for Wuji teleop system</description>
-  <maintainer email="932851972@qq.com">Wuji</maintainer>
+  <version>0.2.0</version>
+  <description>Qt-based teleop launcher and status monitor for the Wuji Hand + Tianji Arm teleoperation stack.</description>
+  <maintainer email="dev@wuji.tech">Wuji</maintainer>
   <license>MIT</license>
 
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>wuji_teleop_bringup</depend>
+  <depend>wujihand_output</depend>
+  <exec_depend>tianji_output</exec_depend>
+  <exec_depend>python3-ruamel.yaml</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

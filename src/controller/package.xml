@@ -3,7 +3,7 @@
 <package format="3">
   <name>controller</name>
   <version>0.1.0</version>
-  <description>Unified controller node - state machine with mode switching support</description>
+  <description>Tianji Arm + Wuji Hand ROS2 controller nodes (single-machine TELEOP).</description>
   <maintainer email="dev@wuji.com">Wuji Robotics</maintainer>
   <license>MIT</license>
 
@@ -18,7 +18,7 @@
   <depend>geometry_msgs</depend>
   <depend>manus_ros2_msgs</depend>
 
-  <!-- Hardware interface dependencies -->
+  <!-- Hardware-interface dependencies -->
   <exec_depend>tianji_output</exec_depend>
   <exec_depend>wujihand_output</exec_depend>
   <exec_depend>wuji_retargeting</exec_depend>

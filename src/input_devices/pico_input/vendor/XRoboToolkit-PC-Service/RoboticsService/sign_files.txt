@@ -1,0 +1,13 @@
+bin/LoadingPorcessRelease.exe
+bin/RoboticsServiceProcess.exe
+bin/PXREAClient2.exe
+bin/UninstallProcess.exe
+bin/APPLogUtils.dll
+bin/Business.dll
+bin/ClientCfg.dll
+bin/CommonUtils.dll
+bin/DeviceConnectionManager.dll
+bin/LayerOperation.dll
+bin/NetworkService.dll
+bin/VideoStream.dll
+bin/PXREAGRPCServer.dll

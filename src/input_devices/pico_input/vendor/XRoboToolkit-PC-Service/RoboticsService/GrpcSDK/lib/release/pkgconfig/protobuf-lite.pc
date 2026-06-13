@@ -1,0 +1,11 @@
+prefix=C:/Users/Admin/Desktop/software/google-grpc/installDir
+exec_prefix=C:/Users/Admin/Desktop/software/google-grpc/installDir
+libdir=C:/Users/Admin/Desktop/software/google-grpc/installDir/lib
+includedir=C:/Users/Admin/Desktop/software/google-grpc/installDir/include
+
+Name: Protocol Buffers
+Description: Google's Data Interchange Format
+Version: 3.18.1.0
+Libs: -L${libdir} -lprotobuf-lite 
+Cflags: -I${includedir}
+Conflicts: protobuf

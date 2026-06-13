@@ -53,21 +53,17 @@ ros2 launch camera camera_launch.py
 # Wrist RealSense only (disable head)
 ros2 launch camera camera_launch.py enable_head:=false
 
-# Wrist using D435 for testing
-ros2 launch camera camera_launch.py wrist_type:=d435i
-
 # Wrist + head stereo → ROS2 + PICO streaming
 ros2 launch camera camera_launch.py enable_pico:=true
 
-# D435 test + head
-ros2 launch camera camera_launch.py wrist_type:=d435i enable_head:=true
+# Head stereo only — PICO H.264 streaming, no wrist cameras
+# (useful when the operator only needs the VR headset view)
+ros2 launch camera camera_launch.py enable_wrist:=false enable_pico:=true
 
-# Head stereo standalone launch (backward compatible)
-ros2 launch camera stereo_head_launch.py
-
-# Full teleoperation (with PICO streaming)
+# Full teleoperation (cameras + hand + arm).
+# Cameras spawn alongside teleop unless you pass enable_camera:=false.
+ros2 launch wuji_teleop_bringup wuji_teleop.launch.py
 ros2 launch wuji_teleop_bringup pico_teleop.launch.py
-ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py
 ```
 
 ## ROS2 Topics
@@ -89,9 +85,10 @@ ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `wrist_type` | (YAML) | Override wrist camera type (d435i/d405) |
+| `wrist_type` | (YAML) | Override wrist camera type (empty = use YAML, currently `d405`) |
 | `enable_head` | true | Enable head stereo camera → ROS2 publishing |
 | `enable_pico` | false | Enable head stereo camera → PICO H.264 streaming |
+| `enable_wrist` | true | Enable wrist RealSense cameras (set `false` for head/PICO-only stereo) |
 | `head_device` | /dev/stereo_camera | Head stereo camera device path |
 | `head_fps` | 30 | Head stereo camera ROS2 publishing frame rate |
 | `head_quality` | 70 | Head stereo camera JPEG compression quality |
@@ -118,35 +115,18 @@ ros2 launch wuji_teleop_bringup wuji_teleop_camera.launch.py
 | Camera | Shutter | Resolution | Config Type | Notes |
 |--------|---------|------------|-------------|-------|
 | **RealSense D405** | **Global** | 848x480@30 | `d405` | **Default**, close range, recommended for dexterous hand |
-| RealSense D435 | Rolling | 848x480@30 | `d435i` | For testing, switch via launch parameter |
 
 ## Switching Cameras
 
-### Method 1: Launch Parameter Override (Temporary wrist camera model switch)
-
-No configuration file changes needed; temporarily override the wrist camera type via launch parameters:
-
-```bash
-# Default uses type configured in YAML (d405)
-ros2 launch camera camera_launch.py
-
-# Use D435 during testing phase
-ros2 launch camera camera_launch.py wrist_type:=d435i
-
-# Explicitly specify D405
-ros2 launch camera camera_launch.py wrist_type:=d405
-```
-
-### Method 2: Modify Configuration File (Permanent switch)
-
-Edit `config/camera_config.yaml`:
+Edit `config/camera_config.yaml` — set the wrist `type` field per side
+(only `d405` is qualified today; the `wrist_type` launch argument is
+kept as the escape hatch for one-off swaps to other RealSense models):
 
 ```yaml
-# Switch wrist camera type: "d405" (default) or "d435i"
 left_wrist:
-  type: "d405"    # ← Modify this field
+  type: "d405"
 right_wrist:
-  type: "d405"    # ← Modify this field
+  type: "d405"
 ```
 
 To switch head cameras, just change `video_device` and `resolution` (all UVC stereo cameras use the same `type: "usb"`):
@@ -206,8 +186,7 @@ camera/
 │   ├── stereo_head/stereo_head_config.yaml  # Head stereo runtime parameters
 │   └── udev/99-teleop-cameras.rules    # udev rules (device symlinks)
 ├── launch/
-│   ├── camera_launch.py                # Unified entry point (wrist+head+PICO)
-│   └── stereo_head_launch.py           # Head stereo standalone launch (backward compatible)
+│   └── camera_launch.py                # Unified entry point (wrist+head+PICO)
 ├── stereocamera/
 │   ├── config_loader.py                # Configuration file loader
 │   ├── unified_stereo.py               # Head stereo entry point (ROS2 + PICO H.264)

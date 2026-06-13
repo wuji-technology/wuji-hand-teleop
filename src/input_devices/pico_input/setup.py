@@ -14,19 +14,17 @@ setup(
         ('share/' + package_name, ['package.xml']),
         # Install config files
         (os.path.join('share', package_name, 'config'),
-            glob('config/*.yaml')),
+            glob('config/*.yaml') + glob('config/*.yaml.template')),
         # Install launch files
         (os.path.join('share', package_name, 'launch'),
             glob('launch/*.py')),
         # Install rviz files
         (os.path.join('share', package_name, 'rviz'),
             glob('rviz/*.rviz')),
-        # Install test data files
-        (os.path.join('share', package_name, 'test'),
-            glob('test/trackingData*.txt')),
-        # Install record data files
-        (os.path.join('share', package_name, 'record'),
-            glob('record/trackingData*.txt')),
+        # Recorded sample data (test/ and record/) was removed in the
+        # open-source pivot — both globs were matching nothing for months
+        # and just made the install rules look like they tracked data
+        # files that no longer exist.
     ],
     install_requires=[
         'setuptools',

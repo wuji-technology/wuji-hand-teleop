@@ -31,14 +31,12 @@ setup(
     zip_safe=False,  # Must be False because of shared libraries
     maintainer='wuji',
     maintainer_email='your_email@example.com',
-    description='Tianji arm hardware interface library - provides low-level control interfaces such as CartesianController',
+    description='Tianji arm hardware interface library - exports TianjiArmController and TianjiChestDriver',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            # Tool scripts
-            'analyze_recording = tianji_output.analyze_recording:main',
-            'debug_arm_axis = tianji_output.debug_arm_axis:main',
+            'debug_arm_axis = tianji_output.tools.debug_arm_axis:main',
         ],
     },
 )

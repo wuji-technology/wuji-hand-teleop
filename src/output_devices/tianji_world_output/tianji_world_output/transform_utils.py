@@ -83,7 +83,7 @@ from .config_loader import get_config as _get_config
 
 def _config():
     """Lazy-load config singleton"""
-    return _get_config(use_ros=False)
+    return _get_config()
 
 
 # =============================================================================

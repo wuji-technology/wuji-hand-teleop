@@ -3,7 +3,7 @@
 <package format="3">
   <name>wujihand_output</name>
   <version>0.1.0</version>
-  <description>Wuji dexterous hand hardware interface library - provides JointController and IKController control interfaces</description>
+  <description>Wuji hand hardware interface library — provides the WujiHandController control interface</description>
   <maintainer email="your_email@example.com">wuji</maintainer>
   <license>MIT</license>
 

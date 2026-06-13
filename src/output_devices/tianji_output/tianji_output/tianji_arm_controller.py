@@ -125,20 +125,12 @@ class TianjiArmController:
         self.logger.info("Dual-arm controller initialization complete")
 
     def _set_tool_params(self):
-        """
-        Set tool parameters (kinematics + dynamics)
-
-        Kinematics parameters [X, Y, Z, A, B, C]:
-            X, Y, Z: Tool center point offset relative to flange (mm)
-            A, B, C: Tool orientation offset relative to flange (degrees)
-
-        Dynamics parameters [M, mx, my, mz, Ixx, Ixy, Ixz, Iyy, Iyz, Izz]:
-            M: Tool mass (kg)
-            mx, my, mz: Center of mass position relative to flange (mm)
-            Ixx~Izz: inertia tensor (kg·mm²)
-        """
-        tool_kine = [0, 0, 120, 0, 0, 0]  # Tool center point 120mm from flange
-        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]  # Mass 0.95kg, center of mass 90mm from flange
+        # IK solves at the flange (tool_kine zero); mounted-tool kinematics
+        # belong in URDF / chest TF, not in the SDK's set_tool matrix.
+        tool_kine = [0, 0, 0, 0, 0, 0]
+        # Identified Wuji Hand payload (M kg, mr mm, I kg·mm²); rewrite if
+        # you mount a different end-effector.
+        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]
 
         self.logger.debug(f"Setting tool parameters: kine={tool_kine}, dyn={tool_dyn}")
 
@@ -224,6 +216,44 @@ class TianjiArmController:
                 'torques': sub_data["outputs"][1]["fb_joint_tor"],
             }
         }
+
+    def get_arm_states_only(self):
+        """Lightweight: (left_cur_state, right_cur_state) ints in one SDK subscribe."""
+        dcss = DCSS()
+        sub_data = self.robot.subscribe(dcss)
+        return (sub_data["states"][0]["cur_state"], sub_data["states"][1]["cur_state"])
+
+    def get_arm_status(self):
+        """Dual-arm state + servo fault codes + frame realtime metrics.
+
+        Returns dict {'left': {...}, 'right': {...}} where each side has
+        state, err_code, servo_errors (7 hex), servo_descriptions (7 strings),
+        realtime (frame_miss_cnt, quality, etc.).
+        """
+        from .fault_codes import describe_fault_codes, read_servo_fault_codes
+        dcss = DCSS()
+        sub_data = self.robot.subscribe(dcss)
+        result = {}
+        for idx, (arm_id, side) in enumerate([('A', 'left'), ('B', 'right')]):
+            servo_errors = read_servo_fault_codes(self.robot.robot, arm_id)
+            inputs = sub_data.get('inputs') or []
+            rt_in = inputs[idx] if idx < len(inputs) else {}
+            frame_miss_cnt = int(rt_in.get('frame_miss_cnt', 0))
+            result[side] = {
+                'state': sub_data["states"][idx]["cur_state"],
+                'err_code': sub_data["states"][idx]["err_code"],
+                'servo_errors': servo_errors,
+                'servo_descriptions': describe_fault_codes(servo_errors, empty=''),
+                'realtime': {
+                    'frame_miss_cnt': frame_miss_cnt,
+                    'max_frame_miss_cnt': int(rt_in.get('max_frame_miss_cnt', 0)),
+                    'in_frame_serial': int(rt_in.get('in_frame_serial', 0)),
+                    'sys_cyc_miss_cnt': int(rt_in.get('sys_cyc_miss_cnt', 0)),
+                    'max_sys_cyc_miss_cnt': int(rt_in.get('max_sys_cyc_miss_cnt', 0)),
+                    'quality': 'good' if frame_miss_cnt < 20 else 'poor',
+                },
+            }
+        return result
 
     # ==================== Impedance Mode Setup ====================
 

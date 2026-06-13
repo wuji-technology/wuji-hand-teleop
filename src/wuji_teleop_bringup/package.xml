@@ -17,11 +17,9 @@
   <exec_depend>tf2_ros</exec_depend>
 
   <!-- Package dependencies -->
-  <exec_depend>common_input</exec_depend>
-  <exec_depend>manus_input_py</exec_depend>
   <exec_depend>manus_ros2</exec_depend>
   <exec_depend>wujihand_output</exec_depend>
-  <exec_depend>tianji_output</exec_depend>
+  <exec_depend>tianji_world_output</exec_depend>
   <exec_depend>camera</exec_depend>
 
   <export>

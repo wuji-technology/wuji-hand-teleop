@@ -41,7 +41,7 @@ Usage
 
   Step 1: Dry run test (recommended first)
   --------------------------------
-  cd ~/Desktop/wuji-hand-teleop/src/input_devices/pico_input/test
+  cd ~/ros2_ws/src/wuji-hand-teleop/src/input_devices/pico_input/test
 
   # Dry run: only print poses, do not control robot
   python3 step5_incremental_control_with_robot.py --dry-run
@@ -134,7 +134,7 @@ Incremental Control Principle
 
 
 =============================================================================
-Differences from pico_teleop_minimal.launch.py
+Differences from pico_teleop.launch.py
 =============================================================================
 
 This script and launch use the same incremental control algorithm, but with the following differences:
@@ -235,17 +235,20 @@ from tianji_world_output.cartesian_controller import CartesianController
 
 
 # PICO -> Robot coordinate transform (loaded from shared config)
-# See tianji_world_output/transform_utils.py and PICO_TELEOP_GUIDE.md §3.1
+# See tianji_world_output/transform_utils.py and pico_input/ARCHITECTURE.md §3.1
 
 # World -> Chest conversion: using shared functions from transform_utils
 # (transform_world_to_chest, apply_world_rotation_to_chest_pose etc.)
 
-# Tracker SN -> role mapping (consistent with step4)
+# Tracker SN -> role mapping. Replace with your own SNs.
+# Production pico_input_node reads `tracker_serial_<sn>` keys from
+# pico_input.yaml dynamically (see fix 3b5fa8d); this dev tool inlines
+# the map to stay runnable as a plain script.
 TRACKER_SN_MAP = {
-    '190058': 'pico_left_wrist',  # PICO left wrist → controls left arm
-    '190600': 'pico_right_wrist', # PICO right wrist → controls right arm
-    '190046': 'pico_left_arm',    # PICO left forearm (arm angle constraint)
-    '190023': 'pico_right_arm',   # PICO right forearm (arm angle constraint)
+    '190058': 'pico_left_wrist',
+    '190600': 'pico_right_wrist',
+    '190046': 'pico_left_arm',
+    '190023': 'pico_right_arm',
 }
 
 
@@ -506,8 +509,8 @@ def main():
     import re
 
     for tracker in tracker_data_list:
-        # Extract 6-digit serial number
-        match = re.search(r'(\d{6})', tracker.serial_number)
+        # Extract 6-digit SN before the trailing 'G' (see fix 3b5fa8d).
+        match = re.search(r'(\d{6})G?$', tracker.serial_number)
         if not match:
             continue
 
@@ -559,7 +562,7 @@ def main():
                 if not pose_str:
                     continue
 
-                match = re.search(r'(\d{6})', sn)
+                match = re.search(r'(\d{6})G?$', sn)
                 if not match:
                     continue
 

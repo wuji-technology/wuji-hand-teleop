@@ -24,7 +24,7 @@ Usage
 
   Terminal 1: Start this script
   ------------------
-  cd ~/Desktop/wuji-hand-teleop/src/input_devices/pico_input/test
+  cd ~/ros2_ws/src/wuji-hand-teleop/src/input_devices/pico_input/test
   python3 step4_visualize_recorded_data.py
 
   # Use other recorded files (large datasets in record/ directory)
@@ -216,7 +216,7 @@ from pico_input.data_source import RecordedDataSource
 
 
 # PICO -> Robot coordinate transform (loaded from shared config)
-# See tianji_world_output/transform_utils.py and PICO_TELEOP_GUIDE.md §3.1
+# See tianji_world_output/transform_utils.py and pico_input/ARCHITECTURE.md §3.1
 
 # World -> Chest conversion: using shared functions from transform_utils
 # (transform_world_to_chest, apply_world_rotation_to_chest_pose etc.)
@@ -416,20 +416,25 @@ class RecordedDataVisualizer(Node):
         hmd_pose = headset_data.to_pose_array()
         self.init_hmd_pose = self._pose_to_matrix(hmd_pose)
 
-        # Record tracker initial poses
+        # Record tracker initial poses.
+        # NOTE: example SNs only — replace with your own when replaying your
+        # own recording. Production pico_input_node reads `tracker_serial_<sn>`
+        # keys dynamically from pico_input.yaml; this dev tool inlines the map
+        # to stay self-contained / runnable without a ROS param yaml.
         self.init_tracker_poses = {}
         tracker_map = {
-            '190058': 'pico_left_wrist',  # PICO left wrist tracker
-            '190600': 'pico_right_wrist', # PICO right wrist tracker
-            '190046': 'pico_left_arm',    # PICO left forearm tracker (unified pico_ prefix)
-            '190023': 'pico_right_arm',   # PICO right forearm tracker (unified pico_ prefix)
+            '190058': 'pico_left_wrist',
+            '190600': 'pico_right_wrist',
+            '190046': 'pico_left_arm',
+            '190023': 'pico_right_arm',
         }
 
         self.get_logger().info('Initializing...')
         for tracker in tracker_data_list:
-            # Extract 6-digit serial number
+            # Extract 6-digit SN before the trailing 'G' — anchored so prefixes
+            # ending in a digit don't fool the match (see fix 3b5fa8d).
             import re
-            match = re.search(r'(\d{6})', tracker.serial_number)
+            match = re.search(r'(\d{6})G?$', tracker.serial_number)
             if not match:
                 continue
 
@@ -542,11 +547,13 @@ class RecordedDataVisualizer(Node):
 
         ============================================================================
         """
+        # Replace SNs with your own if replaying a different recording — see
+        # the note on the first tracker_map above for why this dev tool inlines.
         tracker_map = {
-            '190058': ('pico_left_wrist', self.pico_left_wrist_pub, self.left_arm_pose_pub, 'left'),    # PICO left wrist
-            '190600': ('pico_right_wrist', self.pico_right_wrist_pub, self.right_arm_pose_pub, 'right'), # PICO right wrist
-            '190046': ('pico_left_arm', self.pico_left_arm_pub, None, 'left'),                          # PICO left forearm
-            '190023': ('pico_right_arm', self.pico_right_arm_pub, None, 'right'),                       # PICO right forearm
+            '190058': ('pico_left_wrist', self.pico_left_wrist_pub, self.left_arm_pose_pub, 'left'),
+            '190600': ('pico_right_wrist', self.pico_right_wrist_pub, self.right_arm_pose_pub, 'right'),
+            '190046': ('pico_left_arm', self.pico_left_arm_pub, None, 'left'),
+            '190023': ('pico_right_arm', self.pico_right_arm_pub, None, 'right'),
         }
 
         # Collect wrist and forearm positions for computing elbow direction
@@ -557,9 +564,9 @@ class RecordedDataVisualizer(Node):
             if not tracker.is_valid:
                 continue
 
-            # Extract serial number
+            # Extract 6-digit SN before the trailing 'G' (see fix 3b5fa8d).
             import re
-            match = re.search(r'(\d{6})', tracker.serial_number)
+            match = re.search(r'(\d{6})G?$', tracker.serial_number)
             if not match:
                 continue
 

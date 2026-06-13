@@ -137,7 +137,7 @@ class TestTfQuaternion:
     def test_left_is_conjugate(self):
         """Left TF quaternion should be conjugate of world→chest"""
         from tianji_world_output.config_loader import get_config
-        cfg = get_config(use_ros=False)
+        cfg = get_config()
         w2c = cfg.world_to_chest_quat['left']
         tf_q = get_tf_quaternion('left')
         # Conjugate: [-qx, -qy, -qz, qw]
@@ -146,7 +146,7 @@ class TestTfQuaternion:
     def test_right_is_conjugate(self):
         """Right TF quaternion should be conjugate of world→chest"""
         from tianji_world_output.config_loader import get_config
-        cfg = get_config(use_ros=False)
+        cfg = get_config()
         w2c = cfg.world_to_chest_quat['right']
         tf_q = get_tf_quaternion('right')
         np.testing.assert_array_almost_equal(tf_q, [-w2c[0], -w2c[1], -w2c[2], w2c[3]])
@@ -176,7 +176,7 @@ class TestApplyWorldRotation:
     def test_result_is_valid_rotation(self):
         """Result should be a valid rotation matrix (orthogonal, det=+1)"""
         from tianji_world_output.config_loader import get_config
-        cfg = get_config(use_ros=False)
+        cfg = get_config()
         base = cfg.init_rot['left']
         R_delta = R.from_rotvec([0, np.radians(30), 0])
         result = apply_world_rotation_to_chest_pose(base, R_delta, 'left')

@@ -1,22 +1,22 @@
 # ===========================================
-# Wuji Teleop Docker Compose
+# Wuji Hand Teleop Docker Compose
 # ===========================================
 #
-# 前置条件 (宿主机):
+# Prerequisites (host):
 #   sudo apt-get install docker.io docker-compose-plugin
 #   sudo usermod -aG docker $USER && newgrp docker
 #   sudo apt-get install git-lfs && git lfs install && git lfs pull
 #
-# 使用:
+# Usage:
 #   cd docker
-#   docker compose build              # 构建镜像
-#   docker compose up -d              # 启动容器
-#   docker exec -it wuji-teleop bash  # 进入容器
+#   docker compose build                    # Build the image
+#   docker compose up -d                    # Start the container
+#   docker exec -it wuji-hand-teleop bash   # Open a shell inside
 #
-# 容器内启动遥操作:
-#   ros2 launch wuji_teleop_bringup pico_teleop.launch.py
+# Start teleop inside the container:
+#   ros2 launch wuji_teleop_bringup wuji_teleop.launch.py
 #
-# 国内加速构建:
+# Accelerate the build behind a slow PyPI mirror:
 #   docker compose build --build-arg PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
 #
 # ===========================================
@@ -26,20 +26,32 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: wuji-teleop:latest
-    container_name: wuji-teleop
-    # --- 网络 & IPC ---
-    network_mode: host                  # ROS2 DDS 多机通信
-    ipc: host                           # ROS2 共享内存传输
-    pid: host                           # SteamVR IPC 需要共享 PID 命名空间
+    image: wuji-hand-teleop:latest
+    container_name: wuji-hand-teleop
+    # Auto-start on boot and after a crash, so a host reboot brings the teleop
+    # container back without a manual `docker start`. 'unless-stopped' still
+    # honors an explicit `docker stop` by the operator.
+    restart: unless-stopped
+    # --- Network & IPC ---
+    network_mode: host                  # ROS2 DDS multi-host discovery
+    ipc: host                           # ROS2 shared-memory transport
+    pid: host                           # SteamVR IPC needs a shared PID namespace
 
-    # --- PID 1 管理 ---
-    # PC-Service 以后台进程运行, init 负责僵尸进程回收和信号转发
+    # Lets entrypoint.sh pin per-glove /32 routes when the harness wires each
+    # glove receiver to a separate NIC on the same subnet (see
+    # scripts/setup_glove_routes.sh). Editing the host routing table needs
+    # NET_ADMIN; harmless on single-NIC setups where the script is a no-op.
+    cap_add:
+      - NET_ADMIN
+
+    # --- PID 1 management ---
+    # PC-Service runs as a background process; init reaps zombies + forwards signals.
     init: true
 
-    # --- GPU (可选, NVENC 硬件编码 H.264) ---
-    # 有 NVIDIA GPU 时取消注释以启用 NVENC, 需宿主机安装 nvidia-container-toolkit
-    # 无 GPU 时自动回退 libx264 软编码, 不影响功能
+    # --- GPU (optional, NVENC hardware H.264 encoding) ---
+    # Uncomment the block below when an NVIDIA GPU is available; host needs
+    # nvidia-container-toolkit. Without GPU the build falls back to libx264
+    # software encoding automatically (no functional change).
     # deploy:
     #   resources:
     #     reservations:
@@ -48,27 +60,31 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
-    # --- 设备访问 ---
+    # --- Device access ---
     device_cgroup_rules:
-      - 'c 81:* rmw'                   # video4linux (相机)
-      - 'c 189:* rmw'                  # USB (Manus, RealSense)
+      - 'c 81:* rmw'                   # video4linux (cameras)
+      - 'c 189:* rmw'                  # USB (MANUS, RealSense)
 
     environment:
       - DISPLAY=${DISPLAY}
       - ROS_DOMAIN_ID=${ROS_DOMAIN_ID:-0}
       - RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
       - TZ=Asia/Shanghai
-      - HOST_HOME=${HOME}                  # SteamVR 路径匹配
+      - HOST_HOME=${HOME}                  # used by SteamVR path resolution
 
     volumes:
-      - /tmp/.X11-unix:/tmp/.X11-unix:rw  # GUI (rviz, rqt)
-      - /dev:/dev:rw                       # 设备热插拔
-      - ../src:/home/wuji/ros2_ws/src:rw   # 宿主机源码挂载
-      # --- SteamVR / OpenVR (仅 HTC Vive Tracker 方案需要) ---
-      # PICO-only 用户: 此行可注释掉, 或保留 (自动创建空目录, 无副作用)
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw  # GUI passthrough (rviz, rqt)
+      - /dev:/dev:rw                       # device hot-plug
+      - ../src:/home/wuji/ros2_ws/src:rw   # bind-mount the host source tree
+      # --- Wuji Studio calibration ---
+      # Studio writes <SN>.toml to host ~/.wuji/sdk/params/; SDK reads it in
+      # the container. entrypoint.sh chowns this if docker auto-created it as root.
+      - ${HOME}/.wuji:/home/wuji/.wuji:rw
+      # --- SteamVR / OpenVR (HTC Vive Tracker path only) ---
+      # PICO-only users may comment this out or leave it (the empty dir is harmless).
       - ${HOME}/.steam:/home/wuji/.steam:ro
 
-    # --- 日志轮转 (防止长时间运行撑满磁盘) ---
+    # --- Log rotation (avoid filling disk during long runs) ---
     logging:
       driver: json-file
       options:

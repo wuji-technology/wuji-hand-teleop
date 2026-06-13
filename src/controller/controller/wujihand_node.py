@@ -1,39 +1,30 @@
-"""Dexterous hand controller node (per-hand process).
+"""Wuji-hand controller node (one process per hand, multi-core parallelism).
 
-One process per hand: each subscribes directly to the C++
-manus_data_publisher topics, skipping the Python manus_input
-intermediate layer and removing the dual-hand sync wait bottleneck.
-
-Architecture:
-  manus_data_publisher (C++) -> /manus_glove_0 (120Hz)
-                             -> /manus_glove_1 (120Hz)
-       v                              v
-  left controller (this process)  right controller (other process)
-       v                              v
-  /left_hand/joint_commands       /right_hand/joint_commands
-
-Multi-core parallel: each hand runs on its own process, GIL, and core.
+input_source is selected by wujihand_ik.yaml: 'wuji_glove' (UDP, in-process)
+or 'manus' (subscribes /manus_glove_*); publishes /{side}_hand/joint_commands.
 """
 from __future__ import annotations
 
 import argparse
 import sys
+import threading
+import time
 from typing import Optional
 
 import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.utilities import remove_ros_args
-from std_srvs.srv import SetBool, Trigger
 
 from wujihand_output import WujiHandController
 from .common import (
-    ControlMode,
     ROS2LoggerAdapter,
     get_default_qos,
+    load_yaml_config,
+    get_package_config_path,
 )
 
-# Manus -> MediaPipe mapping (moved here from manus_input_node.py).
+# Manus -> MediaPipe mapping (lifted from the original manus_input_node.py).
 # MediaPipe: 0=WRIST, 1-4=THUMB, 5-8=INDEX, 9-12=MIDDLE, 13-16=RING, 17-20=PINKY
 _MEDIAPIPE_TO_MANUS = (
     1, 22, 23, 24, 25,
@@ -43,14 +34,24 @@ _MEDIAPIPE_TO_MANUS = (
     18, 19, 20, 21,
 )
 
+# Default control-loop rate (Hz). Override with the `control_rate` ROS2 param.
+# 120Hz matches the upper bound of Manus / wuji_glove skeleton frames; higher
+# adds no new input. The wujihand C++ driver on the host runs 1000Hz down to
+# the firmware, so publishing faster from the controller is pointless.
+DEFAULT_CONTROL_RATE_HZ = 120.0
 
-def _convert_to_mediapipe(msg) -> Optional[np.ndarray]:
-    """Convert Manus ManusGlove message to MediaPipe (21, 3) format.
+# wuji_glove reconnect behavior: if the main loop receives no skeleton frame
+# for _RECV_TIMEOUT_SEC seconds in a row, treat the underlying connection as
+# lost (unplugged glove, network drop, power loss, etc.) and call
+# manager.connect() to reconnect.
+# Default ConnectOptions: timeout_ms=1000, retry_count=3 — when offline, a
+# single reconnect blocks ~3s worst-case (i.e. the main loop misses ~3s of
+# joint_commands; output resumes naturally once the link is back).
+_RECV_TIMEOUT_SEC = 2.0
 
-    Returns None if any required node_id is missing — callers should
-    drop the frame rather than substitute origin (0,0,0), which would
-    yank the hand toward an invalid pose.
-    """
+
+def _convert_to_mediapipe(msg) -> np.ndarray:
+    """Convert Manus ManusGlove message to MediaPipe (21, 3) format."""
     positions = {}
     for node in msg.raw_nodes:
         pose = node.pose
@@ -59,170 +60,290 @@ def _convert_to_mediapipe(msg) -> Optional[np.ndarray]:
             dtype=np.float32,
         )
 
-    if not set(_MEDIAPIPE_TO_MANUS).issubset(positions):
-        return None
-
-    result = np.empty((21, 3), dtype=np.float32)
+    result = np.zeros((21, 3), dtype=np.float32)
     for mp_idx, manus_id in enumerate(_MEDIAPIPE_TO_MANUS):
-        result[mp_idx] = positions[manus_id]
+        if manus_id in positions:
+            result[mp_idx] = positions[manus_id]
     return result
 
 
-class WujiHandControllerNode(Node):
-    """Single-hand dexterous hand controller node.
+def _extract_wuji_glove_keypoints(skeleton) -> Optional[np.ndarray]:
+    """Convert a wuji_sdk HandSkeleton to MediaPipe-style (21, 3) float32.
 
-    Subscribes directly to the C++ manus_data_publisher topics, runs the
-    MediaPipe conversion + retarget + publish loop in-process. One node
-    instance per hand.
+    Returns None if the skeleton does not have exactly 21 joints
+    (caller should skip the frame).
+    """
+    joints = skeleton.joints
+    if len(joints) != 21:
+        return None
+    kp = np.array(
+        [j.pose.position for j in joints],
+        dtype=np.float32,
+    )
+    if kp.shape != (21, 3):
+        return None
+    return kp
+
+
+class WujiHandControllerNode(Node):
+    """Per-hand wujihand controller node.
+
+    Dispatches at __init__ on cfg['input_source']:
+      - 'wuji_glove': connect via wuji_sdk (UDP), subscribe hand_skeleton
+      - 'manus':      subscribe /manus_glove_0,1 (existing behavior)
     """
 
-    def __init__(self, side: str, hand_name: str):
+    def __init__(self, side: str, hand_name: str, cfg: dict,
+                 glove_config_path: Optional[str] = None,
+                 retarget_config_dir: Optional[str] = None):
         super().__init__(f"wujihand_controller_{side}")
 
         self._side = side
-        self._mode = ControlMode.TELEOP
         self._logger_adapter = ROS2LoggerAdapter(self.get_logger())
-        self.controller = None  # set below; checked by shutdown() on early failure
-
-        self.declare_parameter('control_rate', 120.0)
-        self.declare_parameter('nlopt_max_eval', 25)
-        control_rate = float(self.get_parameter('control_rate').value)
-        nlopt_max_eval = int(self.get_parameter('nlopt_max_eval').value)
-        if control_rate <= 0.0:
-            raise ValueError("control_rate must be > 0")
-        if nlopt_max_eval < 0:
-            raise ValueError("nlopt_max_eval must be >= 0 (0 = keep library default)")
-
-        # Latest manus data cache (written by callback, consumed by timer)
+        self._input_source = cfg.get("input_source", "wuji_glove")
+        # _latest_keypoints is written by ROS subscription callbacks and
+        # consumed by the timer-driven control loop on a different thread;
+        # the lock keeps writes/reads atomic and prevents losing a frame
+        # mid-swap.
         self._latest_keypoints: Optional[np.ndarray] = None
+        self._keypoints_lock = threading.Lock()
 
-        # Verify dependencies BEFORE acquiring hardware so an ImportError
-        # doesn't leave a half-initialized hand controller behind.
-        try:
-            from manus_ros2_msgs.msg import ManusGlove
-        except ImportError:
-            self.get_logger().error(
-                "manus_ros2_msgs not installed, cannot subscribe to Manus topics"
-            )
-            raise
+        # Wuji-glove-only attributes (None for manus path)
+        self._sdk_device = None
+        self._sdk_sub = None
+        # Stash connect params for reconnects (populated by _setup_wuji_glove).
+        self._glove_sn: Optional[str] = None
+        self._glove_device_name: Optional[str] = None
+        self._glove_config_path: Optional[str] = None
+        # recv watchdog: main loop treats (now - _last_recv_time) > _RECV_TIMEOUT_SEC as a disconnect.
+        self._last_recv_time: float = 0.0
+        self._reconnect_log_counter: int = 0
 
-        # Acquire hardware. If anything below this line raises, the
-        # except clause releases the controller before re-raising.
-        self.get_logger().info(f"Initializing {side} hand controller (wujihandros2)...")
+        # Controller (drives retargeter + wujihand driver)
+        self.get_logger().info(
+            f"Initializing {side}-hand controller (input_source={self._input_source})..."
+        )
         self.controller = WujiHandController(
             side=side,
             hand_name=hand_name,
-            input_source="manus",
+            input_source=self._input_source,
             node=self,
             logger=self._logger_adapter,
-            nlopt_max_eval=nlopt_max_eval,
+            retarget_config_dir=retarget_config_dir,
         )
         self.get_logger().info("Controller initialized")
 
-        try:
-            qos = get_default_qos()
-
-            # Subscribe to all manus topics, filter to this side via msg.side.
-            # (Manus SDK assigns glove index by connect order; 0=left/1=right
-            # is not guaranteed.)
-            self.create_subscription(ManusGlove, "/manus_glove_0", self._glove_callback, qos)
-            self.create_subscription(ManusGlove, "/manus_glove_1", self._glove_callback, qos)
-            self.get_logger().info(
-                f"Subscribed to Manus topics: /manus_glove_0, /manus_glove_1 (filter side={side})"
+        # Dispatch on input_source
+        if self._input_source == "wuji_glove":
+            self._setup_wuji_glove(glove_config_path)
+        elif self._input_source == "manus":
+            self._setup_manus()
+        else:
+            raise ValueError(
+                f"unknown input_source: {self._input_source!r} "
+                f"(expected 'wuji_glove' or 'manus')"
             )
 
-            # Services
-            self.create_service(
-                SetBool, f'/wuji_hand/{side}/switch_mode', self._switch_mode_callback)
-            self.create_service(
-                Trigger, f'/wuji_hand/{side}/get_mode', self._get_mode_callback)
-
-            self.create_timer(1.0 / control_rate, self._teleop_loop)
-        except Exception:
-            # Release the hardware controller before propagating, so we
-            # don't leak a connected wujihandros2 driver session.
-            try:
-                self.controller.disable_and_release()
-            except Exception:
-                self.get_logger().exception("Failed to release controller during init rollback")
-            self.controller = None
-            raise
+        # control_rate comes from a ROS2 param, default 120Hz (see the
+        # DEFAULT_CONTROL_RATE_HZ comment at the top of this module). No
+        # rebuild needed to change it: launch -p control_rate:=... works.
+        self.declare_parameter('control_rate', DEFAULT_CONTROL_RATE_HZ)
+        self._control_rate_hz = float(self.get_parameter('control_rate').value)
+        if self._control_rate_hz <= 0.0:
+            raise ValueError(
+                f"control_rate must be > 0, got {self._control_rate_hz}")
+        self.create_timer(1.0 / self._control_rate_hz, self._teleop_loop)
 
         self.get_logger().info(
-            f"Ready: side={side}, rate={control_rate}Hz, "
-            f"filter=msg.side={side} -> /{hand_name}/joint_commands"
+            f"Ready: side={side}, source={self._input_source}, "
+            f"rate={self._control_rate_hz:.1f}Hz -> /{hand_name}/joint_commands"
         )
 
-    # -------------------- Subscription callback --------------------
+    # ==================== input_source=wuji_glove ====================
 
-    def _glove_callback(self, msg) -> None:
-        """Manus data arrives -> filter by msg.side -> MediaPipe convert -> cache."""
-        if self._mode != ControlMode.TELEOP:
-            return
-        if msg.side.lower() != self._side:
-            return  # not this side, skip
-        keypoints = _convert_to_mediapipe(msg)
-        if keypoints is not None:
-            self._latest_keypoints = keypoints
-        # else: drop frame (incomplete sensor data); reuse last valid keypoints
-
-    # -------------------- Service callbacks --------------------
-
-    def _switch_mode_callback(self, request, response):
-        new_mode = ControlMode.INFERENCE if request.data else ControlMode.TELEOP
-        # This per-hand Manus controller has no inference data path, so
-        # accepting INFERENCE would silently halt joint command output.
-        # Reject explicitly instead of pretending to switch.
-        if new_mode == ControlMode.INFERENCE:
-            response.success = False
-            response.message = (
-                "INFERENCE mode is not supported by this per-hand Manus controller; "
-                "this node only forwards Manus retargeting (TELEOP)."
+    def _setup_wuji_glove(self, glove_config_path: Optional[str]) -> None:
+        """Load the glove config and try the first connection. A first-connect
+        failure does NOT raise (the main loop keeps retrying); configuration
+        errors such as a hand_side mismatch still fail-fast.
+        """
+        # Resolve glove config path: prefer caller-supplied (from launch), fall
+        # back to ament index.
+        if glove_config_path is None:
+            glove_config_path = get_package_config_path(
+                "wuji_glove", "wuji_glove.yaml"
             )
-            return response
-        if self._mode != new_mode:
-            self._mode = new_mode
-            self._latest_keypoints = None
-            self.get_logger().info(f"Switched to {new_mode.value} mode")
-        response.success = True
-        response.message = f"Current mode: {new_mode.value}"
-        return response
+        glove_cfg = load_yaml_config(glove_config_path)[f"{self._side}_glove"]
+        self._glove_sn = glove_cfg["serial_number"]
+        self._glove_device_name = glove_cfg.get(
+            "device_name", f"{self._side}_glove"
+        )
+        self._glove_config_path = glove_config_path
 
-    def _get_mode_callback(self, request, response):
-        response.success = True
-        response.message = self._mode.value
-        return response
+        # First connect: do not raise on failure (e.g. glove not powered at
+        # startup); the main loop keeps retrying.
+        self._connect_glove()
 
-    # -------------------- Control loop --------------------
+    def _connect_glove(self) -> bool:
+        """Connect or reconnect a Wuji Glove.
 
-    def _teleop_loop(self):
-        """Timer tick: consume-once -> retarget -> publish joint_commands."""
-        if self._mode != ControlMode.TELEOP:
+        Returns True on success. A transient failure (device offline, network
+        drop) returns False; the main loop tries again next tick.
+        An SN / hand_side mismatch still raises RuntimeError — that is a
+        configuration error and should not be papered over by retries.
+        """
+        from wuji_sdk import SdkManager, ConnectOptions  # lazy: only loaded on wuji_glove path
+
+        # Release any prior handles (harmless if already None).
+        self._sdk_sub = None
+        self._sdk_device = None
+
+        try:
+            manager = SdkManager.instance()
+            # enable_bridge=False keeps the glove off the zenoh device-bridge.
+            # The default (True) would call declare_node_token + start_bridge_for
+            # after a successful direct connect, advertising this glove on the
+            # LAN so any peer could discover and take it over. Direct-connect
+            # failure also falls back to zenoh discovery — both paths leak.
+            opts = ConnectOptions(enable_bridge=False)
+            device = manager.connect(
+                sn=self._glove_sn,
+                device_name=self._glove_device_name,
+                options=opts,
+            )
+        except Exception as e:
+            # Transient failure: throttle logs (one per 10 attempts) so we
+            # do not flood the console.
+            self._reconnect_log_counter += 1
+            if self._reconnect_log_counter == 1 or self._reconnect_log_counter % 10 == 0:
+                self.get_logger().warn(
+                    f"wuji_sdk connect attempt #{self._reconnect_log_counter} failed: {e}"
+                )
+            return False
+
+        # SN / side mismatch is a config error — do not paper over it with retries.
+        actual_side = device.hand_side().get().lower()
+        if actual_side != self._side:
+            raise RuntimeError(
+                f"{self._side}_glove SN={self._glove_sn} reports hand_side={actual_side}; "
+                f"swap left_glove/right_glove SNs in wuji_glove.yaml."
+            )
+
+        self._sdk_device = device
+        self._sdk_sub = device.hand_skeleton().subscribe()
+        self._last_recv_time = time.monotonic()
+        was_retry = self._reconnect_log_counter > 0
+        self._reconnect_log_counter = 0
+        self.get_logger().info(
+            f"wuji_sdk {'re' if was_retry else ''}connected: SN={self._glove_sn} "
+            f"side={actual_side} device_name={self._glove_device_name} "
+            f"(config={self._glove_config_path})"
+        )
+        return True
+
+    def _teleop_loop_wuji_glove(self) -> None:
+        now = time.monotonic()
+
+        # No active connection -> (re)connect.
+        if self._sdk_sub is None:
+            self._connect_glove()
             return
 
-        kp = self._latest_keypoints
+        skeleton = self._sdk_sub.recv()
+        if skeleton is None:
+            # No frame this tick — has the link been quiet too long?
+            if now - self._last_recv_time > _RECV_TIMEOUT_SEC:
+                self.get_logger().warn(
+                    f"wuji_sdk: no skeleton frame for {now - self._last_recv_time:.1f}s, "
+                    f"reconnecting..."
+                )
+                self._connect_glove()  # release old sub + reconnect
+            return
+
+        # Frame received — refresh the watchdog timestamp.
+        self._last_recv_time = now
+
+        # Drain queue: keep only the latest frame to prevent lag buildup
+        # when the SDK pushes faster than 120Hz.
+        while True:
+            newer = self._sdk_sub.recv()
+            if newer is None:
+                break
+            skeleton = newer
+
+        kp = _extract_wuji_glove_keypoints(skeleton)
         if kp is None:
             return
-        self._latest_keypoints = None
-
         self.controller.set_keypoints(kp)
 
-    # -------------------- Lifecycle --------------------
+    # ==================== input_source=manus ====================
+
+    def _setup_manus(self) -> None:
+        from manus_ros2_msgs.msg import ManusGlove  # lazy: only on manus path
+        qos = get_default_qos()
+        self.create_subscription(ManusGlove, "/manus_glove_0", self._manus_callback, qos)
+        self.create_subscription(ManusGlove, "/manus_glove_1", self._manus_callback, qos)
+        self.get_logger().info(
+            f"Subscribed to Manus topics: /manus_glove_0, /manus_glove_1 "
+            f"(filtering side={self._side})"
+        )
+
+    def _manus_callback(self, msg) -> None:
+        if msg.side.lower() != self._side:
+            return
+        kp = _convert_to_mediapipe(msg)
+        with self._keypoints_lock:
+            self._latest_keypoints = kp
+
+    def _teleop_loop_manus(self) -> None:
+        with self._keypoints_lock:
+            kp = self._latest_keypoints
+            self._latest_keypoints = None  # consume-once
+        if kp is None:
+            return
+        self.controller.set_keypoints(kp)
+
+    # ==================== shared ====================
+
+    def _teleop_loop(self) -> None:
+        if self._input_source == "wuji_glove":
+            self._teleop_loop_wuji_glove()
+        else:
+            self._teleop_loop_manus()
+
+    # ==================== lifecycle ====================
 
     def shutdown(self):
         self.get_logger().info("Shutting down...")
-        if self.controller is not None:
-            self.controller.disable_and_release()
-        self.get_logger().info("Shutdown complete")
+        if self._sdk_sub is not None:
+            self._sdk_sub = None  # SDK has no explicit unsubscribe; release ref
+        if self._sdk_device is not None:
+            self._sdk_device = None
+        self.controller.disable_and_release()
+        self.get_logger().info("Exited cleanly")
 
 
 # -------------------- Entry point --------------------
 
 def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Dexterous hand controller (per-hand)")
+    parser = argparse.ArgumentParser(description="Wuji-hand controller (per-hand)")
     parser.add_argument("--side", required=True, choices=["left", "right"],
-                        help="Which hand this process controls")
+                        help="which hand to drive")
     parser.add_argument("--hand-name", help="wujihandros2 driver namespace")
+    parser.add_argument("-c", "--config", help="wujihand_ik.yaml path")
+    parser.add_argument(
+        "--glove-config",
+        help="wuji_glove.yaml path (used when input_source=wuji_glove; "
+             "falls back to the wuji_glove package default via ament_index)",
+    )
+    parser.add_argument(
+        "--retarget-config-dir",
+        help="Directory containing retarget yaml (overrides the wujihand_output "
+             "package's default config/). Lookup order: "
+             "retarget_{input_source}_{side}.yaml -> retarget_{input_source}.yaml. "
+             "Use for cross-host deployments where launch passes an explicit "
+             "override directory so retarget params follow the deploy host "
+             "rather than the in-package default config/.",
+    )
     return parser.parse_args(argv)
 
 
@@ -236,8 +357,17 @@ def main(argv: Optional[list[str]] = None):
     default_hand_name = "left_hand" if side == "left" else "right_hand"
     hand_name = args.hand_name or default_hand_name
 
+    config_path = args.config or get_package_config_path(
+        "wujihand_output", "wujihand_ik.yaml"
+    )
+    cfg = load_yaml_config(config_path)
+
     rclpy.init(args=raw_argv)
-    node = WujiHandControllerNode(side=side, hand_name=hand_name)
+    node = WujiHandControllerNode(
+        side=side, hand_name=hand_name, cfg=cfg,
+        glove_config_path=args.glove_config,
+        retarget_config_dir=args.retarget_config_dir,
+    )
 
     try:
         rclpy.spin(node)

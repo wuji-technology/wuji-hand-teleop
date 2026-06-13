@@ -4,7 +4,7 @@ tianji_world_output unit tests — pytest shared configuration
 
 How to run:
     # Enter the package root directory
-    cd ~/Desktop/wuji-hand-teleop/src/output_devices/tianji_world_output
+    cd ~/ros2_ws/src/wuji-hand-teleop/src/output_devices/tianji_world_output
 
     # Run all tests (66 total)
     python3 -m pytest tests/ -v
@@ -45,6 +45,6 @@ Test coverage:
 
 Note:
     - Tests do not depend on a ROS2 environment; just use python3 -m pytest directly
-    - Config file is loaded from source-relative path via use_ros=False (config/tianji_robot.yaml)
+    - Config file is loaded via TianjiConfig.load() (which tries ament share, then the source-tree fallback)
     - Re-run tests after modifying tianji_robot.yaml or transform_utils.py
 """

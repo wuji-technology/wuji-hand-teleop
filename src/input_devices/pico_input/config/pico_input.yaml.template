@@ -1,0 +1,117 @@
+# PICO Input Node Configuration
+# Incremental control mode - only tracks position changes of four trackers
+
+pico_input_node:
+  ros__parameters:
+    # ==================== PC-Service Connection ====================
+    # Note: Pybind SDK uses local shared memory communication, the following parameters are reserved for future extension
+    # Actual connection is through PC-Service shared memory, no network configuration needed
+    pc_service_host: "127.0.0.1"  # Reserved parameter, currently unused
+    pc_service_port: 60061        # Reserved parameter, currently unused
+
+    # ==================== Parameters ====================
+    publish_rate: 90.0
+
+    # ==================== Initialization Settings ====================
+    # Auto-initialization delay (seconds), set to 0 to disable auto-initialization
+    # After startup, wait this duration; users are advised to mimic the robot's current pose as closely as possible
+    auto_init_delay: 5.0
+
+    # ==================== One-Euro Filter Adaptive Filtering Parameters ====================
+    # Adaptive low-pass filter (Casiez et al., CHI 2012)
+    # At rest: low cutoff frequency -> strong smoothing (suppresses sensor jitter)
+    # During fast motion: high cutoff frequency -> weak smoothing (low latency, responsive)
+    # Position, orientation, and elbow direction all use One-Euro Filter
+    #
+    # min_cutoff: Minimum cutoff frequency (Hz), controls smoothing strength at rest
+    #   Lower -> smoother at rest, but higher latency on fast startup
+    #   At 90Hz: 1.0Hz -> alpha~=0.065 (strong smoothing)
+    # beta: Speed response coefficient (internally auto-scaled by signal type)
+    #   Higher -> tighter tracking during fast motion, but may miss jitter
+    #   Internal scaling: position x20, orientation x4, elbow x4
+    # elbow_min_cutoff: Minimum cutoff frequency for elbow direction (typically < min_cutoff)
+    #   Elbow direction changes slowly, requires stronger smoothing at rest
+    one_euro_min_cutoff: 1.0    # Minimum cutoff frequency (Hz)
+    one_euro_beta: 0.7          # Speed response coefficient
+    elbow_min_cutoff: 0.3       # Elbow direction minimum cutoff frequency (Hz)
+    # Warning: Dynamic arm angle control is always enabled (must publish elbow direction to IK)
+    # Direction is clamped to the lower hemisphere (elbow can only point down or horizontal, not upward)
+    # When arm is nearly straight (arm tracker distance to shoulder-wrist axis < 15mm), auto-locks last valid direction
+    # Angular rate limit: max 3 deg per frame (270 deg/s), prevents direction jumps causing permanent IK failure
+    # Testing shows: static default_zsp_para causes permanent IK failure when arm reaches workspace boundary
+    # Dynamic arm angle adapts to arm pose, ensuring stable IK solving across the full workspace
+
+    # ==================== Data Source Configuration ====================
+    data_source_type: "live"  # "live" (real PICO SDK) or "recorded" (playback file)
+
+    # RecordedDataSource configuration (only used when data_source_type="recorded")
+    recorded_file_path: "record/trackingData_sample_static.txt"
+    playback_speed: 1.0  # Playback speed multiplier (1.0 = real-time)
+    loop_playback: true  # Whether to loop playback
+
+    # ==================== Topic Publishing ====================
+    # Publish target poses to tianji_world_output_node (fixes interface mismatch issue)
+    enable_topic_publishing: true  # Publish /left_arm_target_pose and /right_arm_target_pose
+    enable_legacy_topics: false    # Publish /pico/* topics (debug only)
+    topic_prefix: "pico"
+
+    # ==================== Tracker serial numbers ====================
+    # Four fixed slots — one per body location. Fill each one with the full
+    # SN string printed in the XRoboToolkit Status dialog (or in pico_input's
+    # boot log when a tracker first arrives). Example: "PC2310MLKC190058G".
+    #
+    # Each SN must be unique. An empty value or a duplicate makes the node
+    # refuse to start, with a clear error message pointing back at this file.
+    tracker_sn_left_wrist:  "YOUR_LEFT_WRIST_TRACKER_SN"
+    tracker_sn_right_wrist: "YOUR_RIGHT_WRIST_TRACKER_SN"
+    tracker_sn_left_arm:    "YOUR_LEFT_FOREARM_TRACKER_SN"
+    tracker_sn_right_arm:   "YOUR_RIGHT_FOREARM_TRACKER_SN"
+
+    # ==================== Robot Configuration ====================
+    # Warning: Robot initial pose, coordinate transforms and other configurations are unified in:
+    #    tianji_world_output/config/tianji_robot.yaml
+    #
+    # pico_input_node loads the following from tianji_robot.yaml:
+    #   - init_pos: End-effector initial position
+    #   - init_quat: End-effector initial orientation
+    #   - world_to_chest_quat: Coordinate transform quaternion
+    #   - pico_to_robot: PICO to Robot coordinate transform matrix
+    #
+    # To modify robot parameters, edit tianji_robot.yaml
+
+# ==================== Incremental Control Mode Description ====================
+#
+# Coordinate system transforms:
+#   PICO (right-hand coordinate system): +X right, +Y up, +Z toward user's facing direction
+#   Robot coordinate system:              +X forward, +Y left, +Z up
+#   Transform: -PICO_Z -> Robot_X, -PICO_X -> Robot_Y, PICO_Y -> Robot_Z
+#
+# Workflow:
+#   1. Tianji driver starts, robot moves to initial pose corresponding to init_joints
+#   2. Start pico_input_node
+#   3. User assumes pose (recommended to mimic robot's current pose)
+#   4. Wait 5 seconds (or call /pico_input/init service)
+#   5. System records initial positions of all trackers
+#   6. Subsequently only publishes incremental changes:
+#      - User hand moves delta -> Robot hand moves delta (with coordinate transform)
+#      - Robot target = configured initial position + delta
+#
+# TF tree structure (published by pico_input_node):
+#   world (robot base)
+#   +-- head (HMD, visualization only)
+#   +-- world_left (left arm chest coordinate system, Y=+0.2)
+#   |   +-- pico_left_wrist (PICO left wrist, dynamic)
+#   |   +-- pico_left_arm (PICO left forearm, dynamic)
+#   +-- world_right (right arm chest coordinate system, Y=-0.2)
+#       +-- pico_right_wrist (PICO right wrist, dynamic)
+#       +-- pico_right_arm (PICO right forearm, dynamic)
+#
+# Topics (unified naming convention):
+#   /pico_hmd, /pico_left_wrist, /pico_right_wrist (PICO data)
+#   /pico_left_arm, /pico_right_arm (PICO forearm data)
+#   /left_arm_target_pose, /right_arm_target_pose (robot control)
+#   /left_arm_elbow_direction, /right_arm_elbow_direction (arm angle constraint)
+#
+# Services:
+#   ros2 service call /pico_input/init std_srvs/srv/Trigger
+#   ros2 service call /pico_input/reset std_srvs/srv/Trigger

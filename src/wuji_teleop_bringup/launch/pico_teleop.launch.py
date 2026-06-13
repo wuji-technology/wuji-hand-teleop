@@ -1,47 +1,47 @@
 """
 PICO Teleoperation Unified Launch
 
-  - PICO scheme uses tianji_world_output (world coordinate IK), SteamVR scheme uses tianji_output (chest coordinate IK)
-  - Hand output migrated from wujihand_ik to controller/wujihand_controller (2026-02-28)
+  - PICO uses tianji_world_output (world-frame IK).
+  - Hand output migrated from wujihand_ik to controller/wujihand_controller (2026-02-28).
 
-Merges the original pico_teleop.launch.py and pico_preview.launch.py.
-Controls which modules to launch via enable_robot / enable_camera / enable_hand parameters.
+Merges the previous pico_teleop.launch.py and pico_preview.launch.py.
+Use enable_robot / enable_camera / enable_hand to gate which modules start.
 
-==================== Architecture: Fixed World Coordinate Frame ====================
+==================== Architecture: fixed world frame ====================
 
 Core design:
-  - world = robot base (fixed)
-  - User stands in front of robot, coordinate frames aligned at initialization
-  - All trackers publish directly in world coordinate frame
+  - world = robot base (does not move)
+  - The operator stands in front of the robot; coordinates are aligned at init.
+  - All trackers publish directly in the world frame.
 
-Coordinate transforms (unified shared library):
+Coordinate transforms (shared library):
   - Authoritative implementation: tianji_world_output.transform_utils
-  - Config source: tianji_robot.yaml (Single Source of Truth)
+  - Configuration source: tianji_world.yaml (single source of truth)
 
-==================== Data Flow Architecture ====================
+==================== Data flow ====================
 
-    PICO SDK --> pico_input_node (coordinate transform) --> /left_arm_target_pose
-                                                        --> /right_arm_target_pose
-                                                        --> /left_arm_elbow_direction
-                                                        --> /right_arm_elbow_direction
-                                                        --> TF (in world frame)
-                                                               |
-    tianji_world_output_node: subscribe target_pose --> IK --> Tianji arms
+    PICO SDK --> pico_input_node (frame transforms) --> /left_arm_target_pose
+                                                    --> /right_arm_target_pose
+                                                    --> /left_arm_elbow_direction
+                                                    --> /right_arm_elbow_direction
+                                                    --> TF (in world frame)
+                                                           |
+    tianji_world_output_node: subscribes target_pose --> IK --> Tianji arm
 
-    MANUS --> /hand_input --> wujihand_retargeting --> Wuji hands
+    Wuji Glove (default, UDP) / MANUS (optional, /manus_glove_{0,1}) --> wujihand_controller --> Wuji hand
 
-    unified_stereo: /dev/stereo_camera -> OpenCV (MJPEG)
-      +-- ROS2: /stereo/{left,right}/compressed (30fps JPEG)
-      +-- PICO: H.264 60fps via XRobo TCP (on-demand)
+    HBVCAM stereo (head, USB UVC) -> unified_stereo
+      |- ROS2 image topics
+      `- FFmpeg H.264 -> TCP -> PICO headset (single process, no v4l2loopback)
 
-    RealSense D405 (wrist) -> ROS2 compressed topics (30fps)
+    RealSense D405 (wrists) -> ROS2 compressed topics (30fps)
 
 ==================== Usage ====================
 
-    # Real robot mode (default: launch all modules)
+    # Real-hardware mode (default: launch every module)
     ros2 launch wuji_teleop_bringup pico_teleop.launch.py
 
-    # Preview mode (input + visualization only, no robot control)
+    # Preview mode (input + visualization only; no robot control)
     ros2 launch wuji_teleop_bringup pico_teleop.launch.py \\
       enable_robot:=false enable_camera:=false enable_hand:=false enable_rviz:=true
 
@@ -50,6 +50,7 @@ Coordinate transforms (unified shared library):
     ros2 service call /pico_input/reset std_srvs/srv/Trigger """
 
 from pathlib import Path
+import yaml
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo
@@ -65,14 +66,25 @@ from wuji_teleop_bringup.hand_defaults import (
     LEFT_HAND_NAME, RIGHT_HAND_NAME,
     DRIVER_PUBLISH_RATE, DRIVER_FILTER_CUTOFF_FREQ, DRIVER_DIAGNOSTICS_RATE,
 )
+from wuji_teleop_bringup.launch_utils import resolve_config_path as _get_config
 
 
-def _get_config(package: str, config_file: str) -> str:
-    return str(Path(get_package_share_directory(package)) / "config" / config_file)
+def _read_input_source() -> str:
+    """Read input_source from wujihand_ik.yaml at launch evaluation time."""
+    yaml_path = Path(_get_config("wujihand_output", "wujihand_ik.yaml"))
+    try:
+        with open(yaml_path) as f:
+            cfg = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return "wuji_glove"
+    src = cfg.get("input_source", "wuji_glove")
+    if src not in ("wuji_glove", "manus"):
+        raise ValueError(f"wujihand_ik.yaml::input_source = {src!r} unsupported")
+    return src
 
 
 def generate_launch_description() -> LaunchDescription:
-    # ==================== Module Switches ====================
+    # ==================== Module switches ====================
     enable_robot_arg = DeclareLaunchArgument(
         "enable_robot", default_value="true",
         description="Enable tianji arm output. Set false for preview mode."
@@ -93,7 +105,7 @@ def generate_launch_description() -> LaunchDescription:
         "hand_config", default_value=_get_config("wujihand_output", "wujihand_ik.yaml")
     )
 
-    # ==================== Dexterous Hand Driver Parameters ====================
+    # ==================== Dexterous-hand driver params ====================
     left_serial_arg = DeclareLaunchArgument(
         "left_serial", default_value=LEFT_HAND_SERIAL,
         description="Left hand serial number",
@@ -111,7 +123,7 @@ def generate_launch_description() -> LaunchDescription:
         description="Right hand wujihandros2 namespace",
     )
 
-    # ==================== Read Parameters ====================
+    # ==================== Read parameters ====================
     enable_robot = LaunchConfiguration("enable_robot")
     enable_camera = LaunchConfiguration("enable_camera")
     enable_hand = LaunchConfiguration("enable_hand")
@@ -126,7 +138,7 @@ def generate_launch_description() -> LaunchDescription:
         LaunchConfiguration("right_serial"), value_type=str
     )
 
-    # ==================== Startup Banner ====================
+    # ==================== Startup banner ====================
     startup_banner = LogInfo(
         msg="""
 ========================================================================
@@ -145,11 +157,12 @@ def generate_launch_description() -> LaunchDescription:
 """
     )
 
-    # ==================== CAMERAS (unified entry: camera_launch.py) ====================
-    # camera_launch.py manages all cameras:
-    #   - Head stereo: unified_stereo (ROS2 30fps + PICO H.264 60fps on-demand)
-    #   - Left/right wrist: RealSense D405 (ROS2 30fps)
-    # Config: camera_config.yaml (device paths, serial numbers, resolution, etc.)
+    # ==================== CAMERAS (single entry point: camera_launch.py) ====================
+    # camera_launch.py manages every camera:
+    #   - Head: HBVCAM stereo (USB UVC) -> unified_stereo, one process emits both
+    #           ROS2 image topics AND FFmpeg H.264 -> TCP for the PICO headset.
+    #   - Wrists: RealSense D405 (ROS2, 30fps).
+    # Config: camera_config.yaml (device paths, serials, resolution, etc.).
     cameras = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([
             PathJoinSubstitution([
@@ -181,39 +194,36 @@ def generate_launch_description() -> LaunchDescription:
         condition=IfCondition(enable_robot),
     )
 
-    # ==================== HAND INPUT: MANUS (enable_hand) ====================
+    # ==================== HAND INPUT: MANUS C++ driver (input_source==manus) ====================
+    input_source = _read_input_source()
     manus_data_publisher = Node(
         package="manus_ros2",
         executable="manus_data_publisher",
         name="manus_data_publisher",
         output="screen",
         emulate_tty=True,
-        condition=IfCondition(enable_hand),
+        condition=IfCondition(enable_hand) if input_source == "manus" else IfCondition("false"),
     )
-    # ==================== HAND OUTPUT (enable_hand) ====================
-    # Per-hand controller processes (multi-core parallel, no shared GIL)
-    wujihand_retargeting_left = Node(
+
+    # ==================== HAND CONTROLLERS (per-side, parallel processes) ====================
+    wujihand_controller_left = Node(
         package="controller",
         executable="wujihand_controller",
         name="wujihand_controller_left",
         output="screen",
         emulate_tty=True,
-        arguments=[
-            "--side", "left",
-            "--hand-name", LaunchConfiguration("left_hand_name"),
-        ],
+        arguments=["--side", "left", "--hand-name", LaunchConfiguration("left_hand_name"),
+                   "--config", hand_config],
         condition=IfCondition(enable_hand),
     )
-    wujihand_retargeting_right = Node(
+    wujihand_controller_right = Node(
         package="controller",
         executable="wujihand_controller",
         name="wujihand_controller_right",
         output="screen",
         emulate_tty=True,
-        arguments=[
-            "--side", "right",
-            "--hand-name", LaunchConfiguration("right_hand_name"),
-        ],
+        arguments=["--side", "right", "--hand-name", LaunchConfiguration("right_hand_name"),
+                   "--config", hand_config],
         condition=IfCondition(enable_hand),
     )
 
@@ -284,8 +294,8 @@ def generate_launch_description() -> LaunchDescription:
 
         # Hand input + output (conditional)
         manus_data_publisher,
-        wujihand_retargeting_left,
-        wujihand_retargeting_right,
+        wujihand_controller_left,
+        wujihand_controller_right,
 
         # RViz (conditional)
         rviz_node,

@@ -21,7 +21,7 @@ Architecture:
 
 Usage:
   # Terminal 1: Start the arm control node
-  cd ~/Desktop/wuji-hand-teleop
+  cd ~/ros2_ws/src/wuji-hand-teleop
   source install/setup.bash
   ros2 launch wuji_teleop_bringup test_arm_control.launch.py
 

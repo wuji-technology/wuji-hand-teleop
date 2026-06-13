@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Wuji Teleop Monitor
+Comment=One-click launcher for Wuji Glove + Wuji Hand teleoperation (Docker)
+Exec={{LAUNCHER}}
+Icon={{PACKAGE_PATH}}/wuji_icon.png
+Terminal=false
+Categories=Development;Robotics;
+StartupNotify=true

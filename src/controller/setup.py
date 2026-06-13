@@ -18,7 +18,7 @@ setup(
     zip_safe=True,
     maintainer='Wuji Robotics',
     maintainer_email='dev@wuji.com',
-    description='Unified controller node - state machine with mode switching support',
+    description='Unified controller nodes — state machines supporting mode switching',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

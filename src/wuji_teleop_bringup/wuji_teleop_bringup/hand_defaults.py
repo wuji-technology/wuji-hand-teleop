@@ -1,7 +1,7 @@
-"""Dexterous hand hardware default parameters — loaded uniformly from wujihand_ik.yaml
+"""Dexterous-hand hardware defaults — loaded from wujihand_ik.yaml.
 
-All launch files read dexterous hand config through this module.
-Actual parameter definitions are in: wujihand_output/config/wujihand_ik.yaml
+All launch files read hand configuration through this module.
+Actual parameters live in: wujihand_output/config/wujihand_ik.yaml
 
 Usage:
     from wuji_teleop_bringup.hand_defaults import (
@@ -30,7 +30,7 @@ def _load_hand_config() -> dict:
 
 _config = _load_hand_config()
 
-# ===== Exported constants (backward compatible, launch files need no changes) =====
+# ===== Exported constants (back-compat; launch files need no changes) =====
 
 LEFT_HAND_SERIAL: str = _config["left_hand"]["serial_number"]
 RIGHT_HAND_SERIAL: str = _config["right_hand"]["serial_number"]

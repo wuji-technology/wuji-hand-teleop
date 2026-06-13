@@ -14,7 +14,7 @@ tracker_serials:
 ```
 
 > [!NOTE]
-> SteamVR supports pairing Tracker in headset-free mode by configuring the Null Driver. For setup instructions, see [Configure Null Driver (Headset-Free Mode)](https://github.com/wuji-technology/wuji-hand-teleop/blob/main/docker/STEAMVR.md#2-configure-null-driver-headset-free-mode). For full usage instructions of wuji-hand-teleop, see [`README.md`](https://github.com/wuji-technology/wuji-hand-teleop).
+> SteamVR supports pairing Tracker in headset-free mode by configuring the Null Driver. For setup instructions, see [Configure Null Driver (Headset-Free Mode)](https://github.com/wuji-technology/wuji-hand-teleop/blob/main/docs/STEAMVR.md#2-configure-null-driver-headset-free-mode). For full usage instructions of wuji-hand-teleop, see [`README.md`](https://github.com/wuji-technology/wuji-hand-teleop).
 
 ## Wear the Tracker
 

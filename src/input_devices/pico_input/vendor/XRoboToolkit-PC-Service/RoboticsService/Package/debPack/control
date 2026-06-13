@@ -1,0 +1,9 @@
+Package: roboticsservice
+Version: 1.0.0.0
+Architecture: amd64
+Maintainer: roboticsservice.support@bytedance.com
+Depends: libqt6core6 (>= 6.2.0), libqt6network6 (>= 6.2.0), libqt6core5compat6 (>= 6.2.0)
+Section: default
+Priority: optional
+Homepage: https://business-cn.picoxr.com/
+Description: Hainan Chuangjian Weilai Technology Co., Ltd.

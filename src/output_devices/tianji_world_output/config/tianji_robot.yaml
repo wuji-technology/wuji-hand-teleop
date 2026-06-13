@@ -62,7 +62,7 @@ init_quat:
 #   Left:  X=forward, Y=down, Z=left (rotated +90 deg around World X axis)
 #   Right: X=forward, Y=up, Z=right (rotated -90 deg around World X axis)
 #
-# These quaternions represent the world->chest vector transform direction, consistent with PICO_TELEOP_GUIDE.md:
+# These quaternions represent the world->chest vector transform direction, consistent with pico_input/ARCHITECTURE.md:
 #   Left:  world→chest: [x, -z, y] corresponding to +90 deg rotation around X axis
 #   Right: world→chest: [x, z, -y] corresponding to -90 deg rotation around X axis
 #

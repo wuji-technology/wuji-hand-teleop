@@ -1,0 +1,20 @@
+# Wuji Glove serial-number binding (input device config).
+# Loaded by wujihand_controller when input_source=wuji_glove.
+# Cross-machine deployments may pass an explicit override path (containing real
+# SNs) via launch arguments; the launch helper _get_config() prefers external
+# overrides automatically.
+#
+# Scan glove serial numbers from inside the container with:
+#   python3 -c "
+#   from wuji_sdk import SdkManager
+#   for d in SdkManager.instance().scan():
+#       print(f'sn={d.sn!r}  address={d.address!r}  transport={d.transport_type}')
+#   "
+
+left_glove:
+  serial_number: "YOUR_LEFT_GLOVE_SERIAL"
+  device_name: "left_glove"
+
+right_glove:
+  serial_number: "YOUR_RIGHT_GLOVE_SERIAL"
+  device_name: "right_glove"

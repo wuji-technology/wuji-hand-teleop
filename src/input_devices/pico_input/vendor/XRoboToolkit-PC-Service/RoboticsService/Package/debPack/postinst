@@ -1,0 +1,21 @@
+#!/bin/sh
+XDG_ICON_RESOURCE="`which xdg-icon-resource 2> /dev/null || true`"
+if [ ! -x "$XDG_ICON_RESOURCE" ]; then
+  echo "Error: Could not find xdg-icon-resource" >&2
+  exit 1
+fi
+
+UPDATE_MENUS="`which update-menus 2> /dev/null || true`"
+if [ -x "$UPDATE_MENUS" ]; then
+  update-menus
+fi
+
+# Update cache of .desktop file MIME types. Non-fatal since it's just a cache.
+update-desktop-database > /dev/null 2>&1 || true
+
+xdg-icon-resource forceupdate --mode system
+ 
+update-mime-database    /usr/share/mime &> /dev/null || :
+update-desktop-database                 &> /dev/null || true
+ 
+gtk-update-icon-cache -f /usr/share/icons/hicolor

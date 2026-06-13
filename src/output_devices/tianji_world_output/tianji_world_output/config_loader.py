@@ -18,9 +18,6 @@ Usage:
 
     # Get raw config dictionary
     raw = config.raw
-
-    # Use in test scripts (no ROS environment needed):
-    config = TianjiConfig.load(use_ros=False)
 """
 
 from __future__ import annotations
@@ -77,19 +74,18 @@ class TianjiConfig:
     config_path: Path
 
     @classmethod
-    def load(cls, config_path: Optional[str] = None, use_ros: bool = True) -> 'TianjiConfig':
+    def load(cls, config_path: Optional[str] = None) -> 'TianjiConfig':
         """
         Load configuration file
 
         Args:
             config_path: Config file path, None for auto-locate
-            use_ros: Whether to use ROS2 package lookup mechanism
 
         Returns:
             TianjiConfig instance
         """
         if config_path is None:
-            config_path = cls._find_config_file(use_ros)
+            config_path = cls._find_config_file()
 
         path = Path(config_path)
         if not path.exists():
@@ -101,33 +97,47 @@ class TianjiConfig:
         return cls._parse(raw, path)
 
     @classmethod
-    def _find_config_file(cls, use_ros: bool = True) -> str:
-        """Find config file"""
-        # Method 1: Use ROS2 package lookup
-        if use_ros:
-            try:
-                from ament_index_python.packages import get_package_share_directory
-                share_dir = get_package_share_directory('tianji_world_output')
-                config_path = Path(share_dir) / 'config' / 'tianji_robot.yaml'
-                if config_path.exists():
-                    return str(config_path)
-            except Exception:
-                pass
+    def _find_config_file(cls) -> str:
+        """Find tianji_robot.yaml.
 
-        # Method 2: Search relative to current file
+        Two layouts are supported:
+          1. Ament install / Docker: `share/<pkg>/config/tianji_robot.yaml`.
+             This is the normal runtime path.
+          2. Source-tree pytest: `<pkg>/config/tianji_robot.yaml` next to
+             this module. conftest.py advertises that the unit tests run
+             with plain `python3 -m pytest` (no colcon, no AMENT setup),
+             so `get_package_share_directory` will raise
+             PackageNotFoundError and we fall back to the source tree.
+
+        Only PackageNotFoundError is caught — any other ament error is a
+        real install problem we want propagated, not silently swallowed.
+        """
+        from ament_index_python.packages import (
+            get_package_share_directory,
+            PackageNotFoundError,
+        )
+        try:
+            share_dir = get_package_share_directory('tianji_world_output')
+        except PackageNotFoundError:
+            share_dir = None
+        if share_dir is not None:
+            config_path = Path(share_dir) / 'config' / 'tianji_robot.yaml'
+            if config_path.exists():
+                return str(config_path)
+
+        # Source-tree fallback (pytest with no ROS2 environment).
         current_dir = Path(__file__).parent
-        possible_paths = [
+        for path in (
             current_dir / 'config' / 'tianji_robot.yaml',
             current_dir.parent / 'config' / 'tianji_robot.yaml',
-        ]
-
-        for path in possible_paths:
+        ):
             if path.exists():
                 return str(path)
 
         raise FileNotFoundError(
-            "Cannot find tianji_robot.yaml config file.\n"
-            "Please ensure the file is located in the tianji_world_output/config/ directory."
+            "Cannot find tianji_robot.yaml. Tried ament share/<pkg>/config/ "
+            "and the source-tree fallback at <pkg>/config/. Did `colcon build` "
+            "succeed and is AMENT_PREFIX_PATH set?"
         )
 
     @classmethod
@@ -203,16 +213,16 @@ class TianjiConfig:
 _config_instance: Optional[TianjiConfig] = None
 
 
-def get_config(use_ros: bool = True) -> TianjiConfig:
+def get_config() -> TianjiConfig:
     """Get config singleton"""
     global _config_instance
     if _config_instance is None:
-        _config_instance = TianjiConfig.load(use_ros=use_ros)
+        _config_instance = TianjiConfig.load()
     return _config_instance
 
 
-def reload_config(config_path: Optional[str] = None, use_ros: bool = True) -> TianjiConfig:
+def reload_config(config_path: Optional[str] = None) -> TianjiConfig:
     """Reload configuration"""
     global _config_instance
-    _config_instance = TianjiConfig.load(config_path=config_path, use_ros=use_ros)
+    _config_instance = TianjiConfig.load(config_path=config_path)
     return _config_instance

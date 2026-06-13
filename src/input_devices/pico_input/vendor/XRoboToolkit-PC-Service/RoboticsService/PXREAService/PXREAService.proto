@@ -1,0 +1,176 @@
+
+
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+package PXREAService;
+
+service EAService {
+  rpc SendBytesToDevice(DeviceBytesInfo) returns (google.protobuf.Empty) {}
+  rpc SendBytesToRoom(RoomBytesInfo) returns (google.protobuf.Empty) {}
+  rpc WatchServerFeedback(VRPid) returns (stream ServerFeedback) {}
+  rpc CancelServerFeedback(VRPid) returns (google.protobuf.Empty) {}
+  rpc SendBeat(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+  rpc DeviceControlJson(DeviceControlParameterJson) returns (google.protobuf.Empty) {}
+}
+
+message DeviceID{
+  string id = 1;
+}
+
+message VRPid{
+  int32 pid = 1;
+}
+
+message TexHandleInfo{
+  int64 pid = 1;
+  int64 handle = 2;
+}
+message VideoPlayInfo{
+  string devid = 1;
+  string videopath = 2;
+}
+message VideoSeekInfo{
+  string devid = 1;
+  int32 millisecond = 2;
+}
+message AppPlayInfo{
+  string devid = 1;
+  string appname = 2;
+}
+message PicPlayInfo{
+  string devid = 1;
+  string picpath = 2;
+}
+message DeviceVolumnInfo{
+  string devid = 1;
+  uint32 volumn = 2;
+}
+message DeviceBytesInfo{
+  string devid = 1;
+  bytes content = 2;
+}
+message RoomBytesInfo{
+  bytes content = 1;
+}
+message ControllerInfo{
+  string devid = 1;
+  int32 controllerid = 2;
+}
+message ControllerHomeButtonFunction{
+  string devid = 1;
+  string homebuttontype = 2;
+  string homefunction = 3;
+}
+message ScreenStateInfo{
+  string devid = 1;
+  int32 state = 2;
+}
+
+message DeviceAliasInfo
+{
+  string devid = 1;
+  string alias = 2;
+}
+
+message ServerFeedback {
+  string name = 1;
+  oneof FeedbackArgs{
+    VrParam vrparam = 2;
+    string devid = 3;
+    DeviceBattery devbattery = 4;
+    DeviceStatus devstatus = 5;
+    DeviceBlob   devblob = 6;
+    DeviceMonitorParameter devmonitorpara = 7;
+    DeviceModel devmodel = 8;
+    CurrentApplication currentapp = 9;
+    ControllerBattery ctrllerbtry = 10;
+    VideoFrameInfo videoframeinfo = 11;
+    DeviceMonitorSharedMemoryKey devicemonitorsharedmemorykey = 12;
+    VideoControlResult videocontrolresult = 13;
+    DeviceAliasInfo devicealiasinfo = 14;
+    DeviceStateJson devicestatejson = 15;
+  }
+}
+
+message VrParam {
+  uint32 width = 1;
+  uint32 height = 2;
+  uint32 fps = 3;
+}
+
+message DeviceBattery
+{
+  string devid = 1;
+  uint32 battery = 2;
+}
+message DeviceStatus
+{
+  string devid = 1;
+  int32 status = 2;
+}
+message DeviceModel
+{
+  string devid = 1;
+  string model = 2;
+}
+message CurrentApplication
+{
+  string devid = 1;
+  string appname = 2;
+}
+message ControllerBattery
+{
+  string devid = 1;
+  int32 controllerid = 2;
+  bool connected = 3;
+  uint32 battery = 4;
+}
+message DeviceBlob
+{
+  string devid = 1;
+  bytes content = 2;
+}
+message DeviceMonitorParameter
+{
+  string devid = 1;
+  uint32 width = 2;
+  uint32 height = 3;
+}
+message VideoFrameInfo
+{
+  string devid = 1;
+  uint32 frameSize = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  uint32 bytesPerLine = 5;
+  int32 pixFormat = 6;
+}
+message DeviceMonitorSharedMemoryKey
+{
+  string smkey = 1;
+}
+message VideoControlResult
+{
+  string devid = 1;
+  string action = 2;
+  int32 result = 3;
+  int32 errorcode = 4;
+  string detail = 5;
+}
+message DeviceControlParameterJson
+{
+  string devid = 1;
+  string parameter = 2;
+}
+message DeviceStateJson
+{
+    string devid = 1;
+    string statejson = 2;
+}
+message ScreenMonitorParameter
+{
+  string devid = 1;
+  int32 quality = 2;
+}

@@ -10,6 +10,7 @@
   <depend>rclpy</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
   <depend>tf2_ros</depend>
   <exec_depend>tianji_output</exec_depend>
 

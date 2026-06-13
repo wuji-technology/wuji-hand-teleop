@@ -13,7 +13,7 @@ Input/Output:
   Output: Send joint angle commands to the real robot
 
 Usage:
-  cd ~/Desktop/wuji-hand-teleop/src/input_devices/pico_input/test
+  cd ~/ros2_ws/src/wuji-hand-teleop/src/input_devices/pico_input/test
 
   # === Translation Tests ===
   # Basic test (maintain initial pose)

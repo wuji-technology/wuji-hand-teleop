@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Wuji Hand Controller (single-hand).
+"""
+Wuji Hand Controller.
 
-ROS2 communication via the wujihandros2 driver (C++ wujihandcpp SDK).
-Each instance manages one hand and supports both joint-angle control and
-IK-based retargeting control.
+Talks to the wujihandros2 driver (which wraps the C++ wujihandcpp SDK)
+over ROS2. Each instance owns a single hand and supports both raw joint
+control and IK-based retargeting.
 
-Multi-core parallel: each hand runs in its own process with its own
-retargeter and its own GIL, fully utilizing multi-core CPUs.
+Multi-core parallelism: one process per hand -> independent retargeter,
+independent GIL -> good multi-core CPU utilization.
 """
 import logging
 from pathlib import Path
@@ -14,9 +15,9 @@ from typing import Optional, Tuple
 import numpy as np
 
 try:
-    from wujihand_output._internal.hand_interface import WujiHandROS2
+    from wujihand_output._internal.hand_interface import WujiHand
 except ImportError:
-    from ._internal.hand_interface import WujiHandROS2
+    from ._internal.hand_interface import WujiHand
 
 try:
     from wuji_retargeting import Retargeter
@@ -26,16 +27,15 @@ except ImportError:
 
 
 class WujiHandController:
-    """Single-hand Wuji Hand controller.
+    """Wuji-hand controller for a single hand.
 
-    Hardware communication is handled by the wujihandros2 driver
-    (1000Hz control rate). One instance == one hand; multi-core
-    parallelism is provided by process-level isolation.
+    Talks to the wujihandros2 driver (1000Hz hardware loop). One instance
+    = one hand; multi-core parallelism is provided by process-level
+    isolation.
 
-    Two control modes are supported:
-      1. Joint-angle control: set the 20 joint angles directly.
-      2. IK control: drive the hand from 21 hand keypoints via inverse
-         kinematics retargeting.
+    Two control modes:
+    1. Joint angle control: set the 20 joint angles directly.
+    2. IK control: take a 21-point hand keypoint set and retarget it.
     """
 
     NUM_JOINTS = 20  # 5 fingers x 4 joints
@@ -46,27 +46,29 @@ class WujiHandController:
         hand_name: str,
         input_source: str = "manus",
         retarget_config: Optional[str] = None,
+        retarget_config_dir: Optional[str] = None,
         enable_ik: bool = True,
         logger=None,
         node=None,
-        nlopt_max_eval: Optional[int] = 25,
     ):
-        """Initialize the single-hand controller.
+        """
+        Initialize a single-hand controller.
 
         Args:
             side: "left" or "right".
-            hand_name: wujihandros2 driver namespace, e.g. "left_hand".
-            input_source: input source type, used to select the IK
-                retargeting config file.
-            retarget_config: optional explicit path to a retargeting
-                config file.
-            enable_ik: whether to enable IK control.
-            logger: optional logger to inject (defaults to a stdlib
-                logger).
-            node: ROS2 node instance (required).
-            nlopt_max_eval: NLOPT max evaluations per frame; pass 0 or
-                a negative value to keep the wuji_retargeting library
-                default (50).
+            hand_name: wujihandros2 driver namespace (e.g. "left_hand").
+            input_source: input source type (used to pick the IK retarget config).
+            retarget_config: explicit retarget config path (optional).
+            retarget_config_dir: retarget config directory (optional). When
+                set, lookup order is
+                retarget_{input_source}_{side}.yaml then
+                retarget_{input_source}.yaml — taking priority over the
+                wujihand_output package's bundled config/. Used for
+                multi-host deployments: launch passes the local test/
+                config directory so retarget params follow the deploy host.
+            enable_ik: enable IK control.
+            logger: external logger.
+            node: ROS2 node instance.
         """
         if logger is not None:
             self.logger = logger
@@ -82,10 +84,12 @@ class WujiHandController:
         self.hand_name = hand_name
         self.input_source = input_source
         self.node = node
-        self._nlopt_max_eval = nlopt_max_eval
+        self._retarget_config_dir = (
+            Path(retarget_config_dir) if retarget_config_dir else None
+        )
 
         # Hardware interface
-        self.hand: Optional[WujiHandROS2] = None
+        self.hand: Optional[WujiHand] = None
 
         # IK retargeter
         self.retargeter: Optional['Retargeter'] = None
@@ -94,60 +98,48 @@ class WujiHandController:
         if enable_ik and RETARGETER_AVAILABLE:
             self._init_retargeter(retarget_config)
         elif enable_ik and not RETARGETER_AVAILABLE:
-            self.logger.warning("wuji_retargeting not installed, IK control unavailable")
+            self.logger.warning("wuji_retargeting not installed; IK control unavailable")
 
         self._init_hand()
-        self.logger.info(f"{side} hand controller initialized (wujihandros2)")
+        self.logger.info(f"{side}-hand controller initialized (wujihandros2)")
 
     def _resolve_retarget_config(self) -> Optional[str]:
-        """Resolve retarget config path.
+        """Resolve retarget_{input_source}_{side}.yaml from override dir or package share."""
+        candidate_dirs = []
+        if self._retarget_config_dir is not None:
+            candidate_dirs.append(self._retarget_config_dir)
 
-        Lookup order:
-          1. retarget_{input_source}_{side}.yaml
-          2. retarget_{input_source}.yaml
-        """
         try:
-            from ament_index_python.packages import (
-                PackageNotFoundError,
-                get_package_share_directory,
+            from ament_index_python.packages import get_package_share_directory
+            candidate_dirs.append(
+                Path(get_package_share_directory("wujihand_output")) / "config"
             )
-        except ImportError:
-            return None
-        try:
-            config_dir = Path(get_package_share_directory("wujihand_output")) / "config"
-        except PackageNotFoundError:
-            return None
+        except Exception as e:
+            self.logger.warning(
+                f"Could not locate wujihand_output share dir; "
+                f"skipping package default retarget config: {e}")
 
-        per_side = config_dir / f"retarget_{self.input_source}_{self.side}.yaml"
-        if per_side.exists():
-            return str(per_side)
-
-        shared = config_dir / f"retarget_{self.input_source}.yaml"
-        if shared.exists():
-            return str(shared)
+        for cfg_dir in candidate_dirs:
+            per_side = cfg_dir / f"retarget_{self.input_source}_{self.side}.yaml"
+            if per_side.exists():
+                self.logger.info(f"IK retarget config: {per_side}")
+                return str(per_side)
 
         return None
 
     def _init_retargeter(self, config: Optional[str]) -> None:
         config_path = config or self._resolve_retarget_config()
-        if not (config_path and Path(config_path).exists()):
-            self.logger.warning("IK retargeting config file not found")
-            return
-        self.retargeter = Retargeter.from_yaml(config_path, self.side)
-        self._ik_enabled = True
-        # Override library's hardcoded set_maxeval(50). Lower = faster
-        # but extreme poses may regress in accuracy.
-        if self._nlopt_max_eval and self._nlopt_max_eval > 0:
-            self.retargeter.optimizer.opt.set_maxeval(int(self._nlopt_max_eval))
-            self.logger.info(
-                f"NLOPT max_eval = {int(self._nlopt_max_eval)} (library default: 50)"
-            )
-        self.logger.info(f"IK retargeting config: {Path(config_path).name}")
+        if config_path and Path(config_path).exists():
+            self.retargeter = Retargeter.from_yaml(config_path, self.side)
+            self._ik_enabled = True
+            self.logger.info(f"IK retarget config: {Path(config_path).name}")
+        else:
+            self.logger.warning("No IK retarget config found")
 
     def _init_hand(self) -> None:
         if self.node is None:
-            raise RuntimeError("ROS2 node not provided")
-        self.hand = WujiHandROS2(
+            raise RuntimeError("ROS2 node was not provided")
+        self.hand = WujiHand(
             hand_name=self.hand_name,
             side=self.side,
             node=self.node,
@@ -174,13 +166,13 @@ class WujiHandController:
         return self._ik_enabled
 
     def retarget(self, keypoints: np.ndarray) -> Optional[np.ndarray]:
-        """Retarget hand keypoints into joint angles.
+        """Retarget hand keypoints to joint angles.
 
         Args:
-            keypoints: hand keypoints, shape (21, 3) or flat (63,).
+            keypoints: hand keypoints, shape (21, 3) or (63,).
 
         Returns:
-            Joint-angle array of shape (20,), or None on failure.
+            (20,) joint-angle array, or None on failure.
         """
         if self.retargeter is None:
             return None
@@ -190,14 +182,14 @@ class WujiHandController:
                 keypoints = keypoints.reshape(21, 3)
             return self.retargeter.retarget(keypoints)
         except Exception as e:
-            self.logger.error(f"{self.side} hand IK retargeting error: {e}")
+            self.logger.error(f"{self.side}-hand IK retarget failed: {e}")
             return None
 
     def set_keypoints(self, keypoints: np.ndarray) -> Tuple[bool, Optional[np.ndarray]]:
-        """Drive the hand from keypoints (IK retarget + hardware control).
+        """Drive the hand from keypoints (IK retarget + hardware command).
 
         Returns:
-            Tuple: (success, joint angles).
+            (success, joint_angles).
         """
         angles = self.retarget(keypoints)
         if angles is not None and self.hand is not None:
@@ -215,4 +207,4 @@ class WujiHandController:
         if self.hand is not None:
             self.hand.release()
             self.hand = None
-        self.logger.info("Shutdown complete")
+        self.logger.info("Exited cleanly")

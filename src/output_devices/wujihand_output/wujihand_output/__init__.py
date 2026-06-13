@@ -1,20 +1,20 @@
 """
-wujihand_output package - Wuji dexterous hand hardware interface
+wujihand_output package — Wuji dexterous-hand hardware interface.
 
-File structure:
-    __init__.py                # Public API exports
-    wujihand_controller.py     # Unified controller (supports joint angle and IK control)
-    _internal/                 # Internal implementation (not recommended for direct import)
-        hand_interface.py      # Low-level dexterous hand hardware interface
+File layout:
+├── __init__.py                # public API exports
+├── wujihand_controller.py     # unified controller (joint-angle + IK control)
+└── _internal/                 # internal implementation (do not import directly)
+    └── hand_interface.py      # low-level hardware interface
 
-Public interfaces:
-- WujiHandController: Unified controller (supports joint angle and IK control)
+Public interface:
+- WujiHandController: unified controller (supports joint-angle and IK control)
 
-Usage example:
+Example:
     from wujihand_output import WujiHandController
     controller = WujiHandController(left_serial='xxx', right_serial='yyy')
 
-    # Joint angle control
+    # Joint-angle control
     controller.set_joint_positions(left_positions=[...], right_positions=[...])
 
     # IK control (requires wuji_retargeting)

@@ -1,0 +1,10 @@
+# Tianji Arm Chest-frame Configuration (HTC/Tracker pathway)
+
+# Robot IP address
+robot_ip: "192.168.1.190"
+
+# Initial joint angles (degrees) — dual-arm forward-reach pose.
+# Shared with tianji_world.yaml so both pathways use the same home pose.
+init_joints:
+  left:  [55.0, -65.0, -70.0, -60.0, 60.0, 0.0, 0.0]
+  right: [-55.0, -65.0, 70.0, -60.0, -60.0, 0.0, 0.0]

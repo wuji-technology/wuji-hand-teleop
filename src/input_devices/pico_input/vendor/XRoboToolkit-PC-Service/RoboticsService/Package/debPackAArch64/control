@@ -1,0 +1,9 @@
+Package: roboticsservice
+Version: 1.0.0.0
+Architecture: arm64
+Maintainer: roboticsservice.support@bytedance.com
+Depends:
+Section: default
+Priority: optional
+Homepage: https://business-cn.picoxr.com/
+Description: Hainan Chuangjian Weilai Technology Co., Ltd.

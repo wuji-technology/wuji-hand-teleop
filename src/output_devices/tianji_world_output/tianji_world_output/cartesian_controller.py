@@ -92,7 +92,7 @@ class CartesianController:
 
         # IK parameters (can be modified at runtime) — loaded from unified config
         from tianji_world_output.config_loader import TianjiConfig
-        self._cfg = TianjiConfig.load(use_ros=False)
+        self._cfg = TianjiConfig.load()
         self.zsp_type = self._cfg.zsp_type
         left_zsp = self._cfg.default_zsp_para.get('left', [0, -1, -0.5, 0, 0, 0])
         right_zsp = self._cfg.default_zsp_para.get('right', [0, 1, -0.5, 0, 0, 0])
@@ -113,21 +113,12 @@ class CartesianController:
         self.logger.info("Dual-arm initialization complete")
 
     def _set_tool_params(self):
-        """
-        Set tool parameters (kinematics + dynamics)
-
-        Kinematics parameters [X, Y, Z, A, B, C]:
-            X, Y, Z: Tool center point position offset relative to flange (mm)
-            A, B, C: Tool orientation offset relative to flange (degrees)
-
-        Dynamics parameters [M, mx, my, mz, Ixx, Ixy, Ixz, Iyy, Iyz, Izz]:
-            M: Tool mass (kg)
-            mx, my, mz: Center of mass position relative to flange (mm)
-            Ixx~Izz: Inertia tensor (kg*mm^2)
-        """
-        # Wuji Hand payload parameters (consistent with tianji_arm_controller.py)
-        tool_kine = [0, 0, 120, 0, 0, 0]  # Tool center point 120mm from flange
-        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]  # Mass 0.95kg, center of mass 90mm from flange
+        # IK solves at the flange (tool_kine zero); mounted-tool kinematics
+        # belong in URDF / chest TF, not in the SDK's set_tool matrix.
+        tool_kine = [0, 0, 0, 0, 0, 0]
+        # Identified Wuji Hand payload (M kg, mr mm, I kg·mm²); rewrite if
+        # you mount a different end-effector.
+        tool_dyn = [0.95, 0, 0, 90, 0, 0, 0, 0, 0, 0]
 
         self.logger.info("Setting tool parameters (Wuji Hand): kine=%s, dyn=%s", tool_kine, tool_dyn)
 
@@ -160,16 +151,51 @@ class CartesianController:
         right_joints = sub_data["outputs"][1]["fb_joint_pos"]
         return left_joints, right_joints
 
+    def _wait_for_arm_state(self, target_state, timeout=2.0, poll_interval=0.05):
+        """Poll cur_state until both arms reach target_state, or timeout.
+
+        Marvin's set_state(N) is not synchronous — the arm goes through a
+        transitional state before landing on target_state. Polling the
+        DCSS readback is the only reliable way to know the transition
+        actually happened (vs. a fixed time.sleep that's either too short
+        or wastes time).
+
+        Returns (ok: bool, left_state: int, right_state: int).
+        """
+        dcss = DCSS()
+        deadline = time.monotonic() + timeout
+        a_state, b_state = -1, -1
+        while time.monotonic() < deadline:
+            sub = self.robot.subscribe(dcss)
+            a_state = sub["states"][0]["cur_state"]
+            b_state = sub["states"][1]["cur_state"]
+            if a_state == target_state and b_state == target_state:
+                return True, a_state, b_state
+            time.sleep(poll_interval)
+        return False, a_state, b_state
+
     def set_impedance_mode(self, mode='joint', K=None, D=None):
-        """Set dual-arm impedance mode"""
-        # Set dual-arm state
+        """Enable both arms in impedance (state=3) mode.
+
+        Was sleep-based (five `time.sleep(0.5)` chunks); switched to a
+        DCSS poll for the actual state transition. The kd_params /
+        impedance_type writes that follow still need a short settle
+        before the next `send_cmd`, because the Marvin protocol applies
+        parameters out-of-band of cur_state and there's no readback we
+        can poll. Those sleeps are intentional and small.
+        """
         self.robot.clear_set()
         self.robot.set_state(arm='A', state=3)
         self.robot.set_state(arm='B', state=3)
         self.robot.set_vel_acc(arm='A', velRatio=60, AccRatio=60)
         self.robot.set_vel_acc(arm='B', velRatio=60, AccRatio=60)
         self.robot.send_cmd()
-        time.sleep(0.5)
+        ok, a, b = self._wait_for_arm_state(target_state=3, timeout=2.0)
+        if not ok:
+            raise RuntimeError(
+                f"set_impedance_mode: arms didn't reach state=3 in 2s "
+                f"(left={a}, right={b}). Servos faulted or the cabinet is offline."
+            )
 
         if mode == 'cart':
             K = K or [8000, 8000, 8000, 100, 100, 100, 20]
@@ -178,11 +204,11 @@ class CartesianController:
             self.robot.clear_set()
             self.robot.set_cart_kd_params(arm='A', K=K, D=D, type=2)
             self.robot.set_cart_kd_params(arm='B', K=K, D=D, type=2)
-            time.sleep(0.5)
+            time.sleep(0.5)  # param-apply settle (no cur_state to poll)
             self.robot.set_impedance_type(arm='A', type=2)
             self.robot.set_impedance_type(arm='B', type=2)
             self.robot.send_cmd()
-            time.sleep(0.5)
+            time.sleep(0.5)  # param-apply settle
 
             self.logger.info("Dual-arm Cartesian impedance mode K=%s", K)
 
@@ -194,13 +220,13 @@ class CartesianController:
             self.robot.set_joint_kd_params(arm='A', K=K, D=D)
             self.robot.set_joint_kd_params(arm='B', K=K, D=D)
             self.robot.send_cmd()
-            time.sleep(0.5)
+            time.sleep(0.5)  # param-apply settle
 
             self.robot.clear_set()
             self.robot.set_impedance_type(arm='A', type=1)
             self.robot.set_impedance_type(arm='B', type=1)
             self.robot.send_cmd()
-            time.sleep(0.5)
+            time.sleep(0.5)  # param-apply settle
 
             self.logger.info("Dual-arm joint impedance mode K=%s", K)
 
@@ -392,15 +418,57 @@ class CartesianController:
             self.logger.warning("[Arm %s IK] Exception: %s", arm_name, e)
         return None
 
-    def disable_and_release(self):
-        """Disable and release both arms"""
-        self.logger.info("Disabling both arms...")
-        self.robot.clear_set()
-        self.robot.set_state(arm='A', state=0)
-        self.robot.set_state(arm='B', state=0)
-        self.robot.send_cmd()
-        time.sleep(2)
+    def disable_and_release(self, poll_timeout=3.0):
+        """Shutdown path: clear errors, request set_state(0), poll until the
+        firmware confirms cur_state==0 (or poll_timeout elapses), then
+        release the TCP session.
+
+        Same shape as tianji_chest_driver.disable_and_release (fixed in
+        9b087b5 / f950490). The previous implementation here had a fixed
+        time.sleep(2) that two things go wrong with on shutdown:
+
+          1. SIGINT received while sleeping raises KeyboardInterrupt in
+             the middle of cleanup. release_robot() never runs, the
+             Marvin TCP session leaks, and the next launch fails to
+             connect.
+          2. 2s is not always enough for state=3 (impedance) -> state=0.
+             When the firmware takes longer, the operator stops teleop
+             but the arms remain at TORQ holding torque — unsafe.
+
+        Poll cur_state instead, short interruption-safe time.sleep(0.05)
+        chunks, log on timeout, and ALWAYS release_robot() so the TCP
+        session is freed even if state transition failed.
+        """
+        self.logger.info("Disabling arms (set_state=0)...")
+        try:
+            # Empirically, calling clear_error() BEFORE set_state(0) prevents
+            # the firmware from honoring the state transition (the arms stay
+            # at cur_state=3 indefinitely; cf. the smoke test in this commit
+            # message). set_standby() works because it never clear_errors —
+            # mirror that. If the user really needs errors cleared on
+            # shutdown, do it AFTER cur_state reaches 0.
+            self.robot.clear_set()
+            self.robot.set_state(arm='A', state=0)
+            self.robot.set_state(arm='B', state=0)
+            self.robot.send_cmd()
+        except Exception as exc:
+            self.logger.warning("set_state(0) on shutdown failed (ignored): %s", exc)
+
+        try:
+            ok, a, b = self._wait_for_arm_state(target_state=0,
+                                                timeout=max(0.5, float(poll_timeout)))
+            if ok:
+                self.logger.info("Both arms at cur_state=0")
+            else:
+                self.logger.warning(
+                    "Servos may still be on (cur_state left=%d, right=%d); "
+                    "releasing TCP anyway", a, b)
+        except Exception as exc:
+            self.logger.warning("cur_state poll failed (ignored): %s", exc)
 
         self.logger.debug("Releasing connection...")
-        self.robot.release_robot()
+        try:
+            self.robot.release_robot()
+        except Exception as exc:
+            self.logger.warning("release_robot failed (ignored): %s", exc)
         self.logger.info("Safely exited")

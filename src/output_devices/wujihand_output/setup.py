@@ -14,7 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         # Install config files
         (os.path.join('share', package_name, 'config'),
-            glob('config/*.yaml')),
+            glob('config/*.yaml') + glob('config/*.yaml.template')),
     ],
     install_requires=[
         'setuptools',
@@ -23,7 +23,7 @@ setup(
     zip_safe=True,
     maintainer='wuji',
     maintainer_email='your_email@example.com',
-    description='Wuji dexterous hand hardware interface library - provides JointController and IKController control interfaces',
+    description='Wuji hand hardware interface library — provides the WujiHandController control interface',
     license='MIT',
     tests_require=['pytest'],
     entry_points={

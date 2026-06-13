@@ -1,0 +1,46 @@
+# =============================================================================
+# Teleoperation camera udev rules
+# =============================================================================
+# Purpose: assign fixed symlinks to cameras so device paths survive replug.
+# Install: sudo cp 99-teleop-cameras.rules /etc/udev/rules.d/
+#          sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# Or just run: bash src/camera/setup_cameras.sh
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Head camera: USB stereo → /dev/stereo_camera
+# -----------------------------------------------------------------------------
+# HBVCAM-F2439GS-2 V11 (Sunplus vendor=1bcf, product=2d4f, AR0234 global shutter)
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{idVendor}=="1bcf", ATTRS{idProduct}=="2d4f", SYMLINK+="stereo_camera", MODE="0666"
+
+# Alternative: ZED Mini (Stereolabs vendor=2b03)
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{idVendor}=="2b03", ATTRS{product}=="ZED-M", SYMLINK+="stereo_camera", MODE="0666"
+
+# Alternative: ZED 2i
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{idVendor}=="2b03", ATTRS{product}=="ZED 2i", SYMLINK+="stereo_camera", MODE="0666"
+
+# -----------------------------------------------------------------------------
+# Left wrist camera: RealSense D405 → /dev/cam_left_wrist
+# -----------------------------------------------------------------------------
+# Match by serial number — both wrists share vendor/product ID, so the
+# serial is the only thing that distinguishes them. Replace the placeholder
+# with your camera's real serial (see "Replacing a camera" at the bottom).
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{serial}=="YOUR_LEFT_WRIST_CAM_SERIAL", SYMLINK+="cam_left_wrist", MODE="0666"
+
+# -----------------------------------------------------------------------------
+# Right wrist camera: RealSense D405 → /dev/cam_right_wrist
+# -----------------------------------------------------------------------------
+SUBSYSTEM=="video4linux", ATTR{index}=="0", ATTRS{serial}=="YOUR_RIGHT_WRIST_CAM_SERIAL", SYMLINK+="cam_right_wrist", MODE="0666"
+
+# =============================================================================
+# Replacing a camera:
+#   1. Find the serial:   rs-enumerate-devices | grep "Serial Number"
+#                    or:  udevadm info /dev/videoN | grep ID_SERIAL_SHORT
+#   2. Replace the corresponding ATTRS{serial}=="YOUR_..._CAM_SERIAL" above.
+#   3. Reload rules:      sudo udevadm control --reload-rules \
+#                           && sudo udevadm trigger
+#   4. Also update `serial_number:` in src/camera/config/camera_config.yaml
+#      (the RealSense ROS driver opens the device by serial, independent of
+#      the /dev symlink).
+# =============================================================================

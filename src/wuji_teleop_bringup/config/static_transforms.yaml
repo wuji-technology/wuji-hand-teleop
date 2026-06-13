@@ -1,8 +1,8 @@
 # Chest Mount TF Configuration
-# TF structure: chest -> {side}_chest_base (shared + rotation) -> {side}_chest (local)
+# TF chain: chest -> {side}_chest_base (shared + rotation) -> {side}_chest (local)
 
 chest_mount:
-  # Shared translation (chest coordinate frame)
+  # Shared translation (chest frame)
   shared:
     x: 0.0
     y: -0.2
@@ -13,7 +13,7 @@ chest_mount:
     roll: 1.5708
     pitch: 0.0
     yaw: -1.5708
-    # Local translation (left_chest_base coordinate frame)
+    # Local translation (left_chest_base frame)
     local_x: 0.0
     local_y: 0.0
     local_z: 0.037

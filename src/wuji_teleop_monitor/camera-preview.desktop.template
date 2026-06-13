@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Wuji Camera Preview
+Comment=Three-feed camera preview — head stereo + dual D405 wrists (Docker)
+Exec={{LAUNCHER}}
+Icon={{PACKAGE_PATH}}/wuji_icon.png
+Terminal=false
+Categories=Development;Robotics;
+StartupNotify=true

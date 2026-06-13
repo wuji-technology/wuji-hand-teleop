@@ -99,7 +99,7 @@ check_link() {
     fi
 }
 
-check_link "/dev/stereo_camera"    "Head ZED"
+check_link "/dev/stereo_camera"    "Head stereo (USB UVC)"
 check_link "/dev/cam_left_wrist"   "Left wrist RealSense"
 check_link "/dev/cam_right_wrist"  "Right wrist RealSense"
 
@@ -109,9 +109,9 @@ echo "============================================================"
 echo "  Setup complete!"
 echo ""
 echo "  Device mapping:"
-echo "    /dev/stereo_camera   ← ZED Mini (head stereo)"
-echo "    /dev/cam_left_wrist  ← RealSense D405/D435 (left wrist)"
-echo "    /dev/cam_right_wrist ← RealSense D405/D435 (right wrist)"
+echo "    /dev/stereo_camera   ← HBVCAM stereo (head)"
+echo "    /dev/cam_left_wrist  ← RealSense D405 (left wrist)"
+echo "    /dev/cam_right_wrist ← RealSense D405 (right wrist)"
 echo ""
 echo "  Docker mount example:"
 echo "    docker run \\"

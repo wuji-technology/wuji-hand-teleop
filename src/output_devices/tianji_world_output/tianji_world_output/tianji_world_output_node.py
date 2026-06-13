@@ -28,8 +28,11 @@ import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 from rclpy.utilities import remove_ros_args
 from geometry_msgs.msg import PoseStamped, Vector3Stamped
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray
 from scipy.spatial.transform import Rotation as R
 
 from tianji_world_output.cartesian_controller import CartesianController
@@ -38,6 +41,27 @@ from tianji_world_output.ros2_logging import ROS2LoggerAdapter, setup_ros2_loggi
 
 # Log directory
 LOG_DIR = Path.home() / ".wuji_teleop_logs"
+
+# Canonical QoS for the arm joint streams (joint_states + joint_commands).
+# BEST_EFFORT / KEEP_LAST depth=1 is the system-wide convention for high-rate
+# joint topics — it mirrors the HTC side's controller.common.get_default_qos()
+# and what wuji_teleop_monitor/ui/qos_utils.py documents subscribers expect.
+# Why it matters here:
+#   - These topics are an *echo* for the Monitor and the episode recorder; the
+#     real arm command goes straight through the SDK, so dropping the odd echo
+#     frame is harmless.
+#   - RELIABLE would let a lagging subscriber stall the publish stream
+#     (head-of-line blocking) and inject timestamp jitter into recorded
+#     episodes — exactly the data-quality failure we want to avoid.
+#   - depth>1 just buffers stale frames nobody wants (latest-wins stream).
+# Subscribers auto-adapt via match_publisher_qos, so this one constant is the
+# single knob that pins the contract for both PICO arm streams, identical to
+# HTC's. Keep PICO and HTC on the same policy so recorded data is poolable.
+ARM_JOINT_QOS = QoSProfile(
+    reliability=QoSReliabilityPolicy.BEST_EFFORT,
+    history=QoSHistoryPolicy.KEEP_LAST,
+    depth=1,
+)
 
 
 class TianjiWorldOutputNode(Node):
@@ -127,9 +151,53 @@ class TianjiWorldOutputNode(Node):
             10
         )
 
+        # Joint-state publishers — match the HTC tianji_arm_node's contract
+        # (`/{side}_arm/joint_states`) so the Monitor's joint panel can read
+        # real-time arm joint angles regardless of which arm controller is
+        # running. QoS pinned by ARM_JOINT_QOS to the same policy as HTC.
+        self.left_state_pub = self.create_publisher(
+            JointState, '/left_arm/joint_states', ARM_JOINT_QOS)
+        self.right_state_pub = self.create_publisher(
+            JointState, '/right_arm/joint_states', ARM_JOINT_QOS)
+
+        # Joint-command publishers — mirror the HTC tianji_arm_node contract
+        # (`/{side}_arm/joint_commands`, frame_id `{side}_base_cmd`). PICO
+        # input only carries a Cartesian wrist pose; the IK that turns it
+        # into joint angles happens here, so this is the only place on the
+        # PICO path that knows the commanded joint angles. Publishing them
+        # makes the PICO path expose the same joint_commands topic as the
+        # HTC path, so the Monitor's arm Cmd Hz can count real commands
+        # instead of proxying off /{side}_arm_target_pose.
+        self.left_cmd_pub = self.create_publisher(
+            JointState, '/left_arm/joint_commands', ARM_JOINT_QOS)
+        self.right_cmd_pub = self.create_publisher(
+            JointState, '/right_arm/joint_commands', ARM_JOINT_QOS)
+
+        # Null-space (elbow / arm-angle) echo publishers — mirror the HTC
+        # tianji_arm_node `/{side}_arm/zsp_para` contract (Float64MultiArray).
+        # PICO already does live elbow control (the direction is computed from
+        # the arm-tracker geometry by pico_input and arrives on
+        # /{side}_arm_elbow_direction, then feeds IK every control cycle); this
+        # only echoes the constraint that was actually applied, so the Monitor
+        # and the episode recorder see the same zsp_para field the HTC path
+        # exposes. Closes the last cheap field-set gap between the two paths.
+        self.left_zsp_para_pub = self.create_publisher(
+            Float64MultiArray, '/left_arm/zsp_para', ARM_JOINT_QOS)
+        self.right_zsp_para_pub = self.create_publisher(
+            Float64MultiArray, '/right_arm/zsp_para', ARM_JOINT_QOS)
+
         # Control loop
         control_period = 1.0 / control_rate
         self.timer = self.create_timer(control_period, self.control_loop)
+
+        # Joint-state publish loop — 100 Hz (matches Marvin's published rate
+        # tier and is plenty for a Monitor UI preview without saturating
+        # DDS). HTC side runs 500 Hz on a separate timer for inference
+        # consumption; PICO doesn't have that downstream user so 100 Hz is
+        # fine.
+        self._joint_publish_period = 0.01
+        self.joint_publish_timer = self.create_timer(
+            self._joint_publish_period, self._publish_joint_state)
 
         self.get_logger().info("Tianji World Output node initialized (Topic-based, no TF).")
         self.get_logger().info("Subscribing to:")
@@ -185,6 +253,81 @@ class TianjiWorldOutputNode(Node):
             )
         self.right_arm_direction = new_dir
 
+    @staticmethod
+    def _make_arm_joint_state(stamp, side: str, joints, frame_id: str) -> JointState:
+        """Build one 7-DoF arm JointState message.
+
+        Single constructor shared by both arm streams — measured
+        (joint_states) and IK-commanded (joint_commands). They differ only
+        in frame_id and which joint source feeds them; the naming
+        (`{side}_joint_1..7`) and Marvin native unit (degrees) are
+        identical by construction, which is exactly what lets the Monitor
+        compare command vs. state. Keep the two streams defined here so
+        they can never silently drift apart.
+        """
+        msg = JointState()
+        msg.header.stamp = stamp
+        msg.header.frame_id = frame_id
+        msg.name = [f'{side}_joint_{i + 1}' for i in range(7)]
+        msg.position = list(joints)
+        return msg
+
+    def _publish_joint_state(self) -> None:
+        """Publish measured arm joint angles on /{left,right}_arm/joint_states.
+
+        Mirrors the HTC tianji_arm_node contract so the Monitor's joint
+        panel (which subscribes to those two topics regardless of which
+        controller is running) shows live values under the PICO path too.
+        Source is the SDK readback (get_current_joints); frame_id marks
+        these as measured state. Falls through silently on SDK errors —
+        joint preview is a UX nicety, not a hard dependency.
+        """
+        try:
+            left_joints, right_joints = self.controller.get_current_joints()
+        except Exception:
+            return
+        stamp = self.get_clock().now().to_msg()
+        if left_joints is not None:
+            self.left_state_pub.publish(
+                self._make_arm_joint_state(stamp, 'left', left_joints, 'left_base_state'))
+        if right_joints is not None:
+            self.right_state_pub.publish(
+                self._make_arm_joint_state(stamp, 'right', right_joints, 'right_base_state'))
+
+    def _publish_joint_command(self, left_joints, right_joints) -> None:
+        """Publish IK-solved commanded joint angles on /{left,right}_arm/joint_commands.
+
+        Same angles just sent to set_joint_cmd_pose, so this stream is the
+        PICO-path equivalent of HTC's joint_commands. A None side means IK
+        produced no command this tick (no pose yet, or solve failed), so
+        that side is skipped — matching the HTC None semantics. frame_id
+        marks these as command, distinguishing them from joint_states.
+        """
+        stamp = self.get_clock().now().to_msg()
+        if left_joints is not None:
+            self.left_cmd_pub.publish(
+                self._make_arm_joint_state(stamp, 'left', left_joints, 'left_base_cmd'))
+        if right_joints is not None:
+            self.right_cmd_pub.publish(
+                self._make_arm_joint_state(stamp, 'right', right_joints, 'right_base_cmd'))
+
+    def _publish_zsp_para(self) -> None:
+        """Echo the applied null-space (elbow) parameters on /{side}_arm/zsp_para.
+
+        Mirrors HTC tianji_arm_node._publish_zsp_para_and_pose: publishes the
+        same 6-element [dir_x, dir_y, dir_z, 0, 0, 0] vector that was just fed
+        to IK this tick. Source is controller.{left,right}_zsp_para, set in
+        control_loop right before the IK call. A falsy/empty side is skipped.
+        """
+        for zsp, pub in (
+            (getattr(self.controller, 'left_zsp_para', None), self.left_zsp_para_pub),
+            (getattr(self.controller, 'right_zsp_para', None), self.right_zsp_para_pub),
+        ):
+            if zsp:
+                msg = Float64MultiArray()
+                msg.data = [float(x) for x in zsp]
+                pub.publish(msg)
+
     def control_loop(self) -> None:
         """Main control loop: send control commands"""
 
@@ -211,6 +354,18 @@ class TianjiWorldOutputNode(Node):
                 right_pose=self.right_arm_pose,
                 unit='matrix'  # Use 4x4 matrix
             )
+
+            # Publish the commanded joint angles the IK just produced. This
+            # is the PICO-path equivalent of HTC's joint_commands stream:
+            # same angles that were sent to set_joint_cmd_pose, so the
+            # Monitor (and any future inference consumer) sees identical
+            # command semantics regardless of which arm controller is live.
+            self._publish_joint_command(l_joints, r_joints)
+
+            # Echo the null-space constraint applied this tick (set above),
+            # matching HTC's /{side}_arm/zsp_para so both paths expose the
+            # same recorded field set.
+            self._publish_zsp_para()
 
             # Print combined diagnostic info once per second (dual-arm pose + joints + zsp_para)
             self._debug_counter += 1
@@ -303,7 +458,7 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(cli_argv)
 
     # robot_ip: CLI > tianji_robot.yaml > default
-    config = TianjiConfig.load(use_ros=False)
+    config = TianjiConfig.load()
     robot_ip = args.robot_ip or config.robot_ip
 
     rclpy.init(args=raw_argv)
@@ -313,31 +468,44 @@ def main(argv: list[str] | None = None) -> None:
     _shutdown_done = False
 
     def _cleanup():
-        """Clean up resources (close log + robot power off)"""
+        """Clean up resources (close log + robot power off).
+
+        A second SIGINT during cleanup used to abort disable_and_release
+        mid-poll and leak the Marvin TCP session. Mask SIGINT for the
+        duration so an impatient operator can't double-tap Ctrl-C past
+        the safety power-off. SIGTERM stays unmasked because the new
+        disable_and_release uses short 50ms time.sleep() chunks and has
+        a 3s wall-clock cap; a SIGTERM that arrives during cleanup will
+        be picked up on the next chunk boundary, which is fine.
+        """
         nonlocal _shutdown_done
         if _shutdown_done:
             return
         _shutdown_done = True
 
-        # Close detailed log file
-        if hasattr(node, '_detail_log') and node._detail_log:
-            node._detail_log.write(f"# === Log ended ({datetime.now().strftime('%H:%M:%S')}) ===\n")
-            node._detail_log.flush()
-            node._detail_log.close()
-            try:
-                node.get_logger().info(f'Detailed log saved: {node._detail_log_path}')
-            except Exception:
-                print('Detailed log saved: %s' % node._detail_log_path)
-
-        # Force flush all output
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-        # Robot power off (most critical step)
+        prev_sigint = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
-            node.controller.disable_and_release()
-        except Exception as e:
-            print(f'[WARNING] Robot power-off error: {e}', file=sys.stderr)
+            # Close detailed log file
+            if hasattr(node, '_detail_log') and node._detail_log:
+                node._detail_log.write(f"# === Log ended ({datetime.now().strftime('%H:%M:%S')}) ===\n")
+                node._detail_log.flush()
+                node._detail_log.close()
+                try:
+                    node.get_logger().info(f'Detailed log saved: {node._detail_log_path}')
+                except Exception:
+                    print('Detailed log saved: %s' % node._detail_log_path)
+
+            # Force flush all output
+            sys.stdout.flush()
+            sys.stderr.flush()
+
+            # Robot power off (most critical step)
+            try:
+                node.controller.disable_and_release()
+            except Exception as e:
+                print(f'[WARNING] Robot power-off error: {e}', file=sys.stderr)
+        finally:
+            signal.signal(signal.SIGINT, prev_sigint)
 
     def _signal_handler(signum, frame):
         """SIGTERM/SIGINT signal handler: ensure safe robot power-off"""
@@ -346,7 +514,11 @@ def main(argv: list[str] | None = None) -> None:
         _cleanup()
         sys.exit(0)
 
-    # Register signal handler (SIGTERM: sent when launch shuts down)
+    # SIGTERM: sent when ros2 launch tears down (e.g. Monitor's killpg
+    # escalation after SIGINT timed out, or `kill <pid>` on the bringup
+    # process). SIGINT during normal spin is handled by KeyboardInterrupt
+    # in the try/except below — but if SIGTERM arrives we need this
+    # explicit handler to enter the same cleanup path.
     signal.signal(signal.SIGTERM, _signal_handler)
 
     try:

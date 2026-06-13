@@ -58,7 +58,7 @@ tianji_world_output/
 │   ├── fx_kine.py                  <- re-export from tianji_output
 │   ├── fx_robot.py                 <- re-export from tianji_output
 │   ├── structure_data.py           <- re-export from tianji_output
-│   ├── robot_structures.py         <- re-export from tianji_output
+│   ├── ros2_logging.py             <- re-export from pico_input
 │   └── config/
 │       └── ccs_m6.MvKDCfg           <- Tianji IK configuration file
 ├── launch/
@@ -79,7 +79,7 @@ tianji_world_output/
 ### Installation
 
 ```bash
-cd ~/Desktop/wuji-hand-teleop
+cd ~/ros2_ws/src/wuji-hand-teleop
 colcon build --packages-select tianji_world_output
 source install/setup.bash
 ```
@@ -130,7 +130,7 @@ tianji_world_output:
 ## Reference Documentation
 
 - [ROS REP 103](https://www.ros.org/reps/rep-0103.html) - ROS Coordinate Frame Standard
-- [PICO_TELEOP_GUIDE.md](../../input_devices/pico_input/test/docs/PICO_TELEOP_GUIDE.md) - Complete Teleoperation Guide
+- [pico_input/ARCHITECTURE.md](../../input_devices/pico_input/ARCHITECTURE.md) - PICO input package architecture (coordinate transforms, incremental control)
 - [tianji_output](../tianji_output) - Original Output Package
 
 ## Important Notes

@@ -79,29 +79,38 @@ install_prebuilt() {
 }
 
 # =============================================================================
-# Build and install from source
+# Build and install from source (vendored under vendor/)
 # =============================================================================
 install_from_source() {
-    echo_info "Building and installing from source..."
+    echo_info "Building and installing from vendored source..."
 
     # Check dependencies
     echo_info "Installing build dependencies..."
     sudo apt install -y cmake build-essential pybind11-dev
 
-    # Clone and build C++ SDK
-    echo_info "Building PXREARobotSDK..."
+    # Vendored sources live alongside this script under vendor/.
+    VENDOR_PC_SERVICE="$SCRIPT_DIR/vendor/XRoboToolkit-PC-Service"
+    VENDOR_PYBIND="$SCRIPT_DIR/vendor/XRoboToolkit-PC-Service-Pybind"
+    if [ ! -d "$VENDOR_PC_SERVICE" ] || [ ! -d "$VENDOR_PYBIND" ]; then
+        echo_error "Vendored sources not found under $SCRIPT_DIR/vendor/"
+        echo_warn "Run this script from inside a complete wuji-hand-teleop checkout."
+        exit 1
+    fi
+
+    # Copy vendored PC-Service to /tmp and build PXREARobotSDK
+    echo_info "Building PXREARobotSDK from $VENDOR_PC_SERVICE ..."
     cd /tmp
     rm -rf pc-service
-    git clone https://github.com/lzhu686/XRoboToolkit-PC-Service.git pc-service
+    cp -r "$VENDOR_PC_SERVICE" pc-service
     cd pc-service/RoboticsService/PXREARobotSDK
     bash build.sh
 
-    # Clone Pybind SDK (if not exists)
+    # Copy vendored Pybind to a stable working location (~/Desktop)
     PYBIND_DIR=~/Desktop/XRoboToolkit-PC-Service-Pybind
     if [ ! -d "$PYBIND_DIR" ]; then
-        echo_info "Cloning Pybind SDK..."
-        cd ~/Desktop
-        git clone https://github.com/lzhu686/XRoboToolkit-PC-Service-Pybind.git
+        echo_info "Copying vendored Pybind SDK to $PYBIND_DIR ..."
+        mkdir -p ~/Desktop
+        cp -r "$VENDOR_PYBIND" "$PYBIND_DIR"
     fi
 
     # Copy C++ library files
@@ -180,7 +189,7 @@ verify_install() {
 main() {
     echo "=============================================="
     echo "  PICO Input SDK Installation Script"
-    echo "  https://github.com/lzhu686"
+    echo "  https://github.com/wuji-technology/wuji-hand-teleop"
     echo "=============================================="
     echo ""
 

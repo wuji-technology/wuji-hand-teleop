@@ -21,7 +21,8 @@ Usage:
     client.close()
 
 Dependencies:
-    - xrobotoolkit_sdk (Pybind): https://github.com/lzhu686/XRoboToolkit-PC-Service-Pybind
+    - xrobotoolkit_sdk (Pybind): vendored at src/input_devices/pico_input/vendor/XRoboToolkit-PC-Service-Pybind/
+      (upstream: https://github.com/XR-Robotics/XRoboToolkit-PC-Service-Pybind, MIT)
 """
 
 import logging

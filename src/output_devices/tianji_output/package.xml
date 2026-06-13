@@ -11,6 +11,7 @@
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>tf2_ros</depend>
+  <depend>ament_index_python</depend>
 
   <export>
     <build_type>ament_python</build_type>

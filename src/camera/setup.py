@@ -18,7 +18,7 @@ setup(
             glob('launch/*.py')),
         # Install config files (including stereo_head subdirectory)
         (os.path.join('share', ros2_package_name, 'config'),
-            glob('config/*.yaml')),
+            glob('config/*.yaml') + glob('config/*.yaml.template')),
         (os.path.join('share', ros2_package_name, 'config', 'stereo_head'),
             glob('config/stereo_head/*.yaml')),
     ],

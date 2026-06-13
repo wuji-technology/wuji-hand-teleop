@@ -22,7 +22,7 @@ setup(
     install_requires=['setuptools', 'pyyaml'],
     zip_safe=True,
     maintainer='Wentao Zhang',
-    maintainer_email='zhangwt20011015@gmail.com',
+    maintainer_email='maintainers@wuji-tec.com',
     description='Launch files for Wuji Hand and Tianji Arm teleoperation',
     license='MIT',
     tests_require=['pytest'],

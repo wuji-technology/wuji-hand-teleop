@@ -1,0 +1,20 @@
+var searchData=
+[
+  ['pfpxreaclientcallback_0',['pfPXREAClientCallback',['../_p_x_r_e_a_robot_s_d_k_8h.html#ac784a100ecc9c47de50c2427f369d92d',1,'PXREARobotSDK.h']]],
+  ['pxreaclientcallbacktype_1',['PXREAClientCallbackType',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297',1,'PXREARobotSDK.h']]],
+  ['pxreadeinit_2',['PXREADeinit',['../_p_x_r_e_a_robot_s_d_k_8h.html#a81889f88db87fab0d00fc4558bfcf659',1,'PXREARobotSDK.h']]],
+  ['pxreadevcustommessage_3',['PXREADevCustomMessage',['../struct_p_x_r_e_a_dev_custom_message.html',1,'']]],
+  ['pxreadeviceconnect_4',['PXREADeviceConnect',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297ad255497671bc178d4a06ccf2907b84f0',1,'PXREARobotSDK.h']]],
+  ['pxreadevicecontroljson_5',['PXREADeviceControlJson',['../_p_x_r_e_a_robot_s_d_k_8h.html#a06c1c9436ebfb2c645cab8deca3a091e',1,'PXREARobotSDK.h']]],
+  ['pxreadevicecustommessage_6',['PXREADeviceCustomMessage',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297a7e8af9b5262b985d95085e18aeb7fcf3',1,'PXREARobotSDK.h']]],
+  ['pxreadevicefind_7',['PXREADeviceFind',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297aab65f5abca87007dc50e3158cb2673e6',1,'PXREARobotSDK.h']]],
+  ['pxreadevicemissing_8',['PXREADeviceMissing',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297ada424ed956fd1bb7a0af839b86425c1d',1,'PXREARobotSDK.h']]],
+  ['pxreadevicestatejson_9',['PXREADeviceStateJson',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297a3b3f2113ea028b4f23de645905a2c682',1,'PXREARobotSDK.h']]],
+  ['pxreadevstatejson_10',['PXREADevStateJson',['../struct_p_x_r_e_a_dev_state_json.html',1,'']]],
+  ['pxreafullmask_11',['PXREAFullMask',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297aba37cac8ca80a2c23e548494cf3afd4b',1,'PXREARobotSDK.h']]],
+  ['pxreainit_12',['PXREAInit',['../_p_x_r_e_a_robot_s_d_k_8h.html#ac4cb788199833cdba6fce38d5dc9424b',1,'PXREARobotSDK.h']]],
+  ['pxrearobotsdk_2eh_13',['PXREARobotSDK.h',['../_p_x_r_e_a_robot_s_d_k_8h.html',1,'']]],
+  ['pxreasendbytestodevice_14',['PXREASendBytesToDevice',['../_p_x_r_e_a_robot_s_d_k_8h.html#a53d83beec9a177943af539cdba8d0f09',1,'PXREARobotSDK.h']]],
+  ['pxreaserverconnect_15',['PXREAServerConnect',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297ab708c93bcc7e30f0aef6953e7dd4ed0a',1,'PXREARobotSDK.h']]],
+  ['pxreaserverdisconnect_16',['PXREAServerDisconnect',['../_p_x_r_e_a_robot_s_d_k_8h.html#ae6a29cfd3d07fe24a1ee36ad6747b297a1bb9cb86f528cda861b51e1aad2e7730',1,'PXREARobotSDK.h']]]
+];

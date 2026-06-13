@@ -18,7 +18,7 @@ add_executable(manus_data_publisher
   src/ClientPlatformSpecific.cpp
   src/ManusDataPublisher.cpp)
 
-# 这里用当前包里的 ManusSDK 目录
+# Use the ManusSDK directory bundled inside this package.
 target_include_directories(manus_data_publisher PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -29,7 +29,7 @@ target_link_directories(manus_data_publisher PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/ManusSDK/lib
 )
 
-# ✅ 使用 integrated 版，避免外部 GRPC / Protobuf 依赖
+# Link the integrated SDK build to avoid external gRPC / Protobuf dependencies.
 target_link_libraries(manus_data_publisher
   ManusSDK_Integrated
   ncurses
@@ -40,15 +40,15 @@ target_compile_features(manus_data_publisher PUBLIC c_std_99 cxx_std_17)
 install(TARGETS manus_data_publisher
   DESTINATION lib/${PROJECT_NAME})
 
-# 这里也改成包内 ManusSDK/lib
+# In-package ManusSDK/lib for runtime installation.
 set(LIBRARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/ManusSDK/lib)
 
-# 同样使用 integrated 版本的 .so
+# Use the same integrated-build .so.
 set(LIBRARY_FILE ${LIBRARY_DIR}/libManusSDK_Integrated.so)
 
 install(FILES ${LIBRARY_FILE} DESTINATION lib/${PROJECT_NAME})
 
-# 安装校准文件目录
+# Install calibration files.
 install(DIRECTORY calibration/
   DESTINATION share/${PROJECT_NAME}/calibration)
 

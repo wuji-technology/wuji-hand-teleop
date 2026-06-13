@@ -26,7 +26,7 @@ if str(_tianji_path) not in sys.path:
 from tianji_world_output.config_loader import get_config
 
 # Load configuration
-_config = get_config(use_ros=False)
+_config = get_config()
 
 # =============================================================================
 # Export compatibility variables (matching the old robot_config.py interface)

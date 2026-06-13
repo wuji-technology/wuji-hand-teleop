@@ -1,0 +1,48 @@
+# Wuji Hand unified configuration — single source of truth for hand parameters.
+#
+# This file is loaded by:
+#   1. wujihand_controller node (via -c flag)
+#   2. launch files (via wuji_teleop_bringup.hand_defaults module)
+#
+# ===== Glove integration contract =====
+#
+# Per-side controller processes (wujihand_controller_{left,right}) subscribe
+# directly to the input source selected below — there is no intermediate
+# /hand_input bridge topic anymore.
+#
+#   wuji_glove: in-process UDP via wuji_sdk (no ROS topic).
+#   manus:      ROS2 topic /manus_glove_{0,1} (manus_ros2_msgs/ManusGlove),
+#               filtered by msg.side. Published by manus_ros2 C++ driver.
+#
+# Each controller converts its side's raw data to MediaPipe 21-point format
+# (21 x 3 floats) and feeds it into the retargeter.
+#
+# To add a new glove:
+#   1. Add a branch in controller/wujihand_node.py that produces MediaPipe
+#      (21, 3) keypoints for one side.
+#   2. Add retarget config(s): config/retarget_{source}.yaml (shared) or
+#      config/retarget_{source}_{left,right}.yaml (per-side).
+#   3. Add the new value to input_source below.
+#
+# Supported today: wuji_glove (default), manus
+
+# Input source — selects the matching retarget config.
+#   wuji_glove (default, UDP)  — glove SNs in wuji_glove package config/wuji_glove.yaml
+#   manus      (USB dongle)
+input_source: "wuji_glove"
+
+# ===== Wuji Hand hardware =====
+# Find serials with: lsusb -v -d 0483:2000 | grep iSerial
+left_hand:
+  serial_number: "YOUR_LEFT_HAND_SERIAL"
+  name: "left_hand"           # wujihandros2 driver namespace
+
+right_hand:
+  serial_number: "YOUR_RIGHT_HAND_SERIAL"
+  name: "right_hand"          # wujihandros2 driver namespace
+
+# ===== wujihandros2 driver parameters =====
+driver:
+  publish_rate: 1000.0        # driver publish rate (Hz)
+  filter_cutoff_freq: 10.0    # hardware low-pass filter cutoff (Hz)
+  diagnostics_rate: 10.0      # diagnostics publish rate (Hz)

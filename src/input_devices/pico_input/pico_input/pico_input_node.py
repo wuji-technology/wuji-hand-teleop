@@ -65,7 +65,6 @@ Initialization process:
     ros2 service call /pico_input/reset std_srvs/srv/Trigger
 """
 
-import re
 import socket
 from typing import Optional
 
@@ -88,7 +87,18 @@ from tianji_world_output.config_loader import get_config as get_tianji_config
 from tianji_world_output.transform_utils import (
     get_tf_quaternion,
 )
-_tianji_config = get_tianji_config(use_ros=False)
+_tianji_config = get_tianji_config()
+
+# The four physical tracker slots wired through the downstream pipeline.
+# Each entry: yaml key -> role string the rest of the code uses.
+# The yaml schema is fixed at exactly these four keys; the SN values are
+# user-specific. See pico_input.yaml.
+_TRACKER_SLOTS = {
+    'tracker_sn_left_wrist':  'pico_left_wrist',
+    'tracker_sn_right_wrist': 'pico_right_wrist',
+    'tracker_sn_left_arm':    'pico_left_arm',
+    'tracker_sn_right_arm':   'pico_right_arm',
+}
 
 
 class PicoInputNode(Node):
@@ -117,7 +127,10 @@ class PicoInputNode(Node):
 
         # Data source configuration (TDD refactoring addition)
         self.declare_parameter('data_source_type', 'live')  # 'live' or 'recorded'
-        self.declare_parameter('recorded_file_path', 'record/trackingData_sample_static.txt')
+        # Recorded mode is a developer-only replay tool; the open-source build
+        # ships no sample tracking data, so users wanting to test 'recorded'
+        # must point this parameter at their own captured file.
+        self.declare_parameter('recorded_file_path', '')
         self.declare_parameter('playback_speed', 1.0)
         self.declare_parameter('loop_playback', True)
 
@@ -126,25 +139,21 @@ class PicoInputNode(Node):
         self.declare_parameter('pc_service_port', 60061)
 
         # Topic publishing configuration
-        self.declare_parameter('enable_topic_publishing', True)  # Publish /left_arm_target_pose etc.
-        self.declare_parameter('enable_legacy_topics', False)    # Publish /pico/* (debug only)
+        self.declare_parameter('enable_topic_publishing', True)
+        self.declare_parameter('enable_legacy_topics', False)
         self.declare_parameter('topic_prefix', 'pico')
 
-        # One-Euro Filter adaptive filtering parameters (loaded from pico_input.yaml at startup)
-        self.declare_parameter('one_euro_min_cutoff', 1.0)   # Minimum cutoff frequency (Hz)
-        self.declare_parameter('one_euro_beta', 0.7)         # Speed response coefficient
-        self.declare_parameter('elbow_min_cutoff', 0.3)      # Elbow direction minimum cutoff frequency (Hz)
-
-        # Tracker serial number mapping (unified naming convention)
-        # Serial number format: 190058, 190046, 190600, 190023 (6-digit numbers)
-        # pico_* prefix indicates PICO tracker, distinguished from robot DH end-effector
-        self.declare_parameter('tracker_serial_190058', 'pico_left_wrist')   # Left wrist
-        self.declare_parameter('tracker_serial_190046', 'pico_left_arm')     # Left forearm
-        self.declare_parameter('tracker_serial_190600', 'pico_right_wrist')  # Right wrist
-        self.declare_parameter('tracker_serial_190023', 'pico_right_arm')    # Right forearm
+        # One-Euro Filter adaptive filtering parameters (loaded from pico_input.yaml)
+        self.declare_parameter('one_euro_min_cutoff', 1.0)
+        self.declare_parameter('one_euro_beta', 0.7)
+        self.declare_parameter('elbow_min_cutoff', 0.3)
 
         # Initialization related parameters
-        self.declare_parameter('auto_init_delay', 5.0)  # Auto-initialization delay (seconds), 0 to disable
+        self.declare_parameter('auto_init_delay', 5.0)
+
+        # Tracker SN slots (fixed schema, four entries — see _TRACKER_SLOTS).
+        for slot_key in _TRACKER_SLOTS:
+            self.declare_parameter(slot_key, '')
 
         # Get parameters
         self.publish_rate = self.get_parameter('publish_rate').value
@@ -156,16 +165,25 @@ class PicoInputNode(Node):
         self.topic_prefix = self.get_parameter('topic_prefix').value
         self.auto_init_delay = self.get_parameter('auto_init_delay').value
 
-        # Build serial number mapping table: serial_number -> role
-        self.tracker_serial_map = {}
-        for serial in ['190058', '190046', '190600', '190023']:
-            param_name = f'tracker_serial_{serial}'
-            try:
-                role = self.get_parameter(param_name).value
-                if role:
-                    self.tracker_serial_map[serial] = role
-            except Exception:
-                pass
+        # Build SN -> role lookup. yaml schema (_TRACKER_SLOTS) guarantees
+        # the right four keys exist; we still have to catch empty strings
+        # ("user didn't fill the placeholder") and duplicate SNs ("user
+        # copy-pasted the same tracker into two slots").
+        self.sn_to_role = {}
+        for slot_key, role in _TRACKER_SLOTS.items():
+            sn = self.get_parameter(slot_key).value
+            if not sn or sn.startswith('YOUR_'):
+                raise RuntimeError(
+                    f"pico_input.yaml: {slot_key!r} is empty or a placeholder "
+                    f"({sn!r}). Fill it with the full SN of the {role} tracker."
+                )
+            if sn in self.sn_to_role:
+                raise RuntimeError(
+                    f"pico_input.yaml: {slot_key!r} and the slot for "
+                    f"{self.sn_to_role[sn]!r} both have SN {sn!r}. Each "
+                    f"tracker SN must appear exactly once."
+                )
+            self.sn_to_role[sn] = role
 
         # ==================== Incremental controller (core computation logic) ====================
         # Pure computation class, no ROS2 dependency, can be unit tested independently
@@ -450,7 +468,7 @@ class PicoInputNode(Node):
             self.get_logger().info(f'    {role}: [{pos[0]:.3f}, {pos[1]:.3f}, {pos[2]:.3f}]')
 
         # Check for missing trackers
-        expected_roles = set(self.tracker_serial_map.values())
+        expected_roles = set(_TRACKER_SLOTS.values())
         missing_roles = expected_roles - recorded_roles
         if missing_roles:
             self.get_logger().warning(f'  Missing trackers: {missing_roles}')
@@ -469,33 +487,20 @@ class PicoInputNode(Node):
         self.get_logger().info('  No jumping due to different initialization poses')
         self.get_logger().info('=' * 60)
 
-    def _extract_serial_number(self, full_sn: str) -> str:
-        """Extract 6-digit number from full serial number (e.g. PC2310MLKC190058G -> 190058)"""
-        match = re.search(r'(\d{6})', full_sn)
-        return match.group(1) if match else None
-
     def _get_role_for_tracker(self, tracker_data: TrackerData) -> str:
+        """Map a tracker's full SN string to its role (pico_left_wrist etc.).
+
+        Exact-string match against the four SNs configured in pico_input.yaml.
+        Returns None for any tracker the operator hasn't configured —
+        callers warn and skip that frame.
         """
-        Get role based on TrackerData
-
-        Args:
-            tracker_data: TrackerData object
-
-        Returns:
-            Role string (pico_left_wrist, pico_right_wrist, etc.) or None
-        """
-        # Extract 6-digit serial number
-        short_sn = self._extract_serial_number(tracker_data.serial_number)
-
-        # Prefer serial number mapping
-        if short_sn and short_sn in self.tracker_serial_map:
-            return self.tracker_serial_map[short_sn]
-
-        # Fallback: cannot determine role
-        self.get_logger().warning(
-            f'Cannot find role mapping for tracker {tracker_data.serial_number}'
-        )
-        return None
+        role = self.sn_to_role.get(tracker_data.serial_number)
+        if role is None:
+            self.get_logger().warning(
+                f'Cannot find role mapping for tracker '
+                f'{tracker_data.serial_number}; not configured in pico_input.yaml.'
+            )
+        return role
 
     def _publish_callback(self):
         """Main loop: read data from data source and publish TF + Topics"""
@@ -870,7 +875,7 @@ class PicoInputNode(Node):
         self.get_logger().info(f'  Output mode: {mode}')
         self.get_logger().info('  Arm angle control: always enabled (dynamic elbow direction, One-Euro adaptive smoothing)')
         self.get_logger().info(f'  Filtering: One-Euro Filter (position+orientation+elbow direction unified adaptive smoothing)')
-        self.get_logger().info(f'  Tracker mapping: {self.tracker_serial_map}')
+        self.get_logger().info(f'  Tracker SN -> role: {self.sn_to_role}')
         self.get_logger().info('-' * 70)
 
         if self.data_source_type == 'live':

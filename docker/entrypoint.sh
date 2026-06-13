@@ -3,6 +3,14 @@ set -e
 
 WS="$HOME/ros2_ws"
 
+# Detect a Git LFS pointer file (~130-byte text stub instead of the real binary).
+# Hosts that cloned without `git lfs pull` end up with these in place of the
+# real .so files — copying them to /usr/local/lib/ produces a green-looking
+# ldconfig but a runtime ctypes/ld crash with no useful message.
+is_lfs_pointer() {
+    [ -f "$1" ] && head -1 "$1" 2>/dev/null | grep -q "git-lfs"
+}
+
 # ============================================
 # 1. Source ROS2 base environment
 # ============================================
@@ -23,17 +31,35 @@ fi
 # ============================================
 # 3. First-time build (auto-execute when install/ does not exist)
 # ============================================
+# ============================================
+# 2b. Seed per-machine config yamls from their .template siblings if missing
+# ============================================
+# Tracked `*.yaml.template` files carry placeholders (YOUR_LEFT_HAND_SERIAL,
+# etc.); the live `<file>.yaml` is gitignored and holds real SNs / IPs.
+# Auto-cp only when `<file>.yaml` is absent so we never clobber operator edits.
+# Runs every container start (cheap + idempotent) — picks up newly added
+# templates after `git pull` without a full rebuild.
+find "$WS/src" \( -name '*.yaml.template' -o -name '*.rules.template' \) -type f 2>/dev/null | while read -r tpl; do
+    live="${tpl%.template}"
+    if [ ! -e "$live" ]; then
+        cp "$tpl" "$live"
+        echo "[INFO] Seeded $(basename "$live") from .template (edit with real SNs before launch)"
+    fi
+done
+
 if [ ! -f "$WS/install/setup.bash" ]; then
     echo ""
     echo "[INFO] First startup, building ROS2 workspace..."
     echo ""
 
-    # wuji_hand_description URDF conflict (already installed via pip)
+    # wuji-description URDF conflict: wujihandros2 provides wuji_description as a ROS2 package;
+    # wuji-retargeting bundles its own copy via pip. Mark legacy/duplicate paths to skip colcon build.
     find "$WS/src" -path "*/mujoco-sim/wuji_hand_description" -exec touch {}/COLCON_IGNORE \; 2>/dev/null || true
+    find "$WS/src" -path "*/wuji_retargeting/wuji-description" -exec touch {}/COLCON_IGNORE \; 2>/dev/null || true
 
     # Git LFS detection: skip manus_ros2 when .so is a pointer file
     MANUS_SO="$WS/src/input_devices/manus_input/manus_ros2/ManusSDK/lib/libManusSDK.so"
-    if [ -f "$MANUS_SO" ] && head -1 "$MANUS_SO" | grep -q "git-lfs"; then
+    if is_lfs_pointer "$MANUS_SO"; then
         echo "[WARN] ManusSDK .so is a Git LFS pointer file, skipping manus_ros2 build"
         echo "[WARN] Run on host: git lfs install && git lfs pull"
         touch "$WS/src/input_devices/manus_input/COLCON_IGNORE"
@@ -82,7 +108,9 @@ NEED_LDCONFIG=false
 
 # PICO SDK
 PICO_SO="$WS/src/input_devices/pico_input/prebuilt/x86_64/libPXREARobotSDK.so"
-if [ -f "$PICO_SO" ] && [ ! -f /usr/local/lib/libPXREARobotSDK.so ]; then
+if is_lfs_pointer "$PICO_SO"; then
+    echo "[WARN] libPXREARobotSDK.so is a Git LFS pointer; skipping cp. Run on host: git lfs install && git lfs pull"
+elif [ -f "$PICO_SO" ] && [ ! -f /usr/local/lib/libPXREARobotSDK.so ]; then
     sudo cp "$PICO_SO" /usr/local/lib/
     NEED_LDCONFIG=true
 fi
@@ -90,8 +118,14 @@ fi
 # Manus SDK
 MANUS_DIR="$WS/src/input_devices/manus_input/manus_ros2/ManusSDK/lib"
 if [ -d "$MANUS_DIR" ] && [ ! -f /usr/local/lib/libManusSDK.so ]; then
-    sudo cp "$MANUS_DIR"/*.so /usr/local/lib/ 2>/dev/null || true
-    NEED_LDCONFIG=true
+    # Skip any .so under MANUS_DIR that is an LFS pointer — copying a 130-byte
+    # stub would silently fool the startup check below.
+    for so in "$MANUS_DIR"/*.so; do
+        [ -f "$so" ] || continue
+        is_lfs_pointer "$so" && continue
+        sudo cp "$so" /usr/local/lib/
+        NEED_LDCONFIG=true
+    done
 fi
 
 # Manus USB dongle udev rule (allows non-root access to vendor 3325)
@@ -105,8 +139,12 @@ fi
 # Tianji SDK
 TIANJI_DIR="$WS/src/output_devices/tianji_output/tianji_output/_internal/lib"
 if [ -d "$TIANJI_DIR" ] && [ ! -f /usr/local/lib/libMarvinSDK.so ]; then
-    sudo cp "$TIANJI_DIR"/*.so /usr/local/lib/ 2>/dev/null || true
-    NEED_LDCONFIG=true
+    for so in "$TIANJI_DIR"/*.so; do
+        [ -f "$so" ] || continue
+        is_lfs_pointer "$so" && continue
+        sudo cp "$so" /usr/local/lib/
+        NEED_LDCONFIG=true
+    done
 fi
 
 if $NEED_LDCONFIG; then
@@ -122,6 +160,31 @@ if [ ! -f /etc/ld.so.conf.d/ros2_ws.conf ]; then
         find "$WS/install" -name "lib" -maxdepth 3 -type d 2>/dev/null
     } | sudo tee /etc/ld.so.conf.d/ros2_ws.conf >/dev/null
     sudo ldconfig
+fi
+
+# ============================================
+# 4b. Wuji Studio calibration mount (~/.wuji)
+# ============================================
+# docker auto-creates ${HOME}/.wuji on the host as root if it doesn't exist
+# before `docker compose up`; that breaks SDK writes from inside the container.
+# Reclaim ownership so the wuji user inside can read/write calibration files.
+if [ ! -w "$HOME/.wuji" ]; then
+    sudo mkdir -p "$HOME/.wuji/sdk/params"
+    sudo chown -R wuji:wuji "$HOME/.wuji"
+fi
+
+# ============================================
+# 4c. Wuji Glove multi-NIC route pinning
+# ============================================
+# Harnesses that wire each glove receiver to its own NIC on the same subnet hit
+# a routing quirk: the kernel sends unicast to a glove out one (default) NIC,
+# which may not be the NIC the glove sits behind, so the SDK times out on
+# connect even though it can discover the glove over broadcast. Pin a /32 route
+# to the NIC that actually reaches each glove. No-op on single-NIC setups; needs
+# cap_add: NET_ADMIN (set in docker-compose.yml). Re-runnable after powering the
+# gloves on: bash /entrypoint-scripts/setup_glove_routes.sh
+if [ -f /entrypoint-scripts/setup_glove_routes.sh ]; then
+    bash /entrypoint-scripts/setup_glove_routes.sh || true
 fi
 
 # ============================================
@@ -193,59 +256,133 @@ fi
 # ============================================
 echo ""
 echo "============================================"
-echo "  Wuji Teleop ROS2 Docker"
+echo "  Wuji Hand Teleop ROS2 Docker"
 echo "============================================"
 echo "  ROS_DOMAIN_ID:  ${ROS_DOMAIN_ID:-0}"
 echo "  RMW:            ${RMW_IMPLEMENTATION}"
 echo "============================================"
 echo ""
-echo "SDK Status:"
+echo "Required SDKs (hand pipeline — container exits if any fails):"
 
-# PICO
-python3 -c "import xrobotoolkit_sdk; print('  [OK] PICO SDK')" 2>/dev/null \
-    || echo "  [--] PICO SDK"
-[ -f /opt/apps/roboticsservice/runService.sh ] \
-    && echo "  [OK] PICO PC-Service" \
-    || echo "  [--] PICO PC-Service"
+# Hard-required for the hand-only main flow (the README default). A regression
+# here is the silent-failure mode QA hit on bbb8b8f: container boots, teleop
+# starts, glove->hand just doesn't track. Hard-fail at entrypoint instead —
+# stderr is intentionally NOT redirected so the operator sees the real
+# ImportError / OSError, not a sanitized "[--]" line.
+
+# WujiHand SDK — required by wujihand_driver to talk to the hand hardware.
+if dpkg -l wujihandcpp >/dev/null 2>&1; then
+    echo "  [OK] WujiHand SDK"
+else
+    echo "  [FAIL] WujiHand SDK (wujihandcpp .deb not installed; rebuild image)" >&2
+    exit 1
+fi
+
+# In-repo bundled kinematics .so. fx_kine.py loads via ctypes from this exact
+# path; the bug fixed in beddb9c was an off-by-one .gitignore whitelist.
+_KINE_SO=/home/wuji/ros2_ws/src/output_devices/tianji_output/tianji_output/_internal/lib/libKine.so
+if [ ! -f "$_KINE_SO" ]; then
+    echo "  [FAIL] Tianji kine — libKine.so missing at $_KINE_SO" >&2
+    echo "         Check .gitignore whitelist (must keep _internal/lib/*.so)" >&2
+    echo "         and run \`git lfs pull\` on the host." >&2
+    exit 1
+elif is_lfs_pointer "$_KINE_SO"; then
+    echo "  [FAIL] Tianji kine — libKine.so is a Git LFS pointer at $_KINE_SO" >&2
+    echo "         Run on the host: git lfs install && git lfs pull" >&2
+    exit 1
+else
+    echo "  [OK] Tianji kine (libKine.so tracked in repo)"
+fi
+
+# Tianji SDK — Marvin protocol shared library, loaded by the controller.
+if [ -f /usr/local/lib/libMarvinSDK.so ]; then
+    echo "  [OK] Tianji SDK (libMarvinSDK.so)"
+else
+    echo "  [FAIL] Tianji SDK — /usr/local/lib/libMarvinSDK.so missing" >&2
+    exit 1
+fi
+
+# pinocchio — hand IK depends on it via wuji_retargeting. The 3.9.0->4.0.0 bump
+# in Dockerfile §5 fixes the urdfdom soname mismatch. Let Python print the
+# real ImportError on failure (no `2>/dev/null`).
+echo -n "  [..] pinocchio (urdfdom soname + NumPy 2 ABI) ... "
+if python3 -c "import pinocchio" 2>&1; then
+    echo "OK"
+else
+    echo ""
+    echo "  [FAIL] pinocchio import failed — see traceback above" >&2
+    echo "         Likely Dockerfile §5 \`pin==\` got regressed; HEAD pins 4.0.0." >&2
+    exit 1
+fi
+
+# wuji_retargeting — Wuji's hand-pose retargeting algorithm. If pinocchio just
+# passed, this almost always passes too — but a missing submodule init would
+# slip past the pinocchio check.
+echo -n "  [..] wuji_retargeting (hand IK) ... "
+if python3 -c "import wuji_retargeting" 2>&1; then
+    echo "OK"
+else
+    echo ""
+    echo "  [FAIL] wuji_retargeting import failed — see traceback above" >&2
+    echo "         Did \`git submodule update --init --recursive\` run on the host" >&2
+    echo "         before \`docker compose build\`? See Dockerfile §6." >&2
+    exit 1
+fi
+
+echo ""
+echo "Optional SDKs (per-device — missing rows are fine if the device isn't used):"
+
+# Below: optional inputs / sensors. Operator may run hand-only without these
+# and not care that they're [--]. Dashboard format intentional. stderr passes
+# through so a *failed import* (different from "not installed") is still loud.
+
+# PICO (arm input alternative)
+if python3 -c "import xrobotoolkit_sdk" 2>/dev/null; then
+    echo "  [OK] PICO SDK"
+else
+    echo "  [--] PICO SDK (only needed on the PICO arm path)"
+fi
+if [ -f /opt/apps/roboticsservice/runService.sh ]; then
+    echo "  [OK] PICO PC-Service"
+else
+    echo "  [--] PICO PC-Service (only needed on the PICO arm path)"
+fi
 if [ "$ADB_CONNECTED" = "true" ]; then
     echo "  [OK] ADB ($ADB_SERIAL, wired mode)"
 else
-    echo "  [--] ADB (not connected)"
+    echo "  [--] ADB (no PICO headset connected over USB)"
 fi
 
-# Manus
-[ -f /usr/local/lib/libManusSDK.so ] \
-    && echo "  [OK] Manus SDK" \
-    || echo "  [--] Manus SDK"
+# Manus (community-supported hand input alternative)
+if [ -f /usr/local/lib/libManusSDK.so ]; then
+    echo "  [OK] Manus SDK"
+else
+    echo "  [--] Manus SDK (only needed for MANUS Glove path)"
+fi
 
-# Tianji
-[ -f /usr/local/lib/libMarvinSDK.so ] \
-    && echo "  [OK] Tianji SDK" \
-    || echo "  [--] Tianji SDK"
+# RealSense (wrist cameras)
+if dpkg -l ros-humble-realsense2-camera >/dev/null 2>&1; then
+    echo "  [OK] RealSense Driver"
+else
+    echo "  [--] RealSense Driver (only needed for D405 wrist cameras)"
+fi
 
-# WujiHand
-dpkg -l wujihandcpp >/dev/null 2>&1 \
-    && echo "  [OK] WujiHand SDK" \
-    || echo "  [--] WujiHand SDK"
-
-# RealSense
-dpkg -l ros-humble-realsense2-camera >/dev/null 2>&1 \
-    && echo "  [OK] RealSense Driver" \
-    || echo "  [--] RealSense Driver"
-
-# OpenVR / SteamVR
+# OpenVR / SteamVR (HTC Vive Tracker arm path)
 if [ -f "$HOME/.config/openvr/openvrpaths.vrpath" ]; then
     echo "  [OK] OpenVR (SteamVR null driver)"
 else
-    echo "  [--] OpenVR (SteamVR not mounted)"
+    echo "  [--] OpenVR (only needed for HTC Vive Tracker arm path)"
 fi
 
 echo ""
 echo "Launch:"
-echo "  ros2 run wuji_teleop_monitor monitor          # Monitor GUI (recommended)"
-echo "  ros2 launch wuji_teleop_bringup wuji_teleop.launch.py  # Hand + Arm"
-echo "  ros2 launch wuji_teleop_bringup pico_teleop.launch.py  # PICO solution"
-echo "  ros2 launch camera camera_launch.py            # Camera"
+echo "  ros2 run wuji_teleop_monitor monitor                      # Monitor GUI — one-click hand teleop (recommended)"
+echo "  ros2 launch wuji_teleop_bringup wuji_teleop_hand.launch.py  # CLI alternative: dual Wuji Hands"
+echo "  ros2 launch camera camera_launch.py                       # Cameras (head stereo + wrist D405)"
+echo ""
+echo "  # Arm teleop — see docs/STEAMVR.md (HTC) or docs/PICO.md (PICO):"
+echo "  #   ros2 launch wuji_teleop_bringup wuji_teleop.launch.py arm_input:=tracker"
+echo "  #   ros2 launch wuji_teleop_bringup pico_teleop.launch.py"
 echo "============================================"
 echo ""
 
